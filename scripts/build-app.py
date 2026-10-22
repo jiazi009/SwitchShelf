@@ -12,6 +12,7 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--with-libmtp", action="store_true", help="Bundle optional libmtp fallback and its native dependencies")
 args = parser.parse_args()
 subprocess.run(["swift", "build", "-c", "release", "--product", "SwitchShelf"], cwd=ROOT, check=True)
+subprocess.run(["swift", "build", "-c", "release", "--product", "switchshelf-probe"], cwd=ROOT, check=True)
 bin_dir = Path(subprocess.check_output(["swift", "build", "-c", "release", "--show-bin-path"], cwd=ROOT, text=True).strip())
 app = ROOT / "build" / "SwitchShelf.app"
 contents = app / "Contents"
@@ -20,8 +21,9 @@ frameworks = contents / "Frameworks"
 resources = contents / "Resources"
 for directory in (macos, frameworks, resources):
     directory.mkdir(parents=True, exist_ok=True)
-shutil.copy2(bin_dir / "SwitchShelf", macos / "SwitchShelf")
-os.chmod(macos / "SwitchShelf", 0o755)
+for executable in ("SwitchShelf", "switchshelf-probe"):
+    shutil.copy2(bin_dir / executable, macos / executable)
+    os.chmod(macos / executable, 0o755)
 with (contents / "Info.plist").open("wb") as f:
     plistlib.dump({
         "CFBundleIdentifier": "local.switchshelf.app",

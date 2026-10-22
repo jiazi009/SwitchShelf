@@ -132,7 +132,10 @@ if finished.wait(timeout: .now() + .seconds(seconds)) == .timedOut {
     process.terminate()
     if finished.wait(timeout: .now() + .milliseconds(300)) == .timedOut {
         Darwin.kill(process.processIdentifier, SIGKILL)
-        _ = finished.wait(timeout: .now() + .milliseconds(300))
+        if finished.wait(timeout: .now() + .milliseconds(300)) == .timedOut {
+            // A later invocation cannot assume the USB worker is gone.
+            emit(failure(mode: mode, code: "workerExitUnverified", message: "Cannot verify the read-only worker exited; do not retry while it may still own the USB session.", transport: mode == "inventory" ? transport : nil), exitCode: 1)
+        }
     }
     try? manager.removeItem(at: directory)
     emit(failure(mode: mode, code: "timeout", message: "Read-only probe exceeded \(seconds)s; worker stopped, coverage unknown. Keep DBI in Run MTP responder and check permissions/other clients before a manual retry.", transport: mode == "inventory" ? transport : nil), exitCode: 124)

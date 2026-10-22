@@ -1,0 +1,23 @@
+# DBI 647-zhcn compatibility checkpoint
+
+## Observed evidence and scope
+
+Coordinator-provided observations (not reproduced by this worker): user reports DBI `647-zhcn`, firmware display `19.0.1e`, and manually enabled `[MTP Storages] 4: Installed games=true` in the correct `/switch/DBI/dbi.config`. Before restarting DBI, the running MTP responder still exposed its original nine storages. The observed separate SD storage is named `1: SD内存卡`; this is **not** the Installed games storage. No post-restart Installed games storage name, object hierarchy, or object filename samples were provided in this dispatch. This worker did not access hardware, read device files, or change device settings.
+
+Current positive fixture grammar remains explicitly delimited `[TitleID]`, `[v<raw integer>]`, and `[BASE|UPD|DLC]` tokens. This grammar, the English `4: Installed games` storage, and the combined-projection matching fixture are synthetic/previously documented assumptions, **not** verified DBI 647-zhcn output. A negative fixture now explicitly rejects the observed localized `1: SD内存卡` as evidence of installed content. The implementation does not add a guessed Chinese translation of `4: Installed games`, nor infer identities from human names, parent folders, firmware display, TitleID arithmetic, or a root aggregate's display name. A missing/unrecognized Installed games storage stays incomplete rather than claiming an empty inventory.
+
+## Changes and verification
+
+`InventoryReader` now checks task cancellation immediately after each awaited storage, child-list, and object-metadata request, rethrows cancellation rather than converting it into a partial metadata diagnostic, and checks again before publishing a complete snapshot. Hardware-free fixtures cancel a task at each of those await boundaries; all three fail with `CancellationError` instead of reporting complete or partial inventory. The existing positive base/update/DLC, explicit aggregate projection, and negative ambiguous/root-only/missing coverage fixtures remain unchanged.
+
+With coordinator's temporary Swift tools 6.2 manifest copy, `swift test --filter 'DiscoveryTests|IdentityTests|InventoryTests|PTPTests'` passes: **42 test cases** (including three cancellation argument cases), no USB use. The temporary manifest edit is restored and excluded from this worker's commit.
+
+## Session timeout/cancellation review
+
+`InventoryCoordinator` holds its actor gate across `NativePTPTransport.connect`, traversal and `close`. The native ImageCaptureCore open/send/close operations use checked continuations backed by OS callbacks with no guaranteed deadline; if a callback never arrives, cancellation cannot resume that continuation and the app's gate remains busy forever. The traversal's 45-second budget only runs between callbacks. Fallback libmtp calls can likewise block natively. Simply racing a timeout and clearing `busy` would permit a concurrent retry while the prior USB session is still alive; forcing a continuation to resume or releasing the transport on timeout risks double resume, stale callback access, or conflicting native sessions. This change therefore improves cancellation only *after* a callback returns; it does **not** claim a hard app deadline.
+
+Contained architectural recommendation for coordinator-owned app composition/packaging: route app inventory through the already process-isolated, bounded `switchshelf-probe` supervisor (one worker process, one USB operation, deadline and process teardown), decode its JSON into the existing `InstalledInventory` contract, and serialize/guard launches so a timed-out child is reaped before any manual retry. Do not spin up concurrent retries, kill system/other clients, or reset global settings. This needs coordinator review of executable bundling, JSON/schema/error mapping and app lifecycle; the public DeviceService contract can remain stable. Until then, app-side timeout cannot guarantee gate recovery from a stuck native callback, and only the CLI supervisor has a hard process bound.
+
+## Remaining acceptance
+
+After the user actually exits/reopens DBI and re-enters Run MTP responder, the coordinator alone should perform one exclusive read-only probe and provide exact storage names, parent/child handles and representative nested/root package filenames (redacted as needed without changing token syntax). Only then can storage localization, TitleID/version/content-kind parsing and aggregate completeness be claimed compatible with **actual** DBI 647-zhcn output; any unsupported/ambiguous objects remain unknown/incomplete. No install, write, transfer, metadata guess, or sysMMC/emuMMC identity inference was performed.

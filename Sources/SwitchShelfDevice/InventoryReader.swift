@@ -73,6 +73,7 @@ struct InventoryReader: Sendable {
         let sessionID = "mtp-session-\(UUID().uuidString)"
         let started = ContinuousClock.now
         let storages = try await transport.storages()
+        try Task.checkCancellation()
         let targets = storages.filter { Self.isInstalledGames($0.name) }
         var inventory = InstalledInventory(deviceID: sessionID, environmentContext: nil, isComplete: false)
         guard !targets.isEmpty else {
@@ -105,7 +106,10 @@ struct InventoryReader: Sendable {
                     issue("Inventory traversal exceeded its time budget; coverage is incomplete."); stop = true; break
                 }
                 let children: [UInt32]
-                do { children = try await transport.children(storage: storage.id, parent: folder.parent) }
+                do {
+                    children = try await transport.children(storage: storage.id, parent: folder.parent)
+                    try Task.checkCancellation()
+                } catch is CancellationError { throw CancellationError() }
                 catch {
                     issue("Cannot enumerate folder \(storage.id):\(folder.parent) (\(safeError(error))); coverage is incomplete.")
                     continue
@@ -123,7 +127,10 @@ struct InventoryReader: Sendable {
                         issue("Duplicate, cyclic or invalid MTP object handle \(id)."); continue
                     }
                     let object: MTPObject
-                    do { object = try await transport.object(id: id) }
+                    do {
+                        object = try await transport.object(id: id)
+                        try Task.checkCancellation()
+                    } catch is CancellationError { throw CancellationError() }
                     catch { issue("Cannot read object metadata \(id) (\(safeError(error))); coverage is incomplete."); continue }
                     let parentMatches = object.parentID == folder.parent ||
                         (folder.parent == Self.root && object.parentID == 0)
@@ -191,6 +198,7 @@ struct InventoryReader: Sendable {
                 issue("Root virtual package \(projection.id) is an unattributed combined projection, omitted from content records; per-content coverage is not verified.")
             }
         }
+        try Task.checkCancellation()
         inventory.isComplete = complete
         inventory.observedAt = Date()
         inventory.records.sort { $0.objectPath < $1.objectPath }

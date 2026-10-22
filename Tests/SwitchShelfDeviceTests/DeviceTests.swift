@@ -31,6 +31,24 @@ private actor FixtureTransport: InventoryTransport {
     }
     func close() {}
 }
+actor CancellingTransport: InventoryTransport {
+    enum Stage { case storages, children, object }
+    let stage: Stage
+    init(_ stage: Stage) { self.stage = stage }
+    func storages() -> [MTPStorage] {
+        if stage == .storages { withUnsafeCurrentTask { $0?.cancel() } }
+        return [MTPStorage(id: 4, name: "4: Installed games")]
+    }
+    func children(storage: UInt32, parent: UInt32) -> [UInt32] {
+        if stage == .children { withUnsafeCurrentTask { $0?.cancel() } }
+        return [1]
+    }
+    func object(id: UInt32) -> MTPObject {
+        if stage == .object { withUnsafeCurrentTask { $0?.cancel() } }
+        return MTPObject(id: 1, parentID: 0, storageID: 4, name: "Fixture [0100000000001000][v0][BASE].nsp", isFolder: false)
+    }
+    func close() {}
+}
 private let root = UInt32.max
 private func folder(_ id: UInt32, parent: UInt32 = 0, name: String = "Fixture game") -> MTPObject {
     MTPObject(id: id, parentID: parent, storageID: 4, name: name, isFolder: true)
@@ -137,12 +155,25 @@ struct InventoryTests {
         #expect(InventoryReader.isInstalledGames("Installed games"))
         #expect(!InventoryReader.isInstalledGames("Backup Installed games"))
         #expect(!InventoryReader.isInstalledGames("5: SD Card install"))
+        // Observed on DBI 647-zhcn: a separate SD storage, not installed-content evidence.
+        #expect(!InventoryReader.isInstalledGames("1: SD内存卡"))
+    }
+    @Test func observedLocalizedSDStorageAloneIsNotEmptyInstalledInventory() async throws {
+        let result = try await InventoryReader().read(from: FixtureTransport(stores: [
+            MTPStorage(id: 1, name: "1: SD内存卡")]))
+        #expect(!result.isComplete)
+        #expect(result.records.isEmpty)
     }
     @Test func verifiedEmptyTraversalCanBeComplete() async throws {
         let result = try await InventoryReader().read(from: FixtureTransport())
         #expect(result.isComplete)
         #expect(result.records.isEmpty)
         #expect(result.environmentContext == nil)
+    }
+    @Test(arguments: [CancellingTransport.Stage.storages, .children, .object])
+    func cancellationAfterMetadataAwaitNeverReturnsInventory(_ stage: CancellingTransport.Stage) async {
+        let read = Task { try await InventoryReader().read(from: CancellingTransport(stage)) }
+        await #expect(throws: CancellationError.self) { try await read.value }
     }
     @Test func storageFailureThrowsInsteadOfClaimingEmpty() async {
         await #expect(throws: FixtureFailure.self) {

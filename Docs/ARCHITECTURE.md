@@ -6,7 +6,7 @@ SwiftUI native macOS 26+, arm64, 03-liquid-glass.png is the selected visual refe
 ## Modules and ownership
 - SwitchShelfDomain: value models, evidence-based installation assessment; coordinator owns public contract.
 - SwitchShelfLibrary: actor-based read-only recursive SMB/local scanning, filename candidate parsing, source bookmarks, SQLite migrations and cache. agy owns implementation and library tests.
-- SwitchShelfDevice + CDBIBridge: serialized USB discovery and read-only libmtp inventory access; pi owns implementation, probe executable and device tests.
+- SwitchShelfDevice + CDBIBridge: serialized USB discovery and read-only MTP inventory access; prioritize native ImageCaptureCore broker after successful hardware prototype, with optional libmtp fallback. pi owns implementation, probe executable and device tests.
 - SwitchShelfApp: SwiftUI navigation, library grid/list/search/filter, inspector, device and queue pages, root observable app model; opencode owns UI.
 - Coordinator: Package.swift, shared models, app composition, build/bundle scripts, integration, review and final tests.
 
@@ -37,7 +37,7 @@ UI should use these services directly via a MainActor app model; independent wor
 ## Evidence and boundaries
 Current game source: /Volumes/switch 游戏包, SMB mounted NAS. No original-file writes. Store application state under Application Support/SwitchShelf, not NAS. Persist sources with security-scoped bookmarks when needed. Source disconnect retains previous entries and marks them offline; no wipe on failed enumeration. A complete inventory needs successful traversal of Installed games; missing storage or parse errors are not an empty list. MTP exposes virtual objects; do not download full NSPs for inventory. Device identity and environment remain session-scoped unless proven stable. Backend installation and MTP enumeration must never share the USB session concurrently.
 
-SQLite is accessed through the system sqlite3 C interface in the initial dependency-free scaffold. This is a deliberate implementation choice replacing the document's candidate GRDB wrapper; keep schema migration boundaries so a wrapper can change later. libmtp is a native runtime dependency for device access and must be bundled for a distributable app; first validate locally, never require users to set up developer tooling in the final package.
+SQLite is accessed through the system sqlite3 C interface in the initial dependency-free scaffold. This is a deliberate implementation choice replacing the document's candidate GRDB wrapper; keep schema migration boundaries so a wrapper can change later. Native ImageCaptureCore provides brokered PTP/MTP commands without competing with ptpcamerad for the USB interface. The coordinator verified open/GetStorageIDs/close against this Switch. If the optional libmtp route is retained, bundle its native dependencies; never require users to set up developer tooling in the final package.
 
 ## Scope gates
 First integrated milestone: runnable native app, real NAS scan/cache, real device detection and read-only installed inventory, conservative installation badges and a persistent editable install plan. Installation execution is a separate next wave after protocol, result semantics and an explicit test file/target are established. Maintain the original development document's remaining metadata, installation, recovery and maintenance roadmap; an attractive shell alone does not complete that scope.

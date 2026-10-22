@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
 """Build a local native app bundle and include its libmtp runtime dependencies."""
 from pathlib import Path
+import argparse
 import os
 import plistlib
 import shutil
 import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("--with-libmtp", action="store_true", help="Bundle optional libmtp fallback and its native dependencies")
+args = parser.parse_args()
 subprocess.run(["swift", "build", "-c", "release", "--product", "SwitchShelf"], cwd=ROOT, check=True)
 bin_dir = Path(subprocess.check_output(["swift", "build", "-c", "release", "--show-bin-path"], cwd=ROOT, text=True).strip())
 app = ROOT / "build" / "SwitchShelf.app"
@@ -50,7 +54,7 @@ def copy_library(source):
         subprocess.run(["install_name_tool", "-change", old, "@loader_path/" + new.name, str(target)], check=True)
     return target
 
-mtp = next((p for p in (Path("/opt/homebrew/lib/libmtp.dylib"), Path("/usr/local/lib/libmtp.dylib")) if p.exists()), None)
+mtp = next((p for p in (Path("/opt/homebrew/lib/libmtp.dylib"), Path("/usr/local/lib/libmtp.dylib")) if p.exists()), None) if args.with_libmtp else None
 if mtp:
     target = copy_library(mtp)
     alias = frameworks / "libmtp.dylib"
@@ -58,7 +62,7 @@ if mtp:
         alias.unlink()
     if not alias.exists():
         alias.symlink_to(target.name)
-else:
+elif args.with_libmtp:
     print("libmtp runtime not available: bundle will show an actionable device-read error.")
 
 for target in copied.values():

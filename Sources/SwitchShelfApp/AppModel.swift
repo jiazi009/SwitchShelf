@@ -364,26 +364,15 @@ final class AppModel {
     }
 
     func assessment(for content: LocalContent) -> InstallationAssessment {
-        guard let titleID = InstallationAssessor.normalizedID(content.titleID) else {
+        guard InstallationAssessor.normalizedID(content.titleID) != nil else {
             return InstallationAssessment(state: .unknown, explanation: "本地文件名未提供可核对的 Title ID；不推断单项状态。")
         }
-        guard let inventory, inventoryIsCurrentSession else {
-            return InstallationAssessment(state: .unknown, explanation: "尚未读取当前设备的已安装清单；不推断单项状态。")
-        }
-        let matches = inventory.records.filter {
-            InstallationAssessor.normalizedID($0.titleID) == titleID
-        }
-        guard !matches.isEmpty else {
-            return InstallationAssessment(
-                state: .unknown,
-                explanation: "当前清单中没有该 Title ID 的正向记录；不推断为未安装。",
-                observedAt: inventory.observedAt
-            )
-        }
+        // LocalContent has no independently verified package identity. Even a
+        // positive device Title ID match cannot confirm this filename candidate.
         return InstallationAssessment(
-            state: .installed,
-            explanation: "当前设备清单中存在该 Title ID 的正向记录。",
-            observedAt: inventory.observedAt
+            state: .unknown,
+            explanation: "本地文件名中的 Title ID 仅为候选，未核对包身份；不推断单项安装状态。",
+            observedAt: inventoryIsCurrentSession ? inventory?.observedAt : nil
         )
     }
 
@@ -406,12 +395,20 @@ final class AppModel {
         }
 
         do {
-            repository = try LibraryRepository(databaseURL: cacheURL)
+            let location = cacheURL
+            let legacySnapshot = try await Task.detached(priority: .utility) {
+                try LibraryCacheMigration.moveLegacyJSONAside(at: location)
+            }.value
+            let opened = try LibraryRepository(databaseURL: location)
+            if let legacySnapshot {
+                try await opened.save(legacySnapshot)
+            }
+            repository = opened
         } catch {
             notice = AppNotice(
                 level: .error,
                 title: "无法打开本地缓存",
-                message: "游戏库仍可扫描，但结果不会持久保存：\(error.localizedDescription)",
+                message: "游戏库仍可扫描，但结果不会持久保存；旧缓存文件未被删除：\(error.localizedDescription)",
                 action: .openAppSupport,
                 actionLabel: "查看数据目录"
             )
@@ -852,12 +849,13 @@ final class AppModel {
     func refreshDevices() async {
         guard !isDiscovering, !isReadingInventory else { return }
         isDiscovering = true
+        // Discovery exposes only VID/PID, not a stable session identity. A new USB
+        // enumeration cannot prove this is the same device that supplied the last
+        // inventory, even when the candidate signature looks identical.
+        inventory = nil
+        inventorySessionSignature = nil
         let result = await deviceService.discover()
         deviceDiscovery = result
-        if inventorySessionSignature != mtpCandidateSignature {
-            inventory = nil
-            inventorySessionSignature = nil
-        }
         isDiscovering = false
     }
 

@@ -1,0 +1,18 @@
+# SwitchShelf coordination / integration checkpoint
+
+Date: 2026-10-23. Orca Run `run_6bf908529b8b` is bound to the replacement coordinator (generation 2); the former Codex session is done. No new parallel worker was launched. Existing UI Dispatch `ctx_ea9b5b1a277e` remains active in its own worktree; its uncommitted files have not been copied or edited by the coordinator. The library and DBI 647 follow-up Dispatches reported completion with their own reports and commits.
+
+## Integrated evidence
+
+- Library worker commit `2632632` was cherry-picked as `14db18a`; real SMB source `/Volumes/switch 游戏包` was scanned read-only during tests: 16 grouped games, 48 packages, 92,313,880,284 bytes, 0 scan issues. These are filename **candidate** identities, not verified package contents.
+- Device follow-up `3934869` was cherry-picked as `f5d1132`; cancelled metadata awaits do not publish an inventory. Only the observed localized `1: SD内存卡` is known; it is not `4: Installed games`. Exact DBI 647 installed-object names remain unobserved.
+- Coordinator integration commits `3ea5709`, `44236e4`, `2f7b069`, `069d62b`, `41b0cf7`, `ed8523f`, `c97c72b` keep filename-only identities unknown for installation assessment, prevent title-only/ambiguous-folder grouping, preserve cached data on partial scans and source-path collisions, merge one game across multiple sources, and handle invalid persisted versions. Regression fixtures cover these cases.
+- Commit `1347e72` adds `BoundedInventoryReader` for eventual app composition: it launches the metadata-only `switchshelf-probe` in an isolated process, validates bounded JSON/exit/coverage, serializes attempts, and fences retries when a worker exit is unproven. The release `.app` script now includes the helper binary. Fake-executable tests exercise partial data, contradictory results, unverified exit, concurrency and timeout without touching hardware. The live app has **not yet been wired** to this reader; it must not claim bounded app inventory until UI integration.
+- `swift test` on integrated main passes 82 test cases (28 library, 8 domain, 46 device), including a bounded read-only NAS fixture. `python3 scripts/build-app.py` built and ad-hoc signed a local `.app`; `codesign --verify --deep --strict` passed and its bundled `switchshelf-probe --help` ran. This was the placeholder app before the UI worker's code is integrated, not UI acceptance or release signing/notarization.
+- A read-only USB `discover` command currently sees one `057e:201d` MTP candidate, still `waitingForMTP`. Descriptor presence is not a successful installed-content query. No coordinator read of post-restart Installed games objects has occurred.
+
+## Pending / gates
+
+1. UI worker must check Orca follow-ups, fix `AppModel` readiness gate (`discover()` deliberately does not return `.ready` from descriptors), use conservative `InstallationAssessor` semantics, preserve cached source entries on partial scans, remove temporary stubs/manifest edit, compile against integrated services and commit only owned paths. Coordinator then integrates and performs visual/interaction tests against the real cache/NAS.
+2. User must confirm DBI was fully exited/reopened after manually setting `4: Installed games=true` and is now left in “运行 MTP 传输程序”. Only the coordinator may run one exclusive read-only inventory probe. No installed state, object grammar, storage localization or completeness claim is possible before that evidence.
+3. No installation execution, device write, NAS file copy/hash, public distribution or signed dependency/licensing completion has occurred. The local app's install execution remains unavailable pending a separately reviewed test.

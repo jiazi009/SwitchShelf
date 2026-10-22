@@ -208,6 +208,22 @@ struct LibraryRepositoryTests {
         #expect(finalLoaded.games.contains { $0.id == "0100111111111000" && $0.contents[0].byteCount == 1500 })
     }
 
+    @Test("Partial scan does not erase previously cached source entries")
+    func partialScanPreservesCache() {
+        let source = LibrarySource(id: "src", url: URL(fileURLWithPath: "/tmp/Games"), name: "Games")
+        let content = LocalContent(id: "old", titleID: nil, kind: .unknown,
+                                   fileURL: URL(fileURLWithPath: "/tmp/Games/old.nsp"), byteCount: 1, format: .nsp)
+        let original = LibrarySnapshot(sources: [source],
+            games: [Game(id: "old-game", title: "Old", contents: [content])],
+            scannedAt: Date(timeIntervalSince1970: 1))
+        let partial = LibrarySnapshot(sources: [source], games: [],
+            scannedAt: Date(timeIntervalSince1970: 2), issues: ["subdirectory unavailable"])
+        let result = original.merging(scanResult: partial, for: source)
+        #expect(result.games == original.games)
+        #expect(result.scannedAt == original.scannedAt)
+        #expect(result.issues == ["subdirectory unavailable"])
+    }
+
     @Test("A game shared by two sources is one persisted row with both packages")
     func sharedGameAcrossSources() async throws {
         let dbURL = createTempDatabaseURL()

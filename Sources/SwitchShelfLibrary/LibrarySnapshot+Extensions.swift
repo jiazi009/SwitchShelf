@@ -5,6 +5,15 @@ extension LibrarySnapshot {
     /// Merges a newly scanned snapshot for a specific source into this snapshot,
     /// preserving other sources and their contents untouched.
     public func merging(scanResult: LibrarySnapshot, for source: LibrarySource) -> LibrarySnapshot {
+        // Partial enumeration cannot establish absence. Keep the last complete
+        // cache intact instead of replacing it with a truncated source listing.
+        if !scanResult.issues.isEmpty {
+            var preserved = self
+            for issue in scanResult.issues where !preserved.issues.contains(issue) {
+                preserved.issues.append(issue)
+            }
+            return preserved
+        }
         var updatedSources = self.sources.filter { $0.id != source.id }
         if let scannedSource = scanResult.sources.first(where: { $0.id == source.id }) {
             updatedSources.append(scannedSource)

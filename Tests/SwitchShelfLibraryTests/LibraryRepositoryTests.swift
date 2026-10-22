@@ -208,6 +208,22 @@ struct LibraryRepositoryTests {
         #expect(finalLoaded.games.contains { $0.id == "0100111111111000" && $0.contents[0].byteCount == 1500 })
     }
 
+    @Test("Source operations do not include sibling paths sharing a textual prefix")
+    func sourcePathBoundary() {
+        let first = LibrarySource(id: "first", url: URL(fileURLWithPath: "/tmp/Games"), name: "Games")
+        let second = LibrarySource(id: "second", url: URL(fileURLWithPath: "/tmp/Games2"), name: "Games2")
+        let file = URL(fileURLWithPath: "/tmp/Games2/second.nsp")
+        let content = LocalContent(id: "second-file", titleID: nil, kind: .unknown,
+                                   fileURL: file, byteCount: 1, format: .nsp)
+        let original = LibrarySnapshot(sources: [first, second],
+            games: [Game(id: "second-game", title: "Second", contents: [content])])
+
+        let offline = original.markingSourceOffline(sourceID: first.id)
+        #expect(offline.games.first?.contents.first?.availability == .online)
+        let merged = original.merging(scanResult: LibrarySnapshot(sources: [first]), for: first)
+        #expect(merged.games.first?.contents.first?.id == "second-file")
+    }
+
     @Test("Out-of-range persisted versions are treated as unknown, not a process crash")
     func malformedPersistedVersion() async throws {
         let dbURL = createTempDatabaseURL()

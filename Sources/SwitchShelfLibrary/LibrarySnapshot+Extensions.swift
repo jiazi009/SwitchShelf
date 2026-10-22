@@ -12,13 +12,17 @@ extension LibrarySnapshot {
             updatedSources.append(source)
         }
 
-        // Keep games that do NOT belong to this source
+        // Only a path component boundary denotes membership. /Games must not match /Games2.
         let sourcePath = source.url.standardizedFileURL.path
+        func belongsToSource(_ url: URL) -> Bool {
+            let path = url.standardizedFileURL.path
+            return path == sourcePath || path.hasPrefix(sourcePath.hasSuffix("/") ? sourcePath : sourcePath + "/")
+        }
         var retainedGames: [Game] = []
 
         for game in self.games {
             let nonSourceContents = game.contents.filter { content in
-                !content.fileURL.standardizedFileURL.path.hasPrefix(sourcePath)
+                !belongsToSource(content.fileURL)
             }
             if !nonSourceContents.isEmpty {
                 var modifiedGame = game
@@ -57,13 +61,17 @@ extension LibrarySnapshot {
             }
         }
 
+        func belongsToSource(_ url: URL, root: String) -> Bool {
+            let path = url.standardizedFileURL.path
+            return path == root || path.hasPrefix(root.hasSuffix("/") ? root : root + "/")
+        }
         var updatedGames: [Game] = []
         for game in self.games {
             var modifiedContents: [LocalContent] = []
             for content in game.contents {
                 var modifiedContent = content
                 if let targetPath = targetSourcePath,
-                   content.fileURL.standardizedFileURL.path.hasPrefix(targetPath) {
+                   belongsToSource(content.fileURL, root: targetPath) {
                     modifiedContent.availability = .offline
                 }
                 modifiedContents.append(modifiedContent)

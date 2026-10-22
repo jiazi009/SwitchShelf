@@ -11,6 +11,7 @@
 - IOKit discovery sees USB product DBI, vendor 0x057e, product 0x201d. This only proves enumeration, not MTP readiness or installed inventory success.
 - Stock mtp-detect exited 0 while reporting libusb_claim_interface = -3 and failure to initialize. IOKit interface owner is macOS ptpcamerad; command exit status alone is insufficient evidence of success.
 - A coordinator ImageCaptureCore prototype successfully discovered the Switch, opened its brokered session, sent read-only GetStorageIDs (0x1004), received 9 IDs with PTP OK (0x2001), and closed the session without error. No system daemon was terminated. This proves brokered MTP communication, not complete inventory support; pi was directed to implement this native route.
+- Follow-up GetStorageInfo (0x1005) succeeded for all 9 IDs. Actual exposed storages: SD Card install, NAND install, Saves, Album, SD内存卡, 金手指＆Mod, 相册工具, 主题, JKSV存档备份. Installed games is absent. The user was instructed to enable that MTP storage in DBI settings and re-enter MTP; the app must show an actionable missing-storage state rather than an empty installed list. No DBI configuration was modified by an agent.
 - InstallationAssessor fixture tests: 8 domain tests passed, including incomplete identity coverage, old session, candidate local identities, orphan update, version comparison and missing raw version.
 
 This is a bootstrap checkpoint, not evidence that the device adapter, install execution or full app scope has been completed.

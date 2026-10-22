@@ -208,6 +208,30 @@ struct LibraryRepositoryTests {
         #expect(finalLoaded.games.contains { $0.id == "0100111111111000" && $0.contents[0].byteCount == 1500 })
     }
 
+    @Test("A game shared by two sources is one persisted row with both packages")
+    func sharedGameAcrossSources() async throws {
+        let dbURL = createTempDatabaseURL()
+        defer { try? FileManager.default.removeItem(at: dbURL) }
+        let first = LibrarySource(id: "first", url: URL(fileURLWithPath: "/tmp/GamesA"), name: "A")
+        let second = LibrarySource(id: "second", url: URL(fileURLWithPath: "/tmp/GamesB"), name: "B")
+        func package(_ path: String) -> LocalContent {
+            LocalContent(id: path, titleID: "0100111000000000", kind: .base,
+                         fileURL: URL(fileURLWithPath: path), byteCount: 1, format: .nsp)
+        }
+        let original = LibrarySnapshot(sources: [first, second], games: [
+            Game(id: "0100111000000000", title: "Shared", contents: [package("/tmp/GamesB/base.nsp")])
+        ])
+        let scan = LibrarySnapshot(sources: [first], games: [
+            Game(id: "0100111000000000", title: "Shared", contents: [package("/tmp/GamesA/base.nsp")])
+        ])
+        let merged = original.merging(scanResult: scan, for: first)
+        #expect(merged.games.count == 1)
+        #expect(merged.games.first?.contents.count == 2)
+        let repo = try LibraryRepository(databaseURL: dbURL)
+        try await repo.save(merged)
+        #expect(try await repo.load().games.first?.contents.count == 2)
+    }
+
     @Test("Source operations do not include sibling paths sharing a textual prefix")
     func sourcePathBoundary() {
         let first = LibrarySource(id: "first", url: URL(fileURLWithPath: "/tmp/Games"), name: "Games")

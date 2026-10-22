@@ -31,10 +31,20 @@ extension LibrarySnapshot {
             }
         }
 
-        // Add newly scanned games for this source
-        let combinedGames = (retainedGames + scanResult.games).sorted {
-            $0.title.localizedStandardCompare($1.title) == .orderedAscending
+        // A game can span multiple sources. Keep its stable ID and merge its content
+        // rather than producing duplicate game rows (invalid for the SQLite key).
+        var combinedGames = retainedGames
+        var indexes = Dictionary(uniqueKeysWithValues: combinedGames.enumerated().map { ($0.element.id, $0.offset) })
+        for scanned in scanResult.games {
+            if let index = indexes[scanned.id] {
+                let existingIDs = Set(combinedGames[index].contents.map(\.id))
+                combinedGames[index].contents.append(contentsOf: scanned.contents.filter { !existingIDs.contains($0.id) })
+            } else {
+                indexes[scanned.id] = combinedGames.count
+                combinedGames.append(scanned)
+            }
         }
+        combinedGames.sort { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
 
         var combinedIssues = self.issues
         for issue in scanResult.issues where !combinedIssues.contains(issue) {

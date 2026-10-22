@@ -208,6 +208,22 @@ struct LibraryRepositoryTests {
         #expect(finalLoaded.games.contains { $0.id == "0100111111111000" && $0.contents[0].byteCount == 1500 })
     }
 
+    @Test("Out-of-range persisted versions are treated as unknown, not a process crash")
+    func malformedPersistedVersion() async throws {
+        let dbURL = createTempDatabaseURL()
+        defer { try? FileManager.default.removeItem(at: dbURL) }
+        let repo = try LibraryRepository(databaseURL: dbURL)
+        let file = URL(fileURLWithPath: "/tmp/test.nsp")
+        let content = LocalContent(id: "file", titleID: nil, kind: .unknown, rawVersion: 1,
+                                   fileURL: file, byteCount: 1, format: .nsp)
+        try await repo.save(LibrarySnapshot(games: [Game(id: "game", title: "Test", contents: [content])]))
+
+        let db = try SQLiteDatabase(databaseURL: dbURL)
+        try db.execute("UPDATE contents SET raw_version = -1 WHERE id = 'file';")
+        let reloaded = try await repo.load()
+        #expect(reloaded.games.first?.contents.first?.rawVersion == nil)
+    }
+
     @Test("Atomic writes maintain consistency")
     func atomicWritesConsistency() async throws {
         let dbURL = createTempDatabaseURL()

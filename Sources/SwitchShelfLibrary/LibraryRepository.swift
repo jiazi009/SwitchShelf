@@ -59,7 +59,7 @@ public actor LibraryRepository: LibraryPersisting {
             }
 
             let titleID = contentStmt.columnText(2)
-            let rawVersion = contentStmt.columnInt64(4).map { UInt32($0) }
+            let rawVersion = contentStmt.columnInt64(4).flatMap { UInt32(exactly: $0) }
             let displayVersion = contentStmt.columnText(5)
             let availability = SourceAvailability(rawValue: availString) ?? .online
 

@@ -204,6 +204,20 @@ struct LibraryScannerTests {
         #expect(looseGame.contents[0].kind == .dlc)
     }
 
+    @Test("Filename-only NAS identity cannot become a confirmed installed badge")
+    func filenameCandidateDoesNotConfirmInstallation() async throws {
+        let root = try createTempDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        try createDummyFile(at: root.appendingPathComponent("Game [0100111000000000][v0].nsp"))
+        let snapshot = try await LibraryScanner().scan(LibrarySource(url: root, name: "Candidate"))
+        let game = try #require(snapshot.games.first)
+        #expect(game.identification == .matched)
+        let inventory = InstalledInventory(deviceID: "fixture-session", isComplete: true,
+            records: [InstalledRecord(id: "fixture", titleID: "0100111000000000", kind: .base,
+                                      name: "Game", objectPath: "/Installed games/Game")])
+        #expect(InstallationAssessor.assess(game, inventory: inventory, isCurrentSession: true).state == .unknown)
+    }
+
     @Test("A matching display title alone never attaches an unidentified update")
     func sameTitleIsNotContentRelation() async throws {
         let root = try createTempDirectory()

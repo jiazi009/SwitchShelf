@@ -7,7 +7,7 @@ private let updateID = "0100123456780800"
 private func content(_ id: String, kind: ContentKind, version: UInt32? = nil) -> LocalContent {
     LocalContent(id: "\(id)-\(version ?? 0)", titleID: id, kind: kind, rawVersion: version, fileURL: URL(fileURLWithPath: "/fixture/test.nsp"), byteCount: 1, format: .nsp)
 }
-private func game(_ extra: [LocalContent] = [], confidence: IdentificationState = .matched) -> Game {
+private func game(_ extra: [LocalContent] = [], confidence: IdentificationState = .verified) -> Game {
     Game(id: baseID, title: "测试游戏", contents: [content(baseID, kind: .base)] + extra, identification: confidence)
 }
 private func record(_ id: String?, kind: ContentKind, version: UInt32? = nil) -> InstalledRecord {
@@ -28,6 +28,9 @@ private func inventory(_ records: [InstalledRecord], complete: Bool = true) -> I
     let data = inventory([record(baseID, kind: .base)])
     #expect(InstallationAssessor.assess(game(), inventory: data, isCurrentSession: false).state == .unknown)
     #expect(InstallationAssessor.assess(game(confidence: .needsReview), inventory: data, isCurrentSession: true).state == .unknown)
+    let filenameCandidate = InstallationAssessor.assess(game(confidence: .matched), inventory: data, isCurrentSession: true)
+    #expect(filenameCandidate.state == .unknown)
+    #expect(filenameCandidate.explanation.contains("文件名"))
 }
 @Test func updateWithoutBaseIsPartial() {
     let g = game([content(updateID, kind: .update, version: 2)])

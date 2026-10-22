@@ -5,8 +5,8 @@ public enum InstallationAssessor {
     public static func assess(_ game: Game, inventory: InstalledInventory?, isCurrentSession: Bool) -> InstallationAssessment {
         guard let inventory else { return result(.unknown, "尚未读取目标设备的已安装清单") }
         guard isCurrentSession else { return result(.unknown, "仅有上次读取记录，请重新连接并刷新", inventory) }
-        guard game.identification == .verified || game.identification == .matched else {
-            return result(.unknown, "本地游戏身份待确认，不能仅凭名称判断安装状态", inventory)
+        guard game.identification == .verified else {
+            return result(.unknown, "本地包身份尚未验证；文件名中的 Title ID 仅是候选，不能据此判断安装状态", inventory)
         }
         let local = game.contents
         let bases = local.filter { $0.kind == .base }

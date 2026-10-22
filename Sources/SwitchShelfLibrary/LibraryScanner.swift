@@ -151,8 +151,12 @@ public actor LibraryScanner: LibraryScanning {
 
         var builders: [String: GameBuilder] = [:] // Keyed by group key
         var baseTitleIDToKey: [String: String] = [:]
-        var gameFolderToKey: [String: String] = [:]
-        var titleToKey: [String: String] = [:]
+        var gameFolderToKeys: [String: Set<String>] = [:]
+
+        func uniqueFolderKey(_ folder: String) -> String? {
+            guard !folder.isEmpty, let keys = gameFolderToKeys[folder], keys.count == 1 else { return nil }
+            return keys.first
+        }
 
         // Pass 1: Register Base contents
         for item in items where item.parsed.kind == .base {
@@ -184,9 +188,8 @@ public actor LibraryScanner: LibraryScanning {
                 baseTitleIDToKey[baseID] = key
             }
             if !parsed.gameFolder.isEmpty {
-                gameFolderToKey[parsed.gameFolder] = key
+                gameFolderToKeys[parsed.gameFolder, default: []].insert(key)
             }
-            titleToKey[parsed.gameTitle.lowercased()] = key
         }
 
         // Pass 2: Attach Updates
@@ -196,9 +199,7 @@ public actor LibraryScanner: LibraryScanning {
 
             if let baseID = parsed.baseTitleID, let key = baseTitleIDToKey[baseID] {
                 targetKey = key
-            } else if !parsed.gameFolder.isEmpty, let key = gameFolderToKey[parsed.gameFolder] {
-                targetKey = key
-            } else if let key = titleToKey[parsed.gameTitle.lowercased()] {
+            } else if let key = uniqueFolderKey(parsed.gameFolder) {
                 targetKey = key
             } else {
                 targetKey = nil
@@ -224,12 +225,9 @@ public actor LibraryScanner: LibraryScanning {
             let parsed = item.parsed
             let targetKey: String?
 
-            // Reliable relation 1: same non-empty game folder
-            if !parsed.gameFolder.isEmpty, let key = gameFolderToKey[parsed.gameFolder] {
-                targetKey = key
-            }
-            // Reliable relation 2: explicit title match
-            else if let key = titleToKey[parsed.gameTitle.lowercased()] {
+            // A single base in the same game folder is a candidate relation;
+            // matching a display title alone is never sufficient.
+            if let key = uniqueFolderKey(parsed.gameFolder) {
                 targetKey = key
             } else {
                 targetKey = nil
@@ -255,9 +253,7 @@ public actor LibraryScanner: LibraryScanning {
             let parsed = item.parsed
             let targetKey: String?
 
-            if !parsed.gameFolder.isEmpty, let key = gameFolderToKey[parsed.gameFolder] {
-                targetKey = key
-            } else if let key = titleToKey[parsed.gameTitle.lowercased()] {
+            if let key = uniqueFolderKey(parsed.gameFolder) {
                 targetKey = key
             } else {
                 targetKey = nil

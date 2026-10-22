@@ -204,6 +204,34 @@ struct LibraryScannerTests {
         #expect(looseGame.contents[0].kind == .dlc)
     }
 
+    @Test("A matching display title alone never attaches an unidentified update")
+    func sameTitleIsNotContentRelation() async throws {
+        let root = try createTempDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        try createDummyFile(at: root.appendingPathComponent("Same [0100111000000000][v0].nsp"))
+        try createDummyFile(at: root.appendingPathComponent("Same [UPD][v65536].nsp"))
+
+        let snapshot = try await LibraryScanner().scan(LibrarySource(url: root, name: "Collision"))
+        #expect(snapshot.games.count == 2)
+        #expect(snapshot.games.first { $0.id == "0100111000000000" }?.contents.count == 1)
+        #expect(snapshot.games.first { $0.contents.first?.kind == .update }?.contents.count == 1)
+    }
+
+    @Test("One folder containing multiple bases cannot assign DLC to an arbitrary base")
+    func ambiguousFolderDoesNotAssignDLC() async throws {
+        let root = try createTempDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        try createDummyFile(at: root.appendingPathComponent("Collection/One [0100111000000000][BASE].nsp"))
+        try createDummyFile(at: root.appendingPathComponent("Collection/Two [0100222000000000][BASE].nsp"))
+        try createDummyFile(at: root.appendingPathComponent("Collection/Bonus [0100333000001001][DLC].nsp"))
+
+        let snapshot = try await LibraryScanner().scan(LibrarySource(url: root, name: "Ambiguous"))
+        #expect(snapshot.games.count == 3)
+        #expect(snapshot.games.first { $0.id == "0100111000000000" }?.contents.count == 1)
+        #expect(snapshot.games.first { $0.id == "0100222000000000" }?.contents.count == 1)
+        #expect(snapshot.games.first { $0.contents.first?.kind == .dlc }?.contents.count == 1)
+    }
+
     @Test("Partial scan failures capture issues without failing entire scan")
     func scanPartialFailures() async throws {
         let root = try createTempDirectory()

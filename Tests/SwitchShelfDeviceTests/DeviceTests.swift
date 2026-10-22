@@ -49,13 +49,20 @@ struct DiscoveryTests {
                       USBDescriptor(vendorID: 0x057e, productID: 0x2009),
                       USBDescriptor(vendorID: 0x1234, productID: 0x201d)]
         let discovery = DiscoveryClassifier.classify(inputs)
-        #expect(discovery.devices.map(\.productID) == [0x201d, 0x3000])
+        #expect(discovery.devices.map(\.productID) == [0x201d, 0x3000, 0x2000])
         #expect(discovery.state == .detected)
     }
     @Test func mtpPairDoesNotProveReady() {
         let discovery = DiscoveryClassifier.classify([USBDescriptor(vendorID: 0x057e, productID: 0x201d)])
         #expect(discovery.state == .waitingForMTP)
         #expect(!discovery.message.isEmpty)
+    }
+    @Test func observedNormalSwitchDescriptorDoesNotMeanDisconnectedOrReady() {
+        let discovery = DiscoveryClassifier.classify([USBDescriptor(vendorID: 0x057e, productID: 0x2000)])
+        #expect(discovery.state == .waitingForMTP)
+        #expect(discovery.devices.count == 1)
+        #expect(!discovery.devices[0].name.contains("DBI"))
+        #expect(discovery.message.contains("未确认"))
     }
     @Test func vendorAloneAndControllersAreIgnored() {
         #expect(DiscoveryClassifier.classify([USBDescriptor(vendorID: 0x057e, productID: 0x2009)]).state == .disconnected)
@@ -186,6 +193,42 @@ struct InventoryTests {
         let result = try await InventoryReader().read(from: FixtureTransport(objects: [file(1, parent: 0)], children: [root: [1]]))
         #expect(!result.isComplete)
         #expect(result.records.isEmpty) // Combined projection is not double-counted as one content.
+    }
+    @Test func explicitRedundantCombinedRootCanBeResolvedAfterCompleteNestedTraversal() async throws {
+        let objects = [folder(1, name: "Game [0100000000001000]"), file(2),
+            file(3, name: "X [0100000000001800][v65536][UPD].nsp"),
+            file(4, name: "X [0100000000001001][v0][DLC].nsp"),
+            file(9, parent: 0, name: "Combined [0100000000001000][v65536].nsp")]
+        let transport = FixtureTransport(objects: objects, children: [root: [9, 1], 1: [2, 3, 4]])
+        let result = try await InventoryReader().read(from: transport)
+        #expect(result.isComplete)
+        #expect(result.records.count == 3)
+        #expect(result.issues.isEmpty)
+    }
+    @Test func unattributedRootWithOtherwiseCompleteNestedRecordsRemainsPartial() async throws {
+        let objects = [folder(1, name: "Game [0100000000001000]"), file(2),
+                       file(9, parent: 0, name: "Combined unknown.nsp")]
+        let result = try await InventoryReader().read(from: FixtureTransport(objects: objects,
+            children: [root: [1, 9], 1: [2]]))
+        #expect(!result.isComplete)
+        #expect(result.records.count == 1)
+    }
+    @Test func rootCannotAssociateByDisplayName() async throws {
+        let objects = [folder(1, name: "Same display name"), file(2),
+            file(9, parent: 0, name: "Same display name [0100000000001000].nsp")]
+        let result = try await InventoryReader().read(from: FixtureTransport(objects: objects,
+            children: [root: [1, 9], 1: [2]]))
+        #expect(!result.isComplete)
+        #expect(result.records.count == 1)
+    }
+    @Test func rootFolderIDWithoutNestedBaseEvidenceRemainsPartial() async throws {
+        let objects = [folder(1, name: "Game [0100000000001000]"),
+            file(2, name: "X [0100000000001800][v65536][UPD].nsp"),
+            file(9, parent: 0, name: "Combined [0100000000001000].nsp")]
+        let result = try await InventoryReader().read(from: FixtureTransport(objects: objects,
+            children: [root: [1, 9], 1: [2]]))
+        #expect(!result.isComplete)
+        #expect(result.records.count == 1)
     }
     @Test func repeatedCycleAndWrongParentAreIncomplete() async throws {
         let transport = FixtureTransport(objects: [folder(1), file(2, parent: 999)], children: [root: [1], 1: [1, 2]])

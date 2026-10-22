@@ -47,12 +47,17 @@ struct USBDescriptor: Sendable, Equatable {
 enum DiscoveryClassifier {
     static func classify(_ descriptors: [USBDescriptor]) -> DeviceDiscovery {
         let candidates = descriptors.filter {
-            $0.vendorID == 0x057e && [UInt16(0x201d), UInt16(0x3000)].contains($0.productID)
+            $0.vendorID == 0x057e && [UInt16(0x201d), UInt16(0x3000), UInt16(0x2000)].contains($0.productID)
         }
-        let devices = candidates.map {
-            DeviceDescriptor(id: "usb-observation-\(UUID().uuidString)",
-                             name: $0.productID == 0x201d ? "Switch MTP 候选设备" : "DBI Backend 候选设备",
-                             vendorID: $0.vendorID, productID: $0.productID)
+        let devices = candidates.map { candidate in
+            let name: String
+            switch candidate.productID {
+            case 0x201d: name = "Switch MTP 候选设备"
+            case 0x3000: name = "DBI Backend 候选设备"
+            default: name = "Nintendo Switch USB 候选设备"
+            }
+            return DeviceDescriptor(id: "usb-observation-\(UUID().uuidString)", name: name,
+                                    vendorID: candidate.vendorID, productID: candidate.productID)
         }
         if devices.isEmpty {
             return DeviceDiscovery(state: .disconnected, message: "未检测到受支持的 Switch/DBI USB 描述符；请连接数据线并打开 DBI → Run MTP responder。")
@@ -60,10 +65,16 @@ enum DiscoveryClassifier {
         if devices.count > 1 {
             return DeviceDiscovery(state: .detected, devices: devices, message: "检测到多个候选设备；只读清单目前要求仅连接一台目标设备，尚未验证 MTP。")
         }
-        return DeviceDiscovery(state: .waitingForMTP, devices: devices,
-            message: candidates[0].productID == 0x201d
-                ? "检测到 057e:201d MTP 候选描述符，尚未握手；请停留在 DBI Run MTP responder，再读取清单。USB 识别不代表可安装。"
-                : "检测到 057e:3000 Backend 候选描述符；读取清单需要手动进入 DBI → Run MTP responder，尚未验证通道。")
+        let message: String
+        switch candidates[0].productID {
+        case 0x201d:
+            message = "检测到 057e:201d MTP 候选描述符，尚未握手；请停留在 DBI Run MTP responder，再读取清单。USB 识别不代表可安装。"
+        case 0x3000:
+            message = "检测到 057e:3000 Backend 候选描述符；读取清单需要手动进入 DBI → Run MTP responder，尚未验证通道。"
+        default:
+            message = "检测到 057e:2000 Nintendo Switch USB 候选描述符，连接存在但当前协议和 DBI 模式未确认；请打开 DBI → Run MTP responder，不能据此读取清单或安装。"
+        }
+        return DeviceDiscovery(state: .waitingForMTP, devices: devices, message: message)
     }
 }
 

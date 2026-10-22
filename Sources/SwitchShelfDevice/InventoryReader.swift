@@ -89,6 +89,9 @@ struct InventoryReader: Sendable {
         var seenStorages = Set<UInt32>(), seenObjects = Set<UInt32>(), identities = Set<String>()
         var contentFolders = Set<UInt32>(), candidateFolders = Set<UInt32>()
         var folderParents: [UInt32: UInt32] = [:]
+        var topLevelFolderIDs: [UInt32: String] = [:]
+        var nestedBaseIDs: [UInt32: Set<String>] = [:]
+        var rootProjections: [(id: UInt32, titleID: String?)] = []
         var objectCount = 0
         var stop = false
         for storage in targets {
@@ -138,6 +141,9 @@ struct InventoryReader: Sendable {
                         }
                         candidateFolders.insert(id)
                         folderParents[id] = folder.parent
+                        if folder.depth == 0, let titleID = InstalledObjectParser.parse(object.name).titleID {
+                            topLevelFolderIDs[id] = titleID
+                        }
                         pending.append((id, path, folder.depth + 1))
                     } else {
                         let ext = (object.name as NSString).pathExtension.lowercased()
@@ -145,16 +151,18 @@ struct InventoryReader: Sendable {
                             issue("Non-package object \(id) cannot establish installed-content identity."); continue
                         }
                         if folder.depth == 0 {
-                            // Official DBI docs identify these as combined projections, not one content.
-                            // Omit aggregates to avoid double-counting their nested base/update/DLC.
-                            issue("Root virtual package \(id) is a combined projection, omitted from content records; its per-content coverage is not verified.")
+                            // Resolve only after the corresponding nested game is fully traversed.
+                            // Aggregates never become individual content records.
+                            rootProjections.append((id, InstalledObjectParser.parse(object.name).titleID))
                             continue
                         }
                         let parsed = InstalledObjectParser.parse(object.name)
                         for detail in parsed.issues { issue("Object \(id): \(detail)") }
                         if parsed.issues.isEmpty, let titleID = parsed.titleID, let version = parsed.rawVersion {
                             var ancestor = folder.parent
-                            while ancestor != Self.root, contentFolders.insert(ancestor).inserted {
+                            while ancestor != Self.root {
+                                contentFolders.insert(ancestor)
+                                if parsed.kind == .base { nestedBaseIDs[ancestor, default: []].insert(titleID) }
                                 ancestor = folderParents[ancestor] ?? Self.root
                             }
                             let key = "\(titleID):\(parsed.kind.rawValue):\(version)"
@@ -170,6 +178,18 @@ struct InventoryReader: Sendable {
         }
         if !candidateFolders.subtracting(contentFolders).isEmpty {
             issue("One or more Installed games folders lack an attributable content object; this cannot establish an empty/complete content inventory.")
+        }
+        let traversalComplete = complete
+        for projection in rootProjections {
+            let matches = topLevelFolderIDs.filter { folder, titleID in
+                titleID == projection.titleID && nestedBaseIDs[folder]?.contains(titleID) == true
+            }
+            // DBI's documented aggregate projection plus three explicit identity observations:
+            // root filename ID == unique game-folder ID == nested BASE content ID.
+            // Never associate by a human display title or assume root ID identifies one content.
+            if !traversalComplete || projection.titleID == nil || matches.count != 1 {
+                issue("Root virtual package \(projection.id) is an unattributed combined projection, omitted from content records; per-content coverage is not verified.")
+            }
         }
         inventory.isComplete = complete
         inventory.observedAt = Date()

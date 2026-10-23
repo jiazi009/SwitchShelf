@@ -28,3 +28,10 @@ Keep Switch connected by a data-capable USB cable; open DBI and choose Run MTP r
 ## Completion criteria and tracking
 Every task records implementation paths, tests, commit, hardware evidence and limitations. Place persistent reports in Docs/Reports. Completed UI does not prove device capability; passing fixture tests does not prove SMB disconnect or Switch protocol behavior. Update this plan with actual outcomes as development proceeds.
 
+## Acceptance follow-up — 2026-10-23
+
+- `codex/source-access-recovery` / `0b154a5`: existing source selection now refreshes its access bookmark; background bookmark resolution does not show UI.
+- 84 tests, debug build, local app packaging and ad-hoc signature verification pass. A fresh actual app launch persisted 16 games / 48 packages / 0 scan issues to its own cache; the previous app scan stall did not recur and its cause remains unknown.
+- Live UI observation still fails with `permission_denied` despite granted permission status. Search/list/queue/layout acceptance remains pending. No real device probe was performed without the user's DBI readiness confirmation.
+- Next: user unlock/permission review, then live UI checks and one confirmed exclusive read-only DBI inventory. Details: `Docs/Reports/source-access-followup.md` and the updated `project-handoff.md`.
+

@@ -10,7 +10,7 @@
 
 ## 2. 仓库、协调与交付物
 
-- 主仓库：`/Users/jiazi/Desktop/SwitchShelf`，当前 `main` 为 `d6cdd9f`；本地交付物 `build/SwitchShelf.app`（临时 ad-hoc 签名，未公证／发行）。主仓库仅有未跟踪 `.pi/`，不属于交付代码。
+- 主仓库：`/Users/jiazi/Desktop/SwitchShelf`，交接基线 `main` 为 `5ea444b`；本轮接手修订在 `codex/source-access-recovery` 分支，代码提交 `0b154a5`，未合并主分支。本地交付物 `build/SwitchShelf.app` 已重新构建（临时 ad-hoc 签名，未公证／发行）。未跟踪 `.pi/` 不属于交付代码，未改动。
 - Orca Run：`run_6bf908529b8b`，接替协调者 generation 2；原 Codex 协调会话已结束。已有 agy 游戏库、pi 设备和 opencode UI worker 均以 `worker_done` 成功结束，报告和提交已核对。不要重复派工、覆盖其工作树或并发接管同一 Run。
 - 原工作树：`/Users/jiazi/orca/workspaces/SwitchShelf/switchshelf-library`（`2632632`）、`switchshelf-device`（`3934869`）、`switchshelf-ui`（`792db23`、`5b5b587`）。UI 工作树还有未提交的 `Package.swift` 工具版本改动；未整合，勿覆盖。主仓库 cherry-pick 对应提交包括库 `14db18a`、设备 `f5d1132`、UI `dd94bb8` 与其报告 `833a197`。
 - 协调者后续安全修订：`1347e72`（有界独立只读 probe）、`3dc5044`（旧 JSON 缓存安全迁移、候选内容安装状态保持未知、USB 重新枚举使旧清单失效）；验收报告 `53df640`、`d6cdd9f`。详细历史见 `Docs/Reports/coordinator-integration.md`。
@@ -30,7 +30,7 @@
 
 ## 4. 未完成验收／真实限制
 
-1. **实时 UI 与 NAS：** 终端测试能在约 0.22 秒完成只读扫描，但一次实际 `.app` 启动后的扫描在 Foundation `NSURLDirectoryEnumerator`／`open` 阻塞超过两分钟。进程随后由协调者终止；当时 app 的 SQLite 缓存中仍为 **0 款游戏**。可能与图形会话权限或挂载上下文有关，原因没有证明，不能声称 16 款已在实时 UI 显示。`orca computer get-app-state` 报 `permission_denied`，虽然权限查询显示 Accessibility 与 Screenshots 已获授权；会话当时锁屏。需用户解锁并审查可能出现的本地权限提示，再复现、定位、验收。不得伪称玻璃材质、按钮或交互已经现场确认。
+1. **实时 UI 与 NAS：** 之前一次实际 `.app` 启动后的扫描在 Foundation `NSURLDirectoryEnumerator`／`open` 阻塞超过两分钟，当时缓存为 0 款。**本轮重新打包并启动 App 后，2026-10-23 21:40:15（北京时间）的实际 App 缓存已有 16 款游戏／48 个包／0 条扫描问题**；本轮终端测试耗时约 0.34 秒。此前卡住未复现，原因仍未证明，也不能将它归因于本轮书签修复。窗口检查在权限查询显示 Accessibility／Screenshots 已授权后，仍两次报 `permission_denied`。因此可以确认实际 App 扫描和持久化成功，**不能确认 16 款已在窗口中显示或交互通过**。需用户解锁并审查本地权限提示，继续现场验收。
 2. **DBI 647-zhcn 已安装清单：** 用户报告 DBI 647-zhcn、固件显示 `19.0.1e`，并曾手动将 `[MTP Storages] 4: Installed games=true`；此前读取的是 DBI 重启前的九个 storage。已观察的 `1: SD内存卡` **不是** Installed games。没有重启后 Installed games 的 storage 名、层级、对象文件名、完整性或真实 installed records。`Docs/Reports/hardware-connection-647.md`、`device-647-compatibility.md` 详述以前的只读握手和局限。测试 fixture 的英文存储名、Title ID／版本／类型语法并非已证实的 647 中文版输出。
 3. **产品后续：** 元数据／合法封面来源、安装 Backend 协议、授权测试包与目标、结果确认／重试／恢复、SD 维护及发行公证均属于后续阶段；不要将 disabled 队列误当可安装产品。
 
@@ -40,6 +40,8 @@
 2. GUI 可用后，以 `build/SwitchShelf.app` 重试实时打开、NAS 只读扫描、游戏数、搜索／列表／队列／离线缓存、亮暗及 960×640 最小布局。若再次卡住，记录权限状态和阻塞位置，先修复 app 路径；不得用 CLI 16 款结果冒充 UI 呈现。
 3. 确认唯一设备访问者且用户完成 DBI 操作后，由协调者 **仅运行一次独占、限时、只读** inventory probe；记录实际 storage 名、对象层级／命名、状态码、完整性、可解析身份。超时或 partial 时保持未知，不并发重试、不杀系统客户端、更不写设备。根据实测证据再决定是否需要 DBI 647 兼容改动。
 4. 对新证据回归 `swift test`、`swift build`、app 打包与签名验证；更新本文和验收报告，报告明确已完成／未完成项及提交。大改共享领域模型或 `Package.swift` 前先协调。安装执行仍等待**另外**的用户审查批准。
+
+本轮已完成代码复核、上述构建检查和实际 App 缓存检查。接下来先完成步骤 1 的现场准备，再继续步骤 2、3；不需要重新派发已完成的 worker。具体证据见 `Docs/Reports/source-access-followup.md`。
 
 ## 6. 快速入口
 

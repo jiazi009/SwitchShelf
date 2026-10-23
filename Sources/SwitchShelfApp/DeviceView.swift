@@ -228,7 +228,7 @@ struct DeviceView: View {
                     Image(systemName: "lock.shield.fill")
                         .font(.system(size: 10))
                         .foregroundStyle(Theme.installed)
-                    Text("当前里程碑只读：不安装、不删除设备对象、不修改存档或配置。安装执行会在传输协议、结果语义与测试包全部验证后单独启用。")
+                    Text("MTP（057e:201d）用于只读已安装清单；DBI 的 USB Backend（057e:3000）是另一模式，当前仅能作描述符候选检测，不会打开或传输。两种模式不能并行占用 USB。安装队列的“检查计划”只看 Mac 本地文件，与设备连接无关。SD／机身存储是计划意向：Backend 主机协议没有目标设置命令，设备端选择和安装结果尚未验证。当前不安装、不删除设备对象或修改存档。")
                         .font(.system(size: 10))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)

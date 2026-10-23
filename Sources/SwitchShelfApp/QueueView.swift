@@ -108,7 +108,7 @@ struct QueueView: View {
                         .font(.system(size: 13, weight: .semibold))
                     BadgePill(text: "未启用", systemImage: "lock.fill", tone: .warning)
                 }
-                Text("队列会自动保存在本机，可编辑内容、目标与顺序。开始安装需要已验证的 DBI Backend 传输通道、明确的成功/失败语义，以及经授权的测试包与目标；在这些条件成立前不会执行，也不会显示虚假进度。")
+                Text("队列保存在本机。检查计划只查看本地文件元数据，不读取文件内容或连接 USB；SD／机身存储仅是本地意向，Backend 主机协议没有设置目标的命令，设备端选择与结果仍须另行核实。未经授权的安装测试和设备确认前不能开始安装。")
                     .font(.system(size: 10.5))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -117,14 +117,42 @@ struct QueueView: View {
                         .buttonStyle(.borderedProminent)
                         .controlSize(.large)
                         .disabled(true)
-                        .help("不可用：安装传输协议与目标路径尚未验证")
-                        .accessibilityHint("当前不可用。安装传输协议与目标路径尚未验证。")
-                    Button("查看设备与 MTP 说明") { model.showDevice() }
+                        .help("不可用：尚未授权设备安装测试，Backend 传输和设备端目标未验证")
+                        .accessibilityHint("当前不可用。尚未授权安装测试，设备端目标和结果未验证。")
+                    Button("检查计划") { Task { await model.checkPlan() } }
+                        .buttonStyle(.bordered)
+                        .controlSize(.large)
+                        .disabled(model.plan.isEmpty || model.isCheckingPlan)
+                        .help("仅检查本地来源、普通文件、大小与 Backend 文件名；不连接设备")
+                    Button("查看设备模式说明") { model.showDevice() }
                         .buttonStyle(.bordered)
                         .controlSize(.large)
                         .accessibilityLabel("查看设备连接与安装条件说明")
                 }
                 .padding(.top, 2)
+                if model.isCheckingPlan {
+                    Text("正在检查本地文件元数据…")
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(.secondary)
+                } else if let result = model.preparation {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(model.preparationIsCurrent
+                             ? (result.isPrepared ? "本地准备检查通过：\(result.offers.count) 个文件；不代表设备就绪或安装成功。" : "本地准备检查未通过：\(result.issues.count) 个问题。")
+                             : "计划或来源已变化，检查结果已过期；请重新检查计划。")
+                            .font(.system(size: 10.5, weight: .medium))
+                        if model.preparationIsCurrent {
+                            ForEach(Array(result.issues.enumerated()), id: \.offset) { _, issue in
+                                Text("· \(issue.message)\(issue.fileID.map { "（\($0)）" } ?? "")")
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(Theme.warning)
+                            }
+                        }
+                        Text("元数据只反映检查时刻；开始前还需重新验证文件。文件名身份仅是候选，未校验包内容。")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.top, 4)
+                }
             }
             Spacer(minLength: 0)
         }

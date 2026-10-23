@@ -589,22 +589,27 @@ final class AppModel {
         if path == normalizedPath(Self.initialSourceURL) {
             UserDefaults.standard.set(false, forKey: AppSettings.initialSourceRemoved)
         }
-        if let existing = snapshot.sources.first(where: { normalizedPath($0.url) == path }) {
-            select(.source(existing.id))
-            scanSource(existing.id)
-            return
-        }
-
+        // Choosing an existing directory is also the recovery path for lost
+        // access. Refresh its bookmark before rescanning, retaining its ID and
+        // cache instead of treating the selection as a no-op.
+        let existingIndex = snapshot.sources.firstIndex { normalizedPath($0.url) == path }
+        let sourceID = existingIndex.map { snapshot.sources[$0].id } ?? UUID().uuidString
         let didAccess = standardized.startAccessingSecurityScopedResource()
-        let new = LibrarySource(
-            id: UUID().uuidString,
-            url: standardized,
-            name: standardized.lastPathComponent.isEmpty ? "游戏文件夹" : standardized.lastPathComponent,
-            availability: .online
-        )
-        if didAccess { scopedURLs[new.id] = standardized }
-        snapshot.sources.append(new)
-        let created = snapshot.sources[snapshot.sources.count - 1]
+        if didAccess {
+            scopedURLs[sourceID]?.stopAccessingSecurityScopedResource()
+            scopedURLs[sourceID] = standardized
+        }
+        if let existingIndex {
+            snapshot.sources[existingIndex].url = standardized
+            snapshot.sources[existingIndex].availability = .online
+        } else {
+            snapshot.sources.append(LibrarySource(
+                id: sourceID,
+                url: standardized,
+                name: standardized.lastPathComponent.isEmpty ? "游戏文件夹" : standardized.lastPathComponent,
+                availability: .online
+            ))
+        }
 
         var bookmarkError: String?
         do {
@@ -613,7 +618,7 @@ final class AppModel {
                 includingResourceValuesForKeys: nil,
                 relativeTo: nil
             )
-            if let index = snapshot.sources.firstIndex(where: { $0.id == created.id }) {
+            if let index = snapshot.sources.firstIndex(where: { $0.id == sourceID }) {
                 snapshot.sources[index].bookmark = bookmark
             }
         } catch {
@@ -621,17 +626,17 @@ final class AppModel {
         }
 
         await persistSnapshot()
-        select(.source(created.id))
+        select(.source(sourceID))
 
         if let bookmarkError {
             notice = AppNotice(
                 level: .info,
-                title: "来源已添加",
+                title: existingIndex == nil ? "来源已添加" : "来源已重新选择",
                 message: "但无法保存长期访问书签，重新启动后若无法访问，需要再次添加该文件夹。\(bookmarkError)"
             )
         }
 
-        scanSource(created.id)
+        scanSource(sourceID)
     }
 
     func removeSource(_ source: LibrarySource) {

@@ -27,9 +27,11 @@ public actor LibraryScanner: LibraryScanning {
 
         if let bookmarkData = source.bookmark {
             var isStale = false
+            // Background scans must not wait for a bookmark-resolution dialog.
+            // The app refreshes access through explicit folder selection.
             if let resolved = try? URL(
                 resolvingBookmarkData: bookmarkData,
-                options: .withSecurityScope,
+                options: [.withSecurityScope, .withoutUI],
                 relativeTo: nil,
                 bookmarkDataIsStale: &isStale
             ) {

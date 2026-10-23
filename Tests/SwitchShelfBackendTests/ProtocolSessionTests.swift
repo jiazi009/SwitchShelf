@@ -38,6 +38,17 @@ private actor Source: BackendFileReading {
     func setShort() { short = true }
 }
 
+private actor ProgressLog {
+    var snapshots: [BackendTransferResult] = []
+    var fail = false
+    func record(_ result: BackendTransferResult) throws {
+        snapshots.append(result)
+        if fail { throw BackendError.sourceChanged }
+    }
+    func values() -> [BackendTransferResult] { snapshots }
+    func setFailure() { fail = true }
+}
+
 final class BackendProtocolSessionTests: XCTestCase {
     private let offer = BackendFileOffer(id: "file", name: "游戏.nsp", byteCount: 10)
     private func header(_ type: BackendCodec.MessageType = .request, _ command: BackendCodec.Command,
@@ -145,7 +156,14 @@ final class BackendProtocolSessionTests: XCTestCase {
         let (closeSession, closePeer, _) = make(exit())
         await closePeer.setFailure()
         await fails(closeSession, [offer], as: .releaseUnverified)
+        let (_, closeCalls) = await closePeer.snapshot()
+        XCTAssertEqual(closeCalls, 1, "successful body and failed close must not retry close")
         await fails(closeSession, [offer], as: .busy)
+        let (failureSession, failurePeer, _) = make(Data())
+        await failurePeer.setFailure()
+        await fails(failureSession, [offer], as: .releaseUnverified)
+        let (_, failureCloses) = await failurePeer.snapshot()
+        XCTAssertEqual(failureCloses, 1, "failure and failed close must not retry close")
     }
 
     func testBoundedChunksAndMalformedRangePrefix() async throws {
@@ -166,6 +184,57 @@ final class BackendProtocolSessionTests: XCTestCase {
         let (commandBudget, _, _) = make(header(.request, .list) + header(.acknowledgement, .list),
                                          options: BackendSessionOptions(maximumCommands: 1))
         await fails(commandBudget, [offer], as: .timeout)
+    }
+
+    func testProgressPrecedesLaterProtocolFailureAndOverlapIsUnique() async throws {
+        let n = Data(offer.name.utf8)
+        let other = BackendFileOffer(id: "second", name: "second.nsp", byteCount: 2)
+        let log = ProgressLog()
+        let (session, peer, _) = make(range(n, 0, 5) + range(n, 2, 5) + range(n, 0, 5) +
+                                      header(.response, .exit))
+        do {
+            _ = try await session.run(offers: [other, offer], onProgress: { try await log.record($0) })
+            XCTFail("unexpected success")
+        } catch let error as BackendError { XCTAssertEqual(error, .protocolViolation) }
+        let snapshots = await log.values()
+        XCTAssertEqual(snapshots.map(\.totalBytesSent), [5, 10, 15])
+        XCTAssertEqual(snapshots.map { $0.files[1].uniqueBytesSent }, [5, 7, 7])
+        XCTAssertTrue(snapshots.allSatisfy { !$0.peerRequestedExit && $0.files.map(\.fileID) == ["second", "file"] })
+        XCTAssertTrue(snapshots.allSatisfy { $0.files[0].phase == .notRequested &&
+            $0.files[1].phase == .partiallyTransferred })
+        let (_, closes) = await peer.snapshot()
+        XCTAssertEqual(closes, 1)
+    }
+
+    func testFullCoverageProgressIsHostOnlyBeforeExit() async throws {
+        let n = Data(offer.name.utf8)
+        let log = ProgressLog()
+        let (session, peer, _) = make(range(n, 0, 10) + range(n, 0, 10) + exit())
+        let result = try await session.run(offers: [offer], onProgress: { try await log.record($0) })
+        let snapshots = await log.values()
+        XCTAssertEqual(snapshots.map(\.totalBytesSent), [10, 20])
+        XCTAssertEqual(snapshots.map { $0.files[0].uniqueBytesSent }, [10, 10])
+        XCTAssertTrue(snapshots.allSatisfy { !$0.peerRequestedExit &&
+            $0.files[0].phase == .transferredAwaitingConfirmation })
+        XCTAssertTrue(result.peerRequestedExit)
+        XCTAssertEqual(result.files[0].phase, .transferredAwaitingConfirmation)
+        let (_, closes) = await peer.snapshot()
+        XCTAssertEqual(closes, 1)
+    }
+
+    func testObserverFailureClosesOnceAndPreservesError() async throws {
+        let log = ProgressLog()
+        await log.setFailure()
+        let (session, peer, _) = make(range(Data(offer.name.utf8), 0, 3) + exit())
+        do {
+            _ = try await session.run(offers: [offer], onProgress: { try await log.record($0) })
+            XCTFail("unexpected success")
+        } catch let error as BackendError { XCTAssertEqual(error, .sourceChanged) }
+        let snapshots = await log.values()
+        XCTAssertEqual(snapshots.count, 1)
+        let (_, closes) = await peer.snapshot()
+        XCTAssertEqual(closes, 1)
+        await fails(session, [offer], as: .busy)
     }
 
     func testCancellationAndReentrancy() async throws {

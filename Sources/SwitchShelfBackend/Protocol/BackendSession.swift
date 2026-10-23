@@ -29,6 +29,11 @@ public struct BackendSessionOptions: Sendable {
     }
 }
 
+/// Called after each successful host file-data write with a conservative snapshot.
+/// A throwing observer aborts the session; the transport is still closed once.
+/// A crash between transport write and observer persistence can leave progress unknown.
+public typealias BackendProgressObserver = @Sendable (BackendTransferResult) async throws -> Void
+
 /// One-shot DBI Backend host session over an already opened byte transport.
 /// Never discovers a device, selects an install destination, or confirms installation.
 public actor BackendSession {
@@ -44,10 +49,25 @@ public actor BackendSession {
         self.options = options
     }
 
-    public func run(offers: [BackendFileOffer]) async throws -> BackendTransferResult {
+    public func run(offers: [BackendFileOffer],
+                    onProgress: BackendProgressObserver? = nil) async throws -> BackendTransferResult {
         guard !started else { throw BackendError.busy }
         started = true // No reuse, even when validation or close fails.
+        let outcome: Result<BackendTransferResult, Error>
         do {
+            outcome = .success(try await runBody(offers: offers, onProgress: onProgress))
+        } catch {
+            outcome = .failure(error is CancellationError || Task.isCancelled ? BackendError.cancelled : error)
+        }
+        // Close exactly once, regardless of body outcome. A failed release takes
+        // precedence because the device ownership state is then unverified.
+        do { try await transport.close() } catch { throw BackendError.releaseUnverified }
+        if case .success = outcome, Task.isCancelled { throw BackendError.cancelled }
+        return try outcome.get()
+    }
+
+    private func runBody(offers: [BackendFileOffer],
+                         onProgress: BackendProgressObserver?) async throws -> BackendTransferResult {
             guard options.valid else { throw BackendError.invalidPlan }
             var names: [Data: BackendFileOffer] = [:]
             var ids: Set<String> = []
@@ -104,35 +124,40 @@ public actor BackendSession {
                         let bytes = try await reader.read(fileID: offer.id, offset: offset, length: chunk)
                         try checkBudget(clock: clock, deadline: deadline)
                         guard bytes.count == chunk else { throw BackendError.shortRead }
-                        try await write(bytes, clock: clock, deadline: deadline)
-                        offset += UInt64(chunk)
                         let (sum, sumOverflow) = total.addingReportingOverflow(UInt64(chunk))
                         guard !sumOverflow else { throw BackendError.protocolViolation }
+                        // Do not omit coverage merely because a post-write deadline
+                        // expires; the peer may have received the entire chunk.
+                        try await transport.write(bytes, timeoutMilliseconds: timeout(clock: clock, deadline: deadline))
+                        offset += UInt64(chunk)
                         total = sum
                         var intervals = coverage[offer.id] ?? Coverage()
                         intervals.add(offset - UInt64(chunk), offset)
                         coverage[offer.id] = intervals
+                        if let onProgress {
+                            try await onProgress(snapshot(offers: offers, coverage: coverage,
+                                                          total: total, exited: false))
+                        }
+                        try checkBudget(clock: clock, deadline: deadline)
                     }
                 }
                 if exited { break }
             }
             guard exited else { throw BackendError.timeout }
-            let files = offers.map { offer -> BackendFileTransfer in
-                let bytes = coverage[offer.id]?.count ?? 0
-                let phase: BackendFileTransferPhase = bytes == offer.byteCount && coverage[offer.id] != nil
-                    ? .transferredAwaitingConfirmation
-                    : (bytes == 0 ? .notRequested : .partiallyTransferred)
-                return BackendFileTransfer(fileID: offer.id, byteCount: offer.byteCount,
-                                           uniqueBytesSent: bytes, phase: phase)
-            }
-            let result = BackendTransferResult(files: files, peerRequestedExit: true, totalBytesSent: total)
-            try await transport.close()
-            return result
-        } catch {
-            do { try await transport.close() } catch { throw BackendError.releaseUnverified }
-            if error is CancellationError || Task.isCancelled { throw BackendError.cancelled }
-            throw error
+            return snapshot(offers: offers, coverage: coverage, total: total, exited: true)
+    }
+
+    private func snapshot(offers: [BackendFileOffer], coverage: [String: Coverage],
+                          total: UInt64, exited: Bool) -> BackendTransferResult {
+        let files = offers.map { offer -> BackendFileTransfer in
+            let bytes = coverage[offer.id]?.count ?? 0
+            let phase: BackendFileTransferPhase = bytes == offer.byteCount && coverage[offer.id] != nil
+                ? .transferredAwaitingConfirmation
+                : (bytes == 0 ? .notRequested : .partiallyTransferred)
+            return BackendFileTransfer(fileID: offer.id, byteCount: offer.byteCount,
+                                       uniqueBytesSent: bytes, phase: phase)
         }
+        return BackendTransferResult(files: files, peerRequestedExit: exited, totalBytesSent: total)
     }
 
     private func checkBudget(clock: ContinuousClock, deadline: ContinuousClock.Instant) throws {

@@ -32,6 +32,6 @@ Every task records implementation paths, tests, commit, hardware evidence and li
 
 - `codex/source-access-recovery` / `0b154a5`: existing source selection now refreshes its access bookmark; background bookmark resolution does not show UI.
 - 84 tests, debug build, local app packaging and ad-hoc signature verification pass. A fresh actual app launch persisted 16 games / 48 packages / 0 scan issues to its own cache; the previous app scan stall did not recur and its cause remains unknown.
-- Live UI observation still fails with `permission_denied` despite granted permission status. Search/list/queue/layout acceptance remains pending. No real device probe was performed without the user's DBI readiness confirmation.
-- Next: user unlock/permission review, then live UI checks and one confirmed exclusive read-only DBI inventory. Details: `Docs/Reports/source-access-followup.md` and the updated `project-handoff.md`.
+- Orca CLI window observation still fails with `permission_denied` despite granted permission status. After the user's permission screenshots, the available `cua_repl` native control channel verified the real 16-game window, search (one Zelda result), grid/list switching and selection. Inspector AX remains conservatively unknown for installation; its screenshot area needs further visual verification.
+- Queue editing/persistence, offline scenarios, dark and 960×640 layouts remain pending. No real device probe was performed without the user's DBI readiness confirmation. Next: remaining live UI checks and one confirmed exclusive read-only DBI inventory. Details: `Docs/Reports/source-access-followup.md` and the updated `project-handoff.md`.
 

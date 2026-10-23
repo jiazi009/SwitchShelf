@@ -42,3 +42,11 @@ SQLite is accessed through the system sqlite3 C interface in the initial depende
 ## Scope gates
 First integrated milestone: runnable native app, real NAS scan/cache, real device detection and read-only installed inventory, conservative installation badges and a persistent editable install plan. Installation execution is a separate next wave after protocol, result semantics and an explicit test file/target are established. Maintain the original development document's remaining metadata, installation, recovery and maintenance roadmap; an attractive shell alone does not complete that scope.
 
+## Backend foundation wave — 2026-10-23
+
+The user authorized supervised Orca agents to implement USB Backend software and hardware-free tests. `SwitchShelfBackend` owns transport-independent framing/session logic, allowlisted range reads, preparation checks and durable transfer state; `CDBIBackendUSB` owns the native USB adapter. The host protocol reference is pinned to rashevskyv/dbi `22090afc64cc7b5d645a99bf3d4d8625a67b766e` (`dbibackend`). No production UI or CLI may open a Backend transfer session in this wave. Native USB code is compiled and tested with fakes/argument checks only; actual installation requires a separately reviewed file/target test.
+
+`BackendContracts.swift` is coordinator-owned for this wave. Protocol worker owns `SwitchShelfBackend/Protocol`; USB worker owns `CDBIBackendUSB` and `SwitchShelfBackend/USB`; UI/preflight worker owns `SwitchShelfApp` and `SwitchShelfBackend/Preflight`. Coordinator owns the manifest, file reader, journal, integration and final tests. Workers use separate child worktrees and must not launch further agents; the user's explicit delegation authorization applies to the coordinator.
+
+Backend file exchange does not prove installation. Transfer outcomes are per file (`notRequested`, `partiallyTransferred`, `transferredAwaitingConfirmation`), and never promote a game to installed. SD/NAND selections remain local intent: the pinned host protocol does not encode a destination-setting command. Backend and MTP must not hold device sessions concurrently. No new source file reads, physical USB opens/writes, dependency installs or global settings changes are allowed in worker validation.
+

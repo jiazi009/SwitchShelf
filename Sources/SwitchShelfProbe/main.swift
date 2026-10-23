@@ -61,6 +61,10 @@ if arguments.first == "--internal-worker", arguments.count == 4,
                 code = discovery.state == .error ? 1 : 0
                 result = ProbeResult(mode: mode, status: code == 0 ? "ok" : "error", discovery: discovery)
             } else {
+                // One machine-wide lease covers MTP and any future Backend helper.
+                // `discover` only enumerates IOKit descriptors and needs no lease.
+                let lease = try DeviceLease.acquire()
+                defer { lease.release() }
                 let inventory: InstalledInventory
                 if mode == "storages" {
                     inventory = try await service.readStorageDiagnostics()
@@ -71,6 +75,11 @@ if arguments.first == "--internal-worker", arguments.count == 4,
                 result = ProbeResult(mode: mode, status: inventory.isComplete ? "ok" : "partial",
                                      transport: transport, inventory: inventory)
             }
+        } catch let error as DeviceLeaseError {
+            code = 1
+            result = ProbeResult(mode: mode, status: "error", transport: transport,
+                error: ProbeFailure(code: error == .busy ? "busy" : "leaseUnavailable",
+                                    message: error.errorDescription ?? "Device lease unavailable."))
         } catch let error as DeviceServiceError {
             code = 1
             result = ProbeResult(mode: mode, status: "error", transport: transport,

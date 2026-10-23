@@ -104,6 +104,7 @@ public actor BoundedInventoryReader {
             if response.error?.code == "workerExitUnverified" {
                 return fail(.previousProcessUnverified, exited: false)
             }
+            if response.error?.code == "busy" { return fail(.deviceBusy) }
             return fail(response.error?.code == "timeout" ? .timeout : .readFailed)
         }
         guard let inventory = response.inventory,
@@ -116,7 +117,7 @@ public actor BoundedInventoryReader {
 
 public enum ProbeError: Error, LocalizedError, Sendable {
     case invalidTimeout, missingExecutable, temporaryOutput, launchFailed
-    case timeout, readFailed, invalidResponse, previousProcessUnverified
+    case timeout, readFailed, invalidResponse, previousProcessUnverified, deviceBusy
 
     public var errorDescription: String? {
         switch self {
@@ -128,6 +129,7 @@ public enum ProbeError: Error, LocalizedError, Sendable {
         case .readFailed: "只读设备探测失败；清单保持未知，请检查 DBI 模式和连接。"
         case .invalidResponse: "只读探测返回无效或不一致的结果；清单保持未知。"
         case .previousProcessUnverified: "无法确认上次探测进程已退出；为避免并发访问设备，请重启应用后再试。"
+        case .deviceBusy: "另一个进程正在使用 Switch USB 会话（例如 Backend 传输）；请等待该操作结束后重试。"
         }
     }
 }

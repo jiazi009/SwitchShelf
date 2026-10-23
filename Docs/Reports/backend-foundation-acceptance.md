@@ -39,10 +39,19 @@ Orca Run `run_b35d87130bcd` 的九项任务均为 completed：协议核心、USB
 
 首次 pi 结构化会话创建被 Orca 以 `agent_session_operation_invalid` 拒绝，没有遗留进程；随后采用文档支持的现有终端监督方式运行 pi。没有修改全局设置。**本机 pi 的默认提供方仍是 `openai-codex`，模型 `gpt-6-sol`**；已向用户说明并按其指定的 pi 当前配置继续，不能声称已换成另一额度来源。
 
+## 后续接续：共享设备租约 — 2026-10-23
+
+新增 `Sources/SwitchShelfDevice/DeviceLease.swift`：在 `~/Library/Application Support/SwitchShelf/device-lease.lock`（可用 `SWITCHSHELF_DEVICE_LEASE_PATH` 覆盖）上做非阻塞 `flock`，`O_CLOEXEC` 防止子进程继承。锁由内核持有，持锁进程退出或被 SIGKILL 时自动释放，因此不会留下“上一个 helper 是否真的退出”的陈旧状态；同一进程内的第二个句柄同样被拒绝。
+
+- probe worker 在 `inventory`／`storages` 之前获取租约，`discover` 只做 IOKit 枚举、不获取。失败时 JSON 返回 `busy`／`leaseUnavailable`，`BoundedInventoryReader` 将其映射为 `ProbeError.deviceBusy`，整个过程发生在打开设备之前。
+- 新增 2 项测试（同路径第二次获取返回 `.busy`、释放后可再获取；不同路径互不影响）。统一测试现为 **131 项**（库 29、领域 8、设备 50、Backend 34、XCTest 10），`swift test --skip RealNASScanTests` 通过。
+- 交叉进程实测：另一进程持有该锁时，`switchshelf-probe inventory --timeout 5 --json` 在接触设备前返回 `busy`、退出码 1。
+- 仍是注入式：`BackendUSBTransport` 只要求 `BackendUSBDeviceLease`，尚无生产 Backend 打开入口，所以 App 未在进程内持有该租约。等 Backend helper 出现时，helper 必须自己获取同一把锁。
+
 ## 下一步
 
-1. 软件侧先实现具体的 MTP/Backend 共享跨进程租约，并让所有实际会话入口共同遵守；当前只有必须注入的租约接口，不能启用原生打开入口。
-2. 将 Backend 原生操作和 SMB 范围读取纳入独立 helper 的退出确认与硬截止管理。actor 隔离不会强制中止阻塞的 `openat/pread` 或 IOKit 打开/关闭；当前仅协议协作预算和原生读写超时有界。默认 120 秒会话预算也不是已验证的大包生产配置。
+1. ~~MTP/Backend 共享跨进程租约~~ 已完成（见上）；剩余工作是让未来的 Backend helper 复用同一路径，并让 App 在两者之间只有一条获取路径。
+2. 将 Backend 原生操作和 SMB 范围读取纳入独立 helper 的退出确认与硬截止管理。actor 隔离不会强制中止阻塞的 `openat/pread` 或 IOKit 打开/关闭；当前仅协议协作预算和原生读写超时有界。probe 的“父进程限时 + terminate/SIGKILL + 退出确认”模式可复用，但尚未抽成 Backend 使用的公共 helper。默认 120 秒会话预算也不是已验证的大包生产配置。
 3. 上述软件条件完成后，单独制定可审查的小测试包、目标、取消/断连及结果核对方案，再安排用户授权的 Backend 实机测试。当前不需要重复 MTP 重启或拔插；已安装清单仍是独立未解决能力。
 4. 继续亮/暗、窄窗口及真实离线验收，之后再推进合法封面/元数据、发行等路线。
 

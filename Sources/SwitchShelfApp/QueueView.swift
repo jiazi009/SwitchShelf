@@ -142,7 +142,7 @@ struct QueueView: View {
                             .font(.system(size: 10.5, weight: .medium))
                         if model.preparationIsCurrent {
                             ForEach(Array(result.issues.enumerated()), id: \.offset) { _, issue in
-                                Text("· \(issue.message)\(issue.fileID.map { "（\($0)）" } ?? "")")
+                                Text("· \(issue.message)")
                                     .font(.system(size: 10))
                                     .foregroundStyle(Theme.warning)
                             }

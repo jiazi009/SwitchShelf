@@ -62,6 +62,29 @@ import Testing
         #expect(BackendPreflight.check(input([entry(file), duplicate])).issues.contains { $0.message.contains("重复") })
     }
 
+    @Test func protocolInvalidNamesAndOpaqueIDWithRealFixtures() throws {
+        for name in ["colon:sample.nsp", "c1\u{0085}sample.nsp", "line\u{2028}sample.nsp", "paragraph\u{2029}sample.nsp"] {
+            let file = try fixture(name)
+            let result = BackendPreflight.check(input([entry(file, name: name)]))
+            #expect(!result.isPrepared)
+            #expect(result.issues.contains { $0.message.contains("文件名") })
+        }
+        let chinese = try fixture("中文游戏.nsp")
+        #expect(BackendPreflight.check(input([entry(chinese, name: "中文游戏.nsp")])).isPrepared)
+        let valid = try fixture()
+        #expect(!BackendPreflight.check(input([entry(valid, id: "")])).isPrepared)
+    }
+
+    @Test func swappingTwoItemsInvalidatesPreparation() throws {
+        let first = try fixture("first.nsp")
+        let second = try fixture("second.nsp")
+        let a = BackendPreflightItem(id: "first", intendedTarget: "sd", entries: [entry(first, id: "one", name: "first.nsp")])
+        let b = BackendPreflightItem(id: "second", intendedTarget: "nand", entries: [entry(second, id: "two", name: "second.nsp")])
+        let result = BackendPreflight.check(.init(items: [a, b]))
+        #expect(result.isPrepared)
+        #expect(!result.isCurrent(for: .init(items: [b, a])))
+    }
+
     @Test func listWireBytesAreBounded() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

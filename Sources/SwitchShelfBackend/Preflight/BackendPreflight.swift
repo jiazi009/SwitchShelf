@@ -65,7 +65,7 @@ public enum BackendPreflight {
     public static func check(_ input: BackendPreflightInput) -> BackendPreflightResult {
         var offers: [BackendFileOffer] = []
         var issues: [BackendPreflightIssue] = []
-        var names = Set<String>()
+        var names = Set<Data>()
         var ids = Set<String>()
         var listBytes = 0
         let entries = input.items.flatMap(\.entries).filter(\.included)
@@ -74,20 +74,22 @@ public enum BackendPreflight {
         }
         for entry in entries {
             let id = entry.id
-            if !ids.insert(id).inserted {
+            if id.isEmpty || !ids.insert(id).inserted {
                 issues.append(.init(fileID: id, message: "内容 ID 重复，无法唯一提供文件。"))
                 continue
             }
             let bytes = Array(entry.name.utf8)
             let extensionName = (entry.name as NSString).pathExtension.lowercased()
             if bytes.isEmpty || bytes.count > 255 || entry.name == "." || entry.name == ".." ||
-                entry.name.contains("/") || entry.name.contains("\\") ||
-                entry.name.unicodeScalars.contains(where: { $0.value < 32 || $0.value == 127 }) ||
+                entry.name.contains("/") || entry.name.contains("\\") || entry.name.contains(":") ||
+                entry.name.unicodeScalars.contains(where: {
+                    CharacterSet.controlCharacters.contains($0) || CharacterSet.newlines.contains($0)
+                }) ||
                 !["nsp", "xci", "nsz", "xcz"].contains(extensionName) {
                 issues.append(.init(fileID: id, message: "文件名无法安全表示为 Backend 包文件名（需 1–255 UTF-8 字节、支持的扩展名且无路径/控制字符）。"))
                 continue
             }
-            if !names.insert(entry.name).inserted {
+            if !names.insert(Data(bytes)).inserted {
                 issues.append(.init(fileID: id, message: "Backend 文件名重复，设备无法区分同名文件。"))
                 continue
             }

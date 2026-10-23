@@ -53,6 +53,28 @@ import Testing
         await #expect(throws: BackendError.sourceChanged) { try await reader.read(fileID: "a", offset: 0, length: 1) }
     }
 
+    @Test func fifoNULAndCancelledBindingFailClosed() async throws {
+        let url = try fixture()
+        let fifo = url.deletingLastPathComponent().appendingPathComponent("pipe.nsp")
+        #expect(mkfifo(fifo.path, 0o600) == 0)
+        await #expect(throws: BackendError.sourceChanged) {
+            try await AllowlistedBackendFileReader.open(bindings: [.init(id: "fifo", url: fifo, expectedBytes: 0)])
+        }
+        let embeddedNUL = URL(fileURLWithPath: url.path + "\0suffix")
+        // Foundation percent-encodes NUL in file URLs on this platform, so a
+        // literal NUL path cannot be constructed here; it must not alias source.nsp.
+        #expect(!embeddedNUL.path.utf8.contains(0))
+        #expect(embeddedNUL.path.contains("%00"))
+        await #expect(throws: BackendError.sourceChanged) {
+            try await AllowlistedBackendFileReader.open(bindings: [.init(id: "nul", url: embeddedNUL, expectedBytes: 6)])
+        }
+        let task = Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            return try await AllowlistedBackendFileReader.open(bindings: [.init(id: "file", url: url, expectedBytes: 6)])
+        }
+        await #expect(throws: BackendError.cancelled) { try await task.value }
+    }
+
     @Test func ancestorSymlinkAndCancellation() async throws {
         let url = try fixture()
         let alias = url.deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("alias-\(UUID().uuidString)")

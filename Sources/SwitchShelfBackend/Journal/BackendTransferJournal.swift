@@ -38,15 +38,24 @@ public actor BackendTransferJournal {
     private let url: URL
     private var document: BackendJournalDocument
     private var persistenceUncertain = false
+    // Internal fault injection only; never a production bypass/reset API.
+    private let afterRename: (@Sendable () throws -> Void)?
 
-    private init(url: URL, document: BackendJournalDocument) {
+    private init(url: URL, document: BackendJournalDocument, afterRename: (@Sendable () throws -> Void)? = nil) {
         self.url = url
         self.document = document
+        self.afterRename = afterRename
     }
 
     /// Unknown/corrupt/oversized files are never overwritten or reset implicitly.
     public static func open(at url: URL) async throws -> BackendTransferJournal {
         let journal = BackendTransferJournal(url: url, document: .init(schema: 1, attempts: []))
+        try await journal.loadAndInterrupt()
+        return journal
+    }
+
+    internal static func openForTesting(at url: URL, afterRename: @escaping @Sendable () throws -> Void) async throws -> BackendTransferJournal {
+        let journal = BackendTransferJournal(url: url, document: .init(schema: 1, attempts: []), afterRename: afterRename)
         try await journal.loadAndInterrupt()
         return journal
     }
@@ -88,22 +97,30 @@ public actor BackendTransferJournal {
                 throw BackendJournalError.invalidSnapshot
             }
         }
+        guard let previousUnique = Self.uniqueSum(old.files),
+              let currentUnique = Self.uniqueSum(result.files), currentUnique >= previousUnique,
+              currentUnique - previousUnique <= result.totalBytesSent - old.totalBytesSent else {
+            throw BackendJournalError.invalidSnapshot
+        }
         var next = document
         next.attempts[index] = .init(id: old.id, state: .active, files: result.files,
                                      totalBytesSent: result.totalBytesSent, peerRequestedExit: result.peerRequestedExit,
-                                     startedAt: old.startedAt, updatedAt: Date())
+                                     startedAt: old.startedAt, updatedAt: max(Date(), old.updatedAt))
         try commit(next)
     }
 
     public func end(attemptID: UUID, state: BackendAttemptState) throws {
         guard state == .interrupted || state == .failed || state == .finished,
               let index = document.attempts.firstIndex(where: { $0.id == attemptID }),
-              document.attempts[index].state == .active else { throw BackendJournalError.invalidTransition }
+              document.attempts[index].state == .active,
+              state != .finished || document.attempts[index].peerRequestedExit else {
+            throw BackendJournalError.invalidTransition
+        }
         var next = document
         let old = next.attempts[index]
         next.attempts[index] = .init(id: old.id, state: state, files: old.files,
                                      totalBytesSent: old.totalBytesSent, peerRequestedExit: old.peerRequestedExit,
-                                     startedAt: old.startedAt, updatedAt: Date())
+                                     startedAt: old.startedAt, updatedAt: max(Date(), old.updatedAt))
         try commit(next)
     }
 
@@ -113,6 +130,16 @@ public actor BackendTransferJournal {
         case .partiallyTransferred: 1
         case .transferredAwaitingConfirmation: 2
         }
+    }
+
+    private static func uniqueSum(_ files: [BackendFileTransfer]) -> UInt64? {
+        var sum: UInt64 = 0
+        for file in files {
+            let next = sum.addingReportingOverflow(file.uniqueBytesSent)
+            guard !next.overflow else { return nil }
+            sum = next.partialValue
+        }
+        return sum
     }
 
     private static func valid(_ files: [BackendFileTransfer], total: UInt64) -> Bool {
@@ -145,7 +172,11 @@ public actor BackendTransferJournal {
               let loaded = try? JSONDecoder().decode(BackendJournalDocument.self, from: bytes),
               loaded.schema == 1, loaded.attempts.count <= Self.maximumAttempts,
               Set(loaded.attempts.map(\.id)).count == loaded.attempts.count,
-              loaded.attempts.allSatisfy({ Self.valid($0.files, total: $0.totalBytesSent) && $0.startedAt <= $0.updatedAt }) else {
+              loaded.attempts.filter({ $0.state == .active }).count <= 1,
+              loaded.attempts.allSatisfy({
+                  Self.valid($0.files, total: $0.totalBytesSent) && $0.startedAt <= $0.updatedAt &&
+                  ($0.state != .finished || $0.peerRequestedExit)
+              }) else {
             throw BackendJournalError.recoveryRequired
         }
         var next = loaded
@@ -153,14 +184,14 @@ public actor BackendTransferJournal {
             let old = next.attempts[index]
             next.attempts[index] = .init(id: old.id, state: .interrupted, files: old.files,
                                          totalBytesSent: old.totalBytesSent, peerRequestedExit: old.peerRequestedExit,
-                                         startedAt: old.startedAt, updatedAt: Date())
+                                         startedAt: old.startedAt, updatedAt: max(Date(), old.updatedAt))
         }
         if next.attempts != loaded.attempts { try commit(next) }
         else { document = loaded }
     }
 
     private static func boundedRead(_ url: URL) -> Data? {
-        let fd = Darwin.open(url.path, O_RDONLY | O_NOFOLLOW | O_CLOEXEC)
+        let fd = Darwin.open(url.path, O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)
         guard fd >= 0 else { return nil }
         defer { close(fd) }
         var metadata = stat()
@@ -215,6 +246,11 @@ public actor BackendTransferJournal {
         guard written, fsync(fd) == 0,
               rename(temporary.path, url.path) == 0 else { throw BackendJournalError.ioFailure }
         succeeded = true
+        do { try afterRename?() }
+        catch {
+            persistenceUncertain = true
+            throw BackendJournalError.ioFailure
+        }
         let directory = Darwin.open(folder.path, O_RDONLY | O_DIRECTORY | O_CLOEXEC)
         guard directory >= 0 else {
             persistenceUncertain = true

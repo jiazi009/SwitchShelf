@@ -54,9 +54,11 @@ public actor AllowlistedBackendFileReader: BackendFileReading {
     }
 
     private func bind(_ bindings: [BackendSourceBinding]) throws {
+        try Self.requireNotCancelled()
         guard !bindings.isEmpty else { throw BackendError.invalidPlan }
         var prepared: [String: Entry] = [:]
         for binding in bindings {
+            try Self.requireNotCancelled()
             guard !binding.id.isEmpty, prepared[binding.id] == nil,
                   binding.url.isFileURL, binding.expectedBytes <= UInt64(Int64.max) else {
                 throw BackendError.invalidPlan
@@ -64,9 +66,11 @@ public actor AllowlistedBackendFileReader: BackendFileReading {
             let fd = try Self.openWithoutSymlinks(binding.url)
             defer { close(fd) }
             let info = try Self.inspect(fd)
+            try Self.requireNotCancelled()
             guard UInt64(info.st_size) == binding.expectedBytes else { throw BackendError.sourceChanged }
             prepared[binding.id] = Entry(url: binding.url, expectedBytes: binding.expectedBytes, evidence: Evidence(info))
         }
+        try Self.requireNotCancelled()
         entries = prepared
     }
 
@@ -113,8 +117,9 @@ public actor AllowlistedBackendFileReader: BackendFileReading {
     /// Traverses every directory through O_NOFOLLOW; final component is O_NOFOLLOW too.
     /// Relative paths, `..` and symlink ancestors are never accepted.
     private static func openWithoutSymlinks(_ url: URL) throws -> Int32 {
-        guard url.isFileURL, url.path.hasPrefix("/") else { throw BackendError.invalidPlan }
-        let components = url.path.split(separator: "/", omittingEmptySubsequences: true)
+        let path = url.path
+        guard url.isFileURL, path.hasPrefix("/"), !path.utf8.contains(0) else { throw BackendError.invalidPlan }
+        let components = path.split(separator: "/", omittingEmptySubsequences: true)
         guard !components.isEmpty, !components.contains(where: { $0 == "." || $0 == ".." }) else {
             throw BackendError.invalidPlan
         }
@@ -122,7 +127,9 @@ public actor AllowlistedBackendFileReader: BackendFileReading {
         guard directory >= 0 else { throw BackendError.unavailable }
         for (index, component) in components.enumerated() {
             let final = index == components.count - 1
-            let flags = O_RDONLY | O_NOFOLLOW | O_CLOEXEC | (final ? 0 : O_DIRECTORY)
+            // O_NONBLOCK prevents a FIFO swapped into the final pathname from
+            // hanging before fstat can reject it. It does not bound remote FS I/O.
+            let flags = O_RDONLY | O_NOFOLLOW | O_CLOEXEC | (final ? O_NONBLOCK : O_DIRECTORY)
             let next = component.withCString { openat(directory, $0, flags) }
             close(directory)
             if next < 0 {

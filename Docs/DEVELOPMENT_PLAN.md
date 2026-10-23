@@ -35,3 +35,10 @@ Every task records implementation paths, tests, commit, hardware evidence and li
 - Orca CLI window observation still fails with `permission_denied` despite granted permission status. After the user's permission screenshots, the available `cua_repl` native control channel verified the real 16-game window, search (one Zelda result), grid/list switching and selection. Inspector AX remains conservatively unknown for installation; its screenshot area needs further visual verification.
 - Queue editing/persistence, offline scenarios, dark and 960×640 layouts remain pending. No real device probe was performed without the user's DBI readiness confirmation. Next: remaining live UI checks and one confirmed exclusive read-only DBI inventory. Details: `Docs/Reports/source-access-followup.md` and the updated `project-handoff.md`.
 
+## DBI storage diagnosis — 2026-10-23
+
+- After the user's configuration/restart confirmation, one bounded inventory attempt returned partial. A new storage-only diagnostic (`c9fe0c4`) then observed nine storage descriptions before and after a user-performed USB reconnect; Installed games was absent both times. All processes exited normally; no content objects, transfers, installs or device writes were requested by the diagnostic mode.
+- The user confirms DBI itself displays a normal installed-game list. Active configuration loading and this build's MTP behavior remain unresolved; keep app installation states unknown rather than interpreting zero parsed records as an empty device.
+- 86 tests pass (30 library, 8 domain, 48 device), including storage diagnostics that remain incomplete and never traverse content even when a recognized target exists. Debug build, app packaging and ad-hoc signature verification pass.
+- User asked about alternatives: recommend USB Backend for future installation while inventory remains a separate capability; FTP/HTTP are network options with unverified 647 inventory semantics. No installation or network-service activation is authorized by this discussion. Latest evidence, sources and next checks: `Docs/Reports/mtp-storage-diagnosis.md`.
+

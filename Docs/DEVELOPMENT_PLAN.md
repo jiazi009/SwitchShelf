@@ -10,7 +10,7 @@ Use the selected liquid-glass design to develop the native app under Orca superv
 4. Coordinator: domain contracts, real-data composition, installed-state matching, packaging and acceptance.
 
 ## Wave 2 — integrate and validate
-- Merge isolated worker commits after review; build and run tests.
+- Review and cherry-pick isolated worker commits; build and run tests.
 - Run real NAS scan, compare counts and inspect grouping; no filename-only claim of verification.
 - User enters DBI Run MTP responder; coordinator runs a single read-only client and records version, storage coverage and reliable identities.
 - Exercise light/dark/narrow layout, library navigation/search, offline cache, queue editing and inventory badge truthfulness.
@@ -42,3 +42,11 @@ Every task records implementation paths, tests, commit, hardware evidence and li
 - 86 tests pass (30 library, 8 domain, 48 device), including storage diagnostics that remain incomplete and never traverse content even when a recognized target exists. Debug build, app packaging and ad-hoc signature verification pass.
 - User asked about alternatives: recommend USB Backend for future installation while inventory remains a separate capability; FTP/HTTP are network options with unverified 647 inventory semantics. No installation or network-service activation is authorized by this discussion. Latest evidence, sources and next checks: `Docs/Reports/mtp-storage-diagnosis.md`.
 
+
+## Backend software foundation acceptance — 2026-10-23
+
+- Per user quota preference, stopped the three initial Codex workers and completed the wave through three pi terminals. Run `run_b35d87130bcd` has nine completed tasks and no reclaimable terminals; all accepted worker commits are reviewed/cherry-picked onto `codex/source-access-recovery`. pi currently defaults to `openai-codex/gpt-6-sol`; no different quota pool is asserted and no global setting was changed.
+- Implemented the pinned DBI host session, native explicit-open USB adapter, allowlisted bounded range reader, durable conservative journal, metadata-only preflight and queue guidance. Production native open/transfer remains unwired; no physical Backend session or installation occurred.
+- Root validation: 127 tests with `swift test --skip RealNASScanTests`, then 2 new integration tests; 129 total passed. Native strict C checks, release packaging and ad-hoc signature verification pass. Backend contributes 44 new fixture/fake tests.
+- Actual app shows 16 cached games and a normal selected inspector; local queue preflight passed for 2 files, became stale after changing inclusion, then passed for 1 file. Start stayed disabled. Temporary plan removed; persisted queue is empty. Orca CLI observation is working after app/window startup; do not repeat permission toggles without new evidence.
+- Next software gates: one concrete cross-process MTP/Backend lease, independent helper/process exit verification for native/SMB hard deadlines, then a reviewed authorized small-package/target/device-result test. Current inventory remains unknown; no repeated MTP probe under unchanged conditions. Dark/narrow/real-offline GUI acceptance is still pending. Full evidence: `Docs/Reports/backend-foundation-acceptance.md`.

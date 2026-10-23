@@ -5,10 +5,6 @@
 #include <IOKit/usb/USB.h>
 #include <CoreFoundation/CoreFoundation.h>
 #include <pthread.h>
-#include <sys/file.h>
-#include <fcntl.h>
-#include <sys/stat.h>
-#include <unistd.h>
 #include <stdlib.h>
 
 #define MAX_IO (1024u * 1024u)
@@ -17,7 +13,6 @@ struct ss_usb_session {
     IOUSBDeviceInterface **device;
     IOUSBInterfaceInterface190 **interface;
     uint8_t out_pipe, in_pipe;
-    int lease_fd;
 };
 static pthread_mutex_t process_lock = PTHREAD_MUTEX_INITIALIZER;
 static int occupied = 0;
@@ -108,13 +103,8 @@ int ss_usb_open(ss_usb_session **out, int32_t *native) {
     int result = SS_USB_UNAVAILABLE;
     struct ss_usb_session *s = calloc(1, sizeof(*s));
     if (!s) goto failure;
-    s->lease_fd = -1;
-    /* Stable shared hook. Coordinator must make MTP take this SAME lease. */
-    s->lease_fd = open("/tmp/switchshelf-usb-session.lock", O_CREAT | O_RDWR | O_CLOEXEC | O_NOFOLLOW, 0600);
-    struct stat lease_stat;
-    if (s->lease_fd < 0 || fstat(s->lease_fd, &lease_stat) != 0 ||
-        !S_ISREG(lease_stat.st_mode) || lease_stat.st_uid != geteuid() ||
-        flock(s->lease_fd, LOCK_EX | LOCK_NB) != 0) { result=SS_USB_BUSY; goto failure; }
+    /* Cross-process authority is the mandatory caller-supplied shared lease.
+       This native process gate must not acquire a second flock on its path. */
     CFMutableDictionaryRef match = IOServiceMatching(kIOUSBDeviceClassName);
     if (!match) goto failure;
     io_iterator_t iter = IO_OBJECT_NULL;
@@ -152,7 +142,6 @@ failure:
     if (s) {
         if (s->interface) (*s->interface)->Release(s->interface);
         if (s->device) (*s->device)->Release(s->device);
-        if (s->lease_fd>=0) { flock(s->lease_fd,LOCK_UN); close(s->lease_fd); }
         free(s);
     }
     pthread_mutex_lock(&process_lock); occupied=0; pthread_mutex_unlock(&process_lock);
@@ -163,10 +152,10 @@ static int valid(ss_usb_session *s, const void *buf, uint32_t n, uint32_t timeou
 }
 int ss_usb_read(ss_usb_session *s, void *buf, uint32_t *length, uint32_t timeout, int32_t *native) {
     if (!length || !valid(s,buf,*length,timeout)) return SS_USB_INVALID;
-    uint32_t n=*length; *length=0; code(native,0);
+    uint32_t requested=*length, n=requested; *length=0; code(native,0);
     IOReturn kr=(*s->interface)->ReadPipeTO(s->interface,s->in_pipe,buf,&n,timeout,timeout);
     if (kr!=kIOReturnSuccess) { code(native,kr); return mapped(kr); }
-    if (n==0 || n>MAX_IO) return SS_USB_IO;
+    if (n==0 || n>requested) return SS_USB_IO;
     *length=n; return SS_USB_OK;
 }
 int ss_usb_write(ss_usb_session *s, const void *buf, uint32_t length, uint32_t timeout, int32_t *native) {
@@ -185,8 +174,6 @@ int ss_usb_close(ss_usb_session *s, int32_t *native) {
     if (kr!=kIOReturnSuccess) { code(native,kr); return SS_USB_RELEASE; } /* fence and leak deliberately */
     (*s->interface)->Release(s->interface);
     (*s->device)->Release(s->device);
-    if (flock(s->lease_fd, LOCK_UN) != 0) return SS_USB_RELEASE;
-    if (close(s->lease_fd) != 0) return SS_USB_RELEASE;
     free(s);
     pthread_mutex_lock(&process_lock); occupied=0; pthread_mutex_unlock(&process_lock);
     return SS_USB_OK;

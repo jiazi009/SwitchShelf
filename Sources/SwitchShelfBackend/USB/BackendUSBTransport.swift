@@ -3,6 +3,8 @@ import CDBIBackendUSB
 
 /// Shared owner must be provided by composition and must coordinate with MTP.
 /// A failed release must remain fenced; do not make a new lease available.
+/// A failed acquire MUST leave no ownership behind; otherwise it must internally
+/// fence and report a release uncertainty to its own coordinator.
 public protocol BackendUSBDeviceLease: Sendable {
     func acquire() async throws
     func release() async throws
@@ -51,22 +53,42 @@ public actor BackendUSBTransport: BackendByteTransport {
     /// MTP/Backend lease may authorize native open in production composition.
     public static func open(lease: any BackendUSBDeviceLease,
                             driver: any BackendUSBDriver) async throws -> BackendUSBTransport {
+        try Task.checkCancellation()
         try await ProcessGate.shared.acquire()
+        // Acquiring the process gate cannot be cancelled mid-call. Until a lease
+        // successfully returns, its contract guarantees no ownership on failure.
         do {
+            try Task.checkCancellation()
             try await lease.acquire()
         } catch {
             await ProcessGate.shared.release()
             throw error
         }
         do {
-            try await driver.open()
+            try Task.checkCancellation()
+            try await driver.open() // waits even if caller is cancelled mid-open
         } catch {
-            // Native open itself cleans up all partially acquired resources.
-            do { try await lease.release(); await ProcessGate.shared.release() }
-            catch { throw BackendError.releaseUnverified }
+            if (error as? BackendError) == .releaseUnverified {
+                // Native open may still own an interface. Never close it blindly.
+                throw BackendError.releaseUnverified
+            }
+            try await releaseAfterFailedOpen(lease: lease)
             throw error
         }
+        if Task.isCancelled {
+            // Open succeeded after cancellation: close before releasing either gate.
+            do { try await driver.close() }
+            catch { throw BackendError.releaseUnverified }
+            try await releaseAfterFailedOpen(lease: lease)
+            throw BackendError.cancelled
+        }
         return BackendUSBTransport(driver: driver, lease: lease)
+    }
+
+    private static func releaseAfterFailedOpen(lease: any BackendUSBDeviceLease) async throws {
+        do { try await lease.release() }
+        catch { throw BackendError.releaseUnverified }
+        await ProcessGate.shared.release()
     }
 
     private func begin() throws {
@@ -82,16 +104,20 @@ public actor BackendUSBTransport: BackendByteTransport {
         try validate(maximumLength, timeoutMilliseconds)
         try begin()
         defer { active = false }
+        try Task.checkCancellation()
         let bytes = try await driver.read(maximumLength: maximumLength, timeoutMilliseconds: timeoutMilliseconds)
         guard !bytes.isEmpty, bytes.count <= maximumLength else { throw BackendError.transport }
+        try Task.checkCancellation() // native work has finished; gate remains held
         return bytes // fragments are valid, never pad or invent bytes
     }
     public func write(_ data: Data, timeoutMilliseconds: UInt32) async throws {
         try validate(data.count, timeoutMilliseconds)
         try begin()
         defer { active = false }
+        try Task.checkCancellation()
         // A driver success is a full transfer. Driver failures are not retried.
         try await driver.write(data, timeoutMilliseconds: timeoutMilliseconds)
+        try Task.checkCancellation() // cancellation cannot interrupt native I/O
     }
     public func close() async throws {
         guard !closed else { throw BackendError.unavailable }

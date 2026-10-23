@@ -10,21 +10,55 @@ private actor FakeLease: BackendUSBDeviceLease {
     func release() throws { released += 1 }
     func counts() -> (Int, Int) { (acquired, released) }
 }
+private actor DelayGate {
+    private var entered: CheckedContinuation<Void, Never>?
+    private var waiting: CheckedContinuation<Void, Never>?
+    private var didEnter = false
+    func pause() async {
+        didEnter = true
+        entered?.resume(); entered = nil
+        await withCheckedContinuation { waiting = $0 }
+    }
+    func waitUntilEntered() async {
+        if didEnter { return }
+        await withCheckedContinuation { entered = $0 }
+    }
+    func resume() { waiting?.resume(); waiting = nil }
+}
 private actor FakeDriver: BackendUSBDriver {
     var opens = 0
     var writes: [Data] = []
     var failClose = false
     var failWrite = false
     var readBytes = Data([1, 2])
-    func open() { opens += 1 }
-    func read(maximumLength: Int, timeoutMilliseconds: UInt32) -> Data { readBytes }
-    func write(_ data: Data, timeoutMilliseconds: UInt32) throws {
+    var openFailure: BackendError?
+    var openDelay: DelayGate?
+    var readDelay: DelayGate?
+    var writeDelay: DelayGate?
+    var closes = 0
+    func open() async throws {
+        opens += 1
+        if let openDelay { await openDelay.pause() }
+        if let openFailure { throw openFailure }
+    }
+    func read(maximumLength: Int, timeoutMilliseconds: UInt32) async -> Data {
+        if let readDelay { await readDelay.pause() }
+        return readBytes
+    }
+    func write(_ data: Data, timeoutMilliseconds: UInt32) async throws {
+        if let writeDelay { await writeDelay.pause() }
         writes.append(data)
         if failWrite { throw BackendError.transport }
     }
-    func close() throws { if failClose { throw BackendError.releaseUnverified } }
+    func close() throws { closes += 1; if failClose { throw BackendError.releaseUnverified } }
+    func configure(openFailure: BackendError? = nil, openDelay: DelayGate? = nil,
+                   readDelay: DelayGate? = nil, writeDelay: DelayGate? = nil) {
+        self.openFailure=openFailure; self.openDelay=openDelay
+        self.readDelay=readDelay; self.writeDelay=writeDelay
+    }
+    func setReadBytes(_ data: Data) { readBytes = data }
     func setFailures(write: Bool = false, close: Bool = false) { failWrite=write; failClose=close }
-    func counts() -> (Int, Int) { (opens, writes.count) }
+    func counts() -> (Int, Int, Int) { (opens, writes.count, closes) }
 }
 
 @Test func backendUSBDescriptorPredicate() {
@@ -47,19 +81,66 @@ private actor FakeDriver: BackendUSBDriver {
     await #expect(throws: BackendError.invalidPlan) { try await stream.read(maximumLength: 1_048_577, timeoutMilliseconds: 10) }
     await #expect(throws: BackendError.invalidPlan) { try await stream.write(Data([3]), timeoutMilliseconds: 0) }
     await #expect(throws: BackendError.invalidPlan) { try await stream.write(Data(), timeoutMilliseconds: 1) }
+    await #expect(throws: BackendError.invalidPlan) { try await stream.read(maximumLength: 1, timeoutMilliseconds: 60_001) }
+    await driver.setReadBytes(Data([1,2,3]))
+    await #expect(throws: BackendError.transport) { _ = try await stream.read(maximumLength: 2, timeoutMilliseconds: 100) }
     try await stream.write(Data([3,4]), timeoutMilliseconds: 100)
     #expect(await driver.counts().1 == 1)
     try await stream.close()
     #expect(await lease.counts().1 == 1)
     await #expect(throws: BackendError.unavailable) { try await stream.close() }
 
-    let secondLease=FakeLease(), secondDriver=FakeDriver()
-    let secondStream=try await BackendUSBTransport.open(lease: secondLease, driver: secondDriver)
+    // Cancellation before acquisition never calls the supplied lease or driver.
+    let cancelledLease=FakeLease(), cancelledDriver=FakeDriver()
+    let cancelled=Task { () throws -> BackendUSBTransport in
+        withUnsafeCurrentTask { $0?.cancel() }
+        return try await BackendUSBTransport.open(lease: cancelledLease, driver: cancelledDriver)
+    }
+    await #expect(throws: CancellationError.self) { _ = try await cancelled.value }
+    #expect(await cancelledLease.counts().0 == 0)
+    #expect(await cancelledDriver.counts().0 == 0)
+
+    let openDelay=DelayGate(), delayedLease=FakeLease(), delayedDriver=FakeDriver()
+    await delayedDriver.configure(openDelay: openDelay)
+    let opening=Task { try await BackendUSBTransport.open(lease: delayedLease, driver: delayedDriver) }
+    await openDelay.waitUntilEntered()
+    opening.cancel()
+    #expect(await delayedLease.counts().1 == 0) // native open still alive
     await #expect(throws: BackendError.busy) { _ = try await BackendUSBTransport.open(lease: FakeLease(), driver: FakeDriver()) }
-    await secondDriver.setFailures(write: true, close: true)
-    await #expect(throws: BackendError.transport) { try await secondStream.write(Data([1]), timeoutMilliseconds: 20) }
-    #expect(await secondDriver.counts().1 == 1) // uncertain write never retried
-    await #expect(throws: BackendError.releaseUnverified) { try await secondStream.close() }
-    #expect(await secondLease.counts().1 == 0)
+    await openDelay.resume()
+    await #expect(throws: BackendError.cancelled) { _ = try await opening.value }
+    #expect(await delayedDriver.counts().2 == 1)
+    #expect(await delayedLease.counts().1 == 1)
+
+    let readDelay=DelayGate(), writeDelay=DelayGate(), secondLease=FakeLease(), secondDriver=FakeDriver()
+    await secondDriver.configure(readDelay: readDelay, writeDelay: writeDelay)
+    let secondStream=try await BackendUSBTransport.open(lease: secondLease, driver: secondDriver)
+    let reading=Task { try await secondStream.read(maximumLength: 8, timeoutMilliseconds: 100) }
+    await readDelay.waitUntilEntered()
+    reading.cancel()
+    await #expect(throws: BackendError.busy) { try await secondStream.close() }
+    await readDelay.resume()
+    await #expect(throws: CancellationError.self) { _ = try await reading.value }
+    let writing=Task { try await secondStream.write(Data([7]), timeoutMilliseconds: 100) }
+    await writeDelay.waitUntilEntered()
+    writing.cancel()
+    await #expect(throws: BackendError.busy) { try await secondStream.close() }
+    await writeDelay.resume()
+    await #expect(throws: CancellationError.self) { try await writing.value }
+    #expect(await secondDriver.counts().1 == 1) // no retry of cancelled write
+    await secondDriver.configure()
+    await secondDriver.setFailures(write: true)
+    await #expect(throws: BackendError.transport) { try await secondStream.write(Data([8]), timeoutMilliseconds: 100) }
+    #expect(await secondDriver.counts().1 == 2) // uncertain failure never retried
+    try await secondStream.close()
+
+    // An uncertain native open retains both gates and must not invoke close.
+    let uncertainLease=FakeLease(), uncertainDriver=FakeDriver()
+    await uncertainDriver.configure(openFailure: .releaseUnverified)
+    await #expect(throws: BackendError.releaseUnverified) {
+        _ = try await BackendUSBTransport.open(lease: uncertainLease, driver: uncertainDriver)
+    }
+    #expect(await uncertainLease.counts().1 == 0)
+    #expect(await uncertainDriver.counts().2 == 0)
     await #expect(throws: BackendError.busy) { _ = try await BackendUSBTransport.open(lease: FakeLease(), driver: FakeDriver()) }
 }

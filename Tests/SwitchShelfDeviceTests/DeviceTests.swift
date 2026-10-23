@@ -148,6 +148,7 @@ struct InventoryTests {
         #expect(!result.isComplete)
         #expect(result.records.isEmpty)
         #expect(result.issues.contains { $0.contains("Installed games") })
+        #expect(result.issues.contains { $0.contains("SD Card") })
         #expect(await transport.visitedParents.isEmpty)
     }
     @Test func storageNamesRequireExactKnownEntry() {
@@ -159,16 +160,47 @@ struct InventoryTests {
         #expect(!InventoryReader.isInstalledGames("1: SD内存卡"))
     }
     @Test func observedLocalizedSDStorageAloneIsNotEmptyInstalledInventory() async throws {
-        let result = try await InventoryReader().read(from: FixtureTransport(stores: [
-            MTPStorage(id: 1, name: "1: SD内存卡")]))
+        let transport = FixtureTransport(stores: [MTPStorage(id: 1, name: "1: SD内存卡")])
+        let result = try await InventoryReader().read(from: transport)
         #expect(!result.isComplete)
         #expect(result.records.isEmpty)
+        #expect(result.issues.contains { $0.contains("1: SD内存卡") })
+        #expect(await transport.visitedParents.isEmpty)
+    }
+    @Test func unrecognizedStorageDiagnosticsAreEscapedAndBounded() async throws {
+        // Synthetic descriptions exercise diagnostic limits, not DBI naming rules.
+        let stores = [MTPStorage(id: 1, name: "Fixture\n\"quoted\""),
+                      MTPStorage(id: 2, name: String(repeating: "名", count: 10_000))]
+            + (3...100).map { MTPStorage(id: UInt32($0), name: "Fixture storage \($0)") }
+        let transport = FixtureTransport(stores: stores)
+        let result = try await InventoryReader().read(from: transport)
+        let diagnostic = try #require(result.issues.last)
+        #expect(!result.isComplete)
+        #expect(result.records.isEmpty)
+        #expect(diagnostic.contains("Fixture\\n\\\"quoted\\\""))
+        #expect(!diagnostic.contains("\n"))
+        #expect(diagnostic.contains("100 项"))
+        #expect(!diagnostic.contains("Fixture storage 100"))
+        #expect(diagnostic.utf8.count < 12_000)
+        #expect(await transport.visitedParents.isEmpty)
     }
     @Test func verifiedEmptyTraversalCanBeComplete() async throws {
         let result = try await InventoryReader().read(from: FixtureTransport())
         #expect(result.isComplete)
         #expect(result.records.isEmpty)
         #expect(result.environmentContext == nil)
+    }
+    @Test func storageDiagnosticsNeverTraverseEvenRecognizedInstalledStorage() async throws {
+        let transport = FixtureTransport(stores: [MTPStorage(id: 4, name: "4: Installed games"),
+                                                   MTPStorage(id: 1, name: "1: SD内存卡")],
+                                         objects: [folder(1), file(2)], children: [root: [1], 1: [2]])
+        let result = try await InventoryReader().read(from: transport, storageDiagnosticsOnly: true)
+        #expect(!result.isComplete)
+        #expect(result.records.isEmpty)
+        #expect(result.environmentContext == nil)
+        #expect(result.issues.contains { $0.contains("未遍历任何内容对象") })
+        #expect(result.issues.contains { $0.contains("4: Installed games") && $0.contains("1: SD内存卡") })
+        #expect(await transport.visitedParents.isEmpty)
     }
     @Test(arguments: [CancellingTransport.Stage.storages, .children, .object])
     func cancellationAfterMetadataAwaitNeverReturnsInventory(_ stage: CancellingTransport.Stage) async {

@@ -18,12 +18,13 @@ struct ProbeResult: Codable {
     var error: ProbeFailure?
 }
 let usage = """
-Usage: switchshelf-probe [discover|inventory] [--timeout 1...120] [--transport native|libmtp] [--json]
+Usage: switchshelf-probe [discover|inventory|storages] [--timeout 1...120] [--transport native|libmtp] [--json]
 
 Default: discover (IOKit only; never opens MTP). JSON is always emitted.
 inventory is explicitly opt-in, metadata-only, and must not overlap another device client.
+storages is explicitly opt-in and lists storage descriptions only; it never lists content objects.
 Default transport: native (system ImageCaptureCore broker); libmtp is an explicit fallback.
-Exit: 0 successful, 2 incomplete inventory, 1 error, 64 usage, 124 deadline exceeded.
+Exit: 0 successful, 2 incomplete inventory (also successful storage-only diagnostics), 1 error, 64 usage, 124 deadline exceeded.
 Inventory identities are session-scoped; runtime environment remains unknown.
 """
 func encoded(_ result: ProbeResult) -> Data {
@@ -60,7 +61,12 @@ if arguments.first == "--internal-worker", arguments.count == 4,
                 code = discovery.state == .error ? 1 : 0
                 result = ProbeResult(mode: mode, status: code == 0 ? "ok" : "error", discovery: discovery)
             } else {
-                let inventory = try await service.readInventory()
+                let inventory: InstalledInventory
+                if mode == "storages" {
+                    inventory = try await service.readStorageDiagnostics()
+                } else {
+                    inventory = try await service.readInventory()
+                }
                 code = inventory.isComplete ? 0 : 2
                 result = ProbeResult(mode: mode, status: inventory.isComplete ? "ok" : "partial",
                                      transport: transport, inventory: inventory)
@@ -88,7 +94,7 @@ var mode = "discover"
 var transport = "native"
 var timeout: Int?
 var index = 0
-if arguments.first == "discover" || arguments.first == "inventory" { mode = arguments[0]; index = 1 }
+if let first = arguments.first, ["discover", "inventory", "storages"].contains(first) { mode = first; index = 1 }
 while index < arguments.count {
     let option = arguments[index]
     if option == "--json" { index += 1; continue }
@@ -134,11 +140,11 @@ if finished.wait(timeout: .now() + .seconds(seconds)) == .timedOut {
         Darwin.kill(process.processIdentifier, SIGKILL)
         if finished.wait(timeout: .now() + .milliseconds(300)) == .timedOut {
             // A later invocation cannot assume the USB worker is gone.
-            emit(failure(mode: mode, code: "workerExitUnverified", message: "Cannot verify the read-only worker exited; do not retry while it may still own the USB session.", transport: mode == "inventory" ? transport : nil), exitCode: 1)
+            emit(failure(mode: mode, code: "workerExitUnverified", message: "Cannot verify the read-only worker exited; do not retry while it may still own the USB session.", transport: mode == "discover" ? nil : transport), exitCode: 1)
         }
     }
     try? manager.removeItem(at: directory)
-    emit(failure(mode: mode, code: "timeout", message: "Read-only probe exceeded \(seconds)s; worker stopped, coverage unknown. Keep DBI in Run MTP responder and check permissions/other clients before a manual retry.", transport: mode == "inventory" ? transport : nil), exitCode: 124)
+    emit(failure(mode: mode, code: "timeout", message: "Read-only probe exceeded \(seconds)s; worker stopped, coverage unknown. Keep DBI in Run MTP responder and check permissions/other clients before a manual retry.", transport: mode == "discover" ? nil : transport), exitCode: 124)
 }
 let result: ProbeResult
 do {
@@ -150,7 +156,7 @@ do {
     result = try decoder.decode(ProbeResult.self, from: Data(contentsOf: output))
 } catch {
     try? manager.removeItem(at: directory)
-    emit(failure(mode: mode, code: "workerFailed", message: "Probe worker returned no valid bounded JSON result; inventory coverage is unknown.", transport: mode == "inventory" ? transport : nil), exitCode: 1)
+    emit(failure(mode: mode, code: "workerFailed", message: "Probe worker returned no valid bounded JSON result; inventory coverage is unknown.", transport: mode == "discover" ? nil : transport), exitCode: 1)
 }
 try? manager.removeItem(at: directory)
 emit(result, exitCode: process.terminationStatus)

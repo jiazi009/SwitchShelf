@@ -30,10 +30,21 @@ public actor DeviceService {
     }
 
     public func readInventory() async throws -> InstalledInventory {
+        try await read(storageDiagnosticsOnly: false)
+    }
+
+    /// Lists only storage descriptions, without enumerating any content objects.
+    /// The returned inventory is intentionally incomplete and contains no records.
+    public func readStorageDiagnostics() async throws -> InstalledInventory {
+        try await read(storageDiagnosticsOnly: true)
+    }
+
+    private func read(storageDiagnosticsOnly: Bool) async throws -> InstalledInventory {
         try Task.checkCancellation()
         let runtime = RuntimeLocation.preferredPath()
         let inventory = try await InventoryCoordinator.shared.read(runtimePath: runtime,
-            useLibmtp: ProcessInfo.processInfo.environment["SWITCHSHELF_MTP_TRANSPORT"] == "libmtp")
+            useLibmtp: ProcessInfo.processInfo.environment["SWITCHSHELF_MTP_TRANSPORT"] == "libmtp",
+            storageDiagnosticsOnly: storageDiagnosticsOnly)
         try Task.checkCancellation()
         return inventory
     }

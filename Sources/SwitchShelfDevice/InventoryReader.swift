@@ -68,16 +68,39 @@ struct InventoryReader: Sendable {
         return value == "installed games" || value == "4: installed games"
     }
 
-    func read(from transport: any InventoryTransport) async throws -> InstalledInventory {
+    private static func storageDiagnostic(_ storages: [MTPStorage]) -> String {
+        // These are descriptions already returned by GetStorageInfo, not volume
+        // labels or device identifiers. Bound and escape diagnostic text without
+        // treating an unfamiliar name as installed-content evidence.
+        let entries = storages.prefix(16).map { storage in
+            let name = String(String.UnicodeScalarView(storage.name.unicodeScalars.prefix(128)))
+            let truncated = storage.name.unicodeScalars.count > 128 ? "（名称已截断）" : ""
+            return "\(storage.id): \(name.debugDescription)\(truncated)"
+        }
+        let omitted = storages.count > 16 ? "；其余 \(storages.count - 16) 项省略" : ""
+        return "设备报告的 MTP 存储（\(storages.count) 项，ID 仅属于本次会话）：\(entries.joined(separator: "；"))\(omitted)"
+    }
+
+    func read(from transport: any InventoryTransport, storageDiagnosticsOnly: Bool = false) async throws -> InstalledInventory {
         try Task.checkCancellation()
         let sessionID = "mtp-session-\(UUID().uuidString)"
         let started = ContinuousClock.now
         let storages = try await transport.storages()
         try Task.checkCancellation()
-        let targets = storages.filter { Self.isInstalledGames($0.name) }
         var inventory = InstalledInventory(deviceID: sessionID, environmentContext: nil, isComplete: false)
+        if storageDiagnosticsOnly {
+            inventory.issues = [
+                "本次仅枚举 MTP 存储名称，未遍历任何内容对象，不构成已安装清单。",
+                Self.storageDiagnostic(storages)
+            ]
+            return inventory
+        }
+        let targets = storages.filter { Self.isInstalledGames($0.name) }
         guard !targets.isEmpty else {
-            inventory.issues = ["未发现 DBI 的 4: Installed games 存储；可能在 DBI 设置中隐藏。请由用户确认并启用该入口后重新进入 Run MTP responder；当前结果不代表设备没有已安装游戏。"]
+            inventory.issues = [
+                "未识别出 DBI 的 Installed games 存储；入口未暴露或名称不匹配均有可能，请核对入口开关与下列实际存储名称。当前结果不代表设备没有已安装游戏。",
+                Self.storageDiagnostic(storages)
+            ]
             return inventory
         }
         var complete = true

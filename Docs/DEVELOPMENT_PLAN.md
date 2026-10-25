@@ -3,7 +3,14 @@
 ## Current objective
 Continue the user-selected **sphaira MTP inventory + installation** route. Preserve the accepted Games inventory and conservative identity matching; implement installation in gated stages. Backend is deferred and its existing uncommitted changes remain separate. Historical Orca waves below describe earlier work, not a newly dispatched run.
 
-## sphaira installation software checkpoint — 2026-10-25
+## Native sphaira MTP test package — 2026-10-25
+
+- User requested native MTP integration, repackaging and an app run for their manual test. Added a real bounded libusb transport with same-session PTP inspection, packet-aligned stream/final ZLP handling and no driver detach/reset. Inventory remains ImageCaptureCore.
+- Wired a single direct child helper with pre-open DeviceLease, immutable source-review fingerprint, durable conservative records, progress, cancellation, USB/stall/total deadlines, verified process exit, unknown-state reporting and no automatic retry/resume. UI requires one selected file, passing current preflight and explicit per-file/device confirmations. This is an experimental manual-test flow, not completed hardware acceptance.
+- Validation: 200 tests passed (189 Swift Testing plus 11 XCTest); 17 new tests include fake USB packet boundaries and real local child-process stop/exit checks. Strict C/libusb ABI checks, release packaging, bundled-library load without USB initialization and signature verification pass. App 0.3.0 started; live AX/screenshot shows the single-file test page. No game was sent and no physical installation session opened by agent validation.
+- The existing user queue has one plan with two included files; it was preserved. The user must choose one file and confirm their actual device settings. Native exclusive interface access, device result and real SMB behavior still require that manual test. Details: `Docs/Reports/native-sphaira-mtp-2026-10-25.md`; steps: `Docs/Guides/sphaira-mtp-install-test.md`. Backend, manifest, domain and icon work remain untouched.
+
+## sphaira installation software checkpoint — 2026-10-25 (historical foundation)
 
 - Completed: pinned upstream source review; sphaira-specific metadata-only plan checks in the app; separate upload wire codec; single-file bounded streaming state machine; read-only descriptor-pinned source access; 32 new fixture/local-temporary-file tests. No manifest or shared domain changes. App guidance now explains MTP Install mode and device-side destination selection, not Backend.
 - Validation: `swift test --skip RealNASScanTests` passed (172 Swift Testing tests plus 11 XCTest tests), release app/probe packaging and strict signature verification passed. No source-game bytes or physical USB installation access occurred. See `Docs/Reports/sphaira-mtp-install-foundation-2026-10-25.md`.
@@ -39,7 +46,7 @@ Outcomes and remaining limits: `Docs/Reports/sphaira-inventory-acceptance-2026-1
 - P1 SD maintenance remains a separate workflow with preview, backup and recovery before writes.
 
 ## Real-device test instructions
-Keep Switch connected by a data-capable USB cable. Enable MTP and Games in sphaira, or use DBI Run MTP responder with Installed games exposed. Keep that mode running. Tests enumerate storage descriptions and recognized game-content metadata only; do not copy files to installation storages. Quit OpenMTP and other MTP clients first. Record provider/version/environment only when independently known. Missing source, partial coverage and disconnected USB are different outcomes. Do not switch mode during a probe. Backend installation needs its separate reviewed file/target test.
+Keep Switch connected by a data-capable USB cable. Enable MTP and Games in sphaira, or use DBI Run MTP responder with Installed games exposed. Keep that mode running. Tests enumerate storage descriptions and recognized game-content metadata only; do not copy files to installation storages. Quit OpenMTP and other MTP clients first. Record provider/version/environment only when independently known. Missing source, partial coverage and disconnected USB are different outcomes. Do not switch mode during a probe. The native sphaira single-file installation test is separate from these read-only probes: follow `Docs/Guides/sphaira-mtp-install-test.md` and require the user's concrete file/target confirmation before sending. Backend remains deferred.
 
 ## Completion criteria and tracking
 Every task records implementation paths, tests, commit, hardware evidence and limitations. Place persistent reports in Docs/Reports. Completed UI does not prove device capability; passing fixture tests does not prove SMB disconnect or Switch protocol behavior. Update this plan with actual outcomes as development proceeds.

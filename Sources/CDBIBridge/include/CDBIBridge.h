@@ -3,7 +3,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
-/* The bridge exposes only enumeration/metadata. No transfer, mutation or reset API. */
+/* ss_mtp_* exposes enumeration/metadata only. Installation's explicit-open USB API
+   is isolated in SphairaUSB.h and never used by the inventory reader. */
 typedef struct ss_mtp_session ss_mtp_session;
 typedef enum {
     SS_MTP_OK = 0, SS_MTP_RUNTIME_MISSING = 1, SS_MTP_RUNTIME_INCOMPATIBLE = 2,
@@ -33,4 +34,6 @@ int ss_mtp_get_children(ss_mtp_session *, uint32_t storage, uint32_t parent,
 int ss_mtp_get_object(ss_mtp_session *, uint32_t id, ss_mtp_object *out, ss_mtp_error *);
 void ss_mtp_clear_object(ss_mtp_object *);
 void ss_mtp_free(void *allocation);
+/* Installation is a separate explicit-open API, not an inventory operation. */
+#include "SphairaUSB.h"
 #endif

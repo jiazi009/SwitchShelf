@@ -1,8 +1,7 @@
 import Foundation
 
-/// Hardware-free session seam. No production conformer is wired yet. A future adapter
-/// must acquire DeviceLease before opening, inspect this same session (not cached
-/// inventory), and retain the lease until close/independent process exit is verified.
+/// Same-session evidence. The native worker acquires DeviceLease before opening;
+/// the supervisor verifies independent process exit before another request.
 struct SphairaUploadSession: Sendable {
     let deviceVersion: String
     let supportedOperations: Set<UInt16>
@@ -54,18 +53,18 @@ protocol SphairaUploadSource: Sendable {
     func read(offset: UInt64, count: Int) async throws -> Data
 }
 
-struct SphairaUploadResult: Sendable, Equatable {
-    enum Outcome: Sendable { case notStarted, deviceStateUnknown, transferredAwaitingConfirmation }
-    enum Failure: Sendable { case cancelled, source, transport, protocolViolation, unsupportedSession, invalidRequest, alreadyUsed }
-    let outcome: Outcome
+public struct SphairaUploadResult: Sendable, Equatable, Codable {
+    public enum Outcome: String, Sendable, Codable { case notStarted, deviceStateUnknown, transferredAwaitingConfirmation }
+    public enum Failure: String, Sendable, Codable { case cancelled, source, transport, protocolViolation, unsupportedSession, invalidRequest, alreadyUsed }
+    public let outcome: Outcome
     /// Host-side submission, NOT a device installation acknowledgment or resume offset.
-    let bytesSubmitted: UInt64
-    let failure: Failure?
-    let releaseVerified: Bool
+    public let bytesSubmitted: UInt64
+    public let failure: Failure?
+    public let releaseVerified: Bool
+    public var detail: String? = nil
 }
 
-/// Single-file, single-use software foundation. Intentionally internal and unreachable
-/// from the app/probe until the native streaming/deadline and reviewed field-test gates.
+/// Single-file, single-use engine, opened only in the confirmed isolated worker.
 /// No retry, automatic resume, cleanup deletion or installed-state promotion occurs.
 actor SphairaMTPUpload {
     private var used = false
@@ -74,13 +73,15 @@ actor SphairaMTPUpload {
     init(chunkSize: Int = 1024 * 1024) { self.chunkSize = chunkSize }
 
     func upload(name: String, from source: any SphairaUploadSource,
-                through transport: any SphairaUploadTransport) async -> SphairaUploadResult {
+                through transport: any SphairaUploadTransport,
+                progress: @Sendable (UInt64) async throws -> Void = { _ in }) async -> SphairaUploadResult {
         guard !used else {
             return .init(outcome: .notStarted, bytesSubmitted: 0, failure: .alreadyUsed, releaseVerified: false)
         }
         used = true
         var outcome = SphairaUploadResult.Outcome.notStarted
         var failure: SphairaUploadResult.Failure?
+        var detail: String?
         var submitted: UInt64 = 0
         var sourceOperation = false
         let byteCount = source.byteCount
@@ -104,6 +105,7 @@ actor SphairaMTPUpload {
             try Task.checkCancellation()
             // The first command may have side effects even if its response is lost.
             outcome = .deviceStateUnknown
+            try await progress(0) // Durable side-effect intent before the first command.
             try await transport.sendCommand(create)
             try await transport.beginData(SphairaUploadCodec.dataHeader(.sendObjectPropList,
                 payloadBytes: UInt64(properties.count), transaction: createTransaction))
@@ -129,6 +131,7 @@ actor SphairaMTPUpload {
                 try Task.checkCancellation()
                 try await transport.writeData(bytes)
                 submitted += UInt64(count)
+                try await progress(submitted)
             }
             sourceOperation = true
             try await source.validate()
@@ -141,6 +144,10 @@ actor SphairaMTPUpload {
         } catch is CancellationError {
             failure = .cancelled
         } catch {
+            if let native = error as? SphairaNativeError { detail = native.localizedDescription }
+            if let error = error as? SphairaUploadError, case .responseCode(let code) = error {
+                detail = String(format: "设备返回 PTP 错误 0x%04X；请核对 MTP Install 模式和设备屏幕。", Int(code))
+            }
             if sourceOperation { failure = .source }
             else if let error = error as? SphairaUploadError {
                 switch error {
@@ -152,6 +159,6 @@ actor SphairaMTPUpload {
         }
         var released = true
         do { try await transport.close() } catch { released = false }
-        return .init(outcome: outcome, bytesSubmitted: submitted, failure: failure, releaseVerified: released)
+        return .init(outcome: outcome, bytesSubmitted: submitted, failure: failure, releaseVerified: released, detail: detail)
     }
 }

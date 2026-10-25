@@ -55,7 +55,7 @@ struct DeviceView: View {
                     .font(.system(size: 11.5, weight: .medium))
             }
             .buttonStyle(.glass)
-            .disabled(model.isDiscovering || model.isReadingInventory)
+            .disabled(model.isDiscovering || model.isReadingInventory || model.isInstalling)
             .help("重新执行只读 USB 检测")
             .accessibilityLabel("重新检测 USB 设备")
         }
@@ -113,7 +113,7 @@ struct DeviceView: View {
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.regular)
-                    .disabled(model.isDiscovering || model.isReadingInventory)
+                    .disabled(model.isDiscovering || model.isReadingInventory || model.isInstalling)
                     .accessibilityLabel("检测 Switch USB 设备")
                 }
 
@@ -229,7 +229,7 @@ struct DeviceView: View {
                     Image(systemName: "lock.shield.fill")
                         .font(.system(size: 10))
                         .foregroundStyle(Theme.installed)
-                    Text("这里只读取 Games / Installed games 的目录和内容元数据；Mounts、Contents、存档、安装与测速入口不参与扫描。后续 sphaira MTP 安装需另行进入 MTP Install 页面，并在设备端选择目标存储。安装通道尚未启用；发送完成不等于安装成功。")
+                    Text("这里只读取 Games / Installed games 元数据；Mounts、Contents、存档、安装与测速入口不参与扫描。队列中的单文件安装测试需单独确认，在 sphaira 进入 MTP Install 并选择目标存储。安装时暂停清单读取；发送完成不等于安装成功。")
                         .font(.system(size: 10))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)

@@ -24,7 +24,8 @@ Default: discover (IOKit only; never opens MTP). JSON is always emitted.
 inventory is explicitly opt-in, metadata-only, and must not overlap another device client.
 Supported inventory storages: sphaira Games and DBI Installed games. Other storages are never traversed.
 storages is explicitly opt-in and lists storage descriptions only; it never lists content objects.
-Default transport: native (system ImageCaptureCore broker); libmtp is an explicit fallback.
+Default inventory transport: native (system ImageCaptureCore broker); libmtp is an explicit fallback.
+Installation is not a public probe mode; the app uses a separate token-gated, explicitly confirmed direct worker.
 Exit: 0 successful, 2 incomplete inventory (also successful storage-only diagnostics), 1 error, 64 usage, 124 deadline exceeded.
 Inventory identities are session-scoped; runtime environment remains unknown.
 """
@@ -47,6 +48,31 @@ func failure(mode: String, code: String, message: String, transport: String? = n
 // Worker output is an owner-only temporary JSON file. Native stdout/stderr are discarded
 // by the parent: no serials or unrelated libusb diagnostics can contaminate JSON/logs.
 let arguments = Array(CommandLine.arguments.dropFirst())
+// Separate explicit installation entry point. Never reached by discover/inventory/storages.
+// A direct parent process passes one reviewed, confirmed request in a private directory.
+if arguments.first == "--sphaira-install-worker" {
+    guard arguments.count == 3,
+          ProcessInfo.processInfo.environment["SWITCHSHELF_INSTALL_TOKEN"] == arguments[1],
+          UUID(uuidString: arguments[1]) != nil,
+          getppid() > 1,
+          ProcessInfo.processInfo.environment["SWITCHSHELF_INSTALL_PARENT_PID"] == String(getppid()) else {
+        emit(failure(mode: "install", code: "unconfirmed", message: "Installation requires the app confirmation flow."), exitCode: 64)
+    }
+    let parentPID = getppid()
+    // If the app quits/crashes, do not leave an orphan USB sender running.
+    Task.detached {
+        while true {
+            try? await Task.sleep(for: .milliseconds(200))
+            if getppid() != parentPID { Darwin._exit(1) }
+        }
+    }
+    Task {
+        let result = await SphairaInstallWorker.run(directory: URL(fileURLWithPath: arguments[2]))
+        Darwin.exit(result.transfer.outcome == .transferredAwaitingConfirmation && result.transfer.releaseVerified ? 0 : 1)
+    }
+    RunLoop.main.run()
+    Darwin.exit(1)
+}
 if arguments.first == "--internal-worker", arguments.count == 4,
    ProcessInfo.processInfo.environment["SWITCHSHELF_PROBE_WORKER_TOKEN"] == arguments[1] {
     let mode = arguments[2]

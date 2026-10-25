@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build a local native app bundle and include its libmtp runtime dependencies."""
+"""Build the native app with required libusb installation runtime and optional libmtp inventory fallback."""
 from pathlib import Path
 import argparse
 import os
@@ -49,7 +49,7 @@ with (contents / "Info.plist").open("wb") as f:
         "CFBundleIdentifier": "local.switchshelf.app",
         "CFBundleName": "SwitchShelf", "CFBundleDisplayName": "SwitchShelf",
         "CFBundleExecutable": "SwitchShelf", "CFBundlePackageType": "APPL",
-        "CFBundleShortVersionString": "0.2.0", "CFBundleVersion": "2",
+        "CFBundleShortVersionString": "0.3.0", "CFBundleVersion": "3",
         "LSMinimumSystemVersion": "26.0", "NSHighResolutionCapable": True,
         "NSPrincipalClass": "NSApplication",
         **icon_info,
@@ -76,6 +76,27 @@ def copy_library(source):
         new = copy_library(dep)
         subprocess.run(["install_name_tool", "-change", old, "@loader_path/" + new.name, str(target)], check=True)
     return target
+
+# The installation helper uses a real streamed libusb data phase, not whole-file
+# ImageCaptureCore outData. Never ship an enabled installer without its runtime.
+usb = next((p for p in (Path("/opt/homebrew/lib/libusb-1.0.0.dylib"),
+                      Path("/usr/local/lib/libusb-1.0.0.dylib")) if p.exists()), None)
+if not usb:
+    raise SystemExit("Required libusb installation runtime missing; no dependency was installed automatically.")
+copy_library(usb)
+third_party = resources / "ThirdParty"
+third_party.mkdir(exist_ok=True)
+license_file = usb.resolve().parent.parent / "COPYING"
+if not license_file.is_file():
+    raise SystemExit("Required libusb license missing; cannot package its runtime.")
+shutil.copy2(license_file, third_party / "libusb-COPYING.txt")
+version = usb.resolve().parent.parent.name
+(third_party / "libusb-NOTICE.txt").write_text(
+    f"libusb {version}, dynamically linked under LGPL-2.1-or-later.\n"
+    "Copyright libusb contributors. License: libusb-COPYING.txt.\n"
+    "Library code unmodified; Mach-O install paths and ad-hoc signature adjusted for bundling.\n"
+    f"Corresponding upstream source: https://github.com/libusb/libusb/tree/v{version}\n"
+    "The library can be replaced with a compatible libusb 1.0 ABI build.\n", encoding="utf-8")
 
 mtp = next((p for p in (Path("/opt/homebrew/lib/libmtp.dylib"), Path("/usr/local/lib/libmtp.dylib")) if p.exists()), None) if args.with_libmtp else None
 if mtp:

@@ -25,6 +25,11 @@ final class AppModel {
     private(set) var isReadingInventory = false
     private(set) var isCheckingPlan = false
     private(set) var preparation: SphairaPreflightResult?
+    private(set) var isInstalling = false
+    private(set) var isReviewingInstall = false
+    var installationReview: SphairaInstallRequest?
+    private(set) var installProgress: SphairaInstallProgress?
+    private(set) var installReport: SphairaInstallReport?
 
     // MARK: UI state
     private(set) var selection: SidebarItem? = .all
@@ -55,6 +60,9 @@ final class AppModel {
     @ObservationIgnored private let deviceService = DeviceService()
     @ObservationIgnored private let inventoryReader = BoundedInventoryReader()
     @ObservationIgnored private let preflightService = SphairaPreflightService()
+    @ObservationIgnored private let mtpInstaller = SphairaInstaller()
+    @ObservationIgnored private var installTask: Task<Void, Never>?
+    @ObservationIgnored private var reviewedPlan: SphairaPreflightInput?
     @ObservationIgnored private var repository: (any LibraryPersisting)?
     @ObservationIgnored private let appDirectory: URL
     @ObservationIgnored private let planStore: LocalPlanStore
@@ -115,7 +123,7 @@ final class AppModel {
             guard let source = snapshot.sources.first(where: { $0.id == id }) else { return "" }
             return "\(sourceGameCount(id)) 款游戏 · 来源\(source.availability.label)"
         case .queue:
-            return "\(plan.count) 项计划 · \(formatByteCount(planTotalBytes)) · 仅保存在本机"
+            return "\(plan.count) 项计划 · \(formatByteCount(planTotalBytes)) · " + (isInstalling ? "正在发送单文件" : "需确认后发送")
         case .device:
             return deviceSubtitle
         case .maintenance:
@@ -847,7 +855,7 @@ final class AppModel {
     }
 
     var canReadInventory: Bool {
-        mtpCandidateSignature != nil && !isReadingInventory && !isDiscovering
+        mtpCandidateSignature != nil && !isReadingInventory && !isDiscovering && !isInstalling
     }
 
     var inventoryIsCurrentSession: Bool {
@@ -856,7 +864,7 @@ final class AppModel {
     }
 
     func refreshDevices() async {
-        guard !isDiscovering, !isReadingInventory else { return }
+        guard !isDiscovering, !isReadingInventory, !isInstalling else { return }
         isDiscovering = true
         // Discovery exposes only VID/PID, not a stable session identity. A new USB
         // enumeration cannot prove this is the same device that supplied the last
@@ -869,7 +877,7 @@ final class AppModel {
     }
 
     func readInventory() async {
-        guard !isReadingInventory else { return }
+        guard !isReadingInventory, !isInstalling else { return }
         guard canReadInventory, let signature = mtpCandidateSignature else {
             notice = AppNotice(
                 level: .warning,
@@ -958,12 +966,86 @@ final class AppModel {
     }
 
     func checkPlan() async {
-        guard !isCheckingPlan else { return }
+        guard !isCheckingPlan, !isInstalling else { return }
         let input = preflightInput
         isCheckingPlan = true
         let result = await preflightService.check(input)
         preparation = result
         isCheckingPlan = false
+    }
+
+    // MARK: - Explicit single-file sphaira installation test
+
+    var canReviewMTPInstallation: Bool {
+        !isInstalling && !isReviewingInstall && !isReadingInventory && !isDiscovering && !isScanning &&
+        !isCheckingPlan && preparationIsCurrent && preparation?.isPrepared == true && preparation?.offers.count == 1
+    }
+
+    func prepareMTPInstallationReview() async {
+        guard canReviewMTPInstallation else { return }
+        let input = preflightInput
+        let selected = input.items.flatMap { item in item.entries.filter(\.included).map { (item.intendedTarget, $0) } }
+        guard selected.count == 1, let (target, entry) = selected.first, let url = entry.sourceURL,
+              let root = snapshot.sources.filter({ $0.availability == .online && isUnder(url, source: $0) })
+                .max(by: { $0.url.path.count < $1.url.path.count })?.url, entry.expectedBytes > 0 else { return }
+        isReviewingInstall = true
+        defer { isReviewingInstall = false }
+        do {
+            let request = try await Task.detached(priority: .utility) {
+                try SphairaInstallRequest.review(sourceURL: url, allowedRoot: root,
+                    expectedBytes: UInt64(entry.expectedBytes), intendedTarget: target)
+            }.value
+            guard input == preflightInput, !isInstalling, !isReadingInventory, !isDiscovering else { return }
+            reviewedPlan = input
+            installationReview = request
+        } catch {
+            notice = AppNotice(level: .warning, title: "无法准备安装确认", message: "源文件元数据或路径已变化，请重新扫描并检查计划。未连接设备。")
+        }
+    }
+
+    func confirmMTPInstallation(_ request: SphairaInstallRequest) {
+        guard !isInstalling, !isReadingInventory, !isDiscovering, !isScanning,
+              installationReview?.id == request.id, reviewedPlan == preflightInput, preparationIsCurrent else {
+            installationReview = nil
+            return
+        }
+        installationReview = nil
+        reviewedPlan = nil
+        if NSWorkspace.shared.runningApplications.contains(where: { $0.bundleIdentifier == "io.ganeshrvel.openmtp" }) {
+            notice = AppNotice(level: .warning, title: "请先完整退出 OpenMTP", message: "未启动安装测试。请退出其他 MTP 客户端后重新核对确认。")
+            return
+        }
+        isInstalling = true
+        installProgress = nil
+        installReport = nil
+        inventory = nil
+        inventorySessionSignature = nil
+        notice = nil
+        installTask = Task { [weak self] in
+            guard let self else { return }
+            defer { self.isInstalling = false; self.installTask = nil }
+            do {
+                let report = try await self.mtpInstaller.install(request.confirmed()) { [weak self] value in
+                    await MainActor.run {
+                        if self?.isInstalling == true { self?.installProgress = value }
+                    }
+                }
+                self.installReport = report
+                self.notice = AppNotice(level: .warning,
+                    title: report.transfer.outcome == .transferredAwaitingConfirmation ? "传输完成，等待设备确认" : "安装测试未确认完成",
+                    message: report.message)
+            } catch {
+                self.notice = AppNotice(level: .error, title: "安装测试未启动／中止", message: error.localizedDescription)
+            }
+        }
+    }
+
+    func cancelMTPInstallation() { installTask?.cancel() }
+
+    func openMTPInstallationRecords() {
+        let url = appDirectory.appendingPathComponent("MTPInstallAttempts", isDirectory: true)
+        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        NSWorkspace.shared.open(url)
     }
 
     func isInPlan(_ gameID: String) -> Bool {
@@ -979,6 +1061,7 @@ final class AppModel {
     }
 
     private func addToQueue(_ game: Game, persist: Bool) {
+        guard !isInstalling else { return }
         guard !game.contents.isEmpty else {
             notice = AppNotice(level: .info, title: "没有可加入的本地内容", message: "该条目没有可用于安装计划的文件。")
             return
@@ -1005,12 +1088,14 @@ final class AppModel {
     }
 
     func updatePlanTarget(_ id: String, target: InstallTarget) {
+        guard !isInstalling else { return }
         guard let index = plan.firstIndex(where: { $0.id == id }) else { return }
         plan[index].target = target
         schedulePlanSave()
     }
 
     func setPlanContentIncluded(_ itemID: String, contentID: String, included: Bool) {
+        guard !isInstalling else { return }
         guard let itemIndex = plan.firstIndex(where: { $0.id == itemID }),
               let contentIndex = plan[itemIndex].contents.firstIndex(where: { $0.id == contentID }) else { return }
         plan[itemIndex].contents[contentIndex].included = included
@@ -1018,12 +1103,14 @@ final class AppModel {
     }
 
     func updatePlanNote(_ id: String, note: String) {
+        guard !isInstalling else { return }
         guard let index = plan.firstIndex(where: { $0.id == id }) else { return }
         plan[index].note = note
         schedulePlanSave()
     }
 
     func movePlanItem(_ id: String, direction: Int) {
+        guard !isInstalling else { return }
         guard let index = plan.firstIndex(where: { $0.id == id }) else { return }
         let target = index + direction
         guard plan.indices.contains(target) else { return }
@@ -1032,11 +1119,13 @@ final class AppModel {
     }
 
     func removePlanItem(_ id: String) {
+        guard !isInstalling else { return }
         plan.removeAll { $0.id == id }
         schedulePlanSave()
     }
 
     func clearPlan() {
+        guard !isInstalling else { return }
         plan.removeAll()
         schedulePlanSave(immediate: true)
     }

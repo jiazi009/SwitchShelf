@@ -11,26 +11,12 @@ actor SphairaPackageSource: SphairaUploadSource {
         func close() { if value >= 0 { Darwin.close(value); value = -1 } }
         deinit { close() }
     }
-    private struct Fingerprint: Equatable, Sendable {
-        let device: dev_t
-        let inode: ino_t
-        let size: off_t
-        let modifiedSeconds: Int
-        let modifiedNanos: Int
-        let changedSeconds: Int
-        let changedNanos: Int
-        init(_ info: stat) {
-            device = info.st_dev; inode = info.st_ino; size = info.st_size
-            modifiedSeconds = info.st_mtimespec.tv_sec; modifiedNanos = info.st_mtimespec.tv_nsec
-            changedSeconds = info.st_ctimespec.tv_sec; changedNanos = info.st_ctimespec.tv_nsec
-        }
-    }
     let byteCount: UInt64
     private let url: URL
     private let descriptor: Descriptor
-    private let fingerprint: Fingerprint
+    private let fingerprint: SphairaSourceIdentity
 
-    init(url: URL, allowedRoot: URL, expectedBytes: UInt64) throws {
+    init(url: URL, allowedRoot: URL, expectedBytes: UInt64, reviewedIdentity: SphairaSourceIdentity? = nil) throws {
         guard url.isFileURL, allowedRoot.isFileURL,
               [nil, "", "localhost"].contains(url.host), [nil, "", "localhost"].contains(allowedRoot.host),
               !url.path.contains("\0"), !allowedRoot.path.contains("\0"),
@@ -53,7 +39,8 @@ actor SphairaPackageSource: SphairaUploadSource {
         self.byteCount = expectedBytes
         self.url = url
         self.descriptor = handle
-        self.fingerprint = Fingerprint(info)
+        self.fingerprint = SphairaSourceIdentity(info)
+        if let reviewedIdentity, reviewedIdentity != self.fingerprint { throw SphairaUploadError.sourceChanged }
     }
 
     func validate() throws {
@@ -66,7 +53,7 @@ actor SphairaPackageSource: SphairaUploadSource {
         var named = stat()
         guard fstat(descriptor.value, &opened) == 0, fstat(namedDescriptor, &named) == 0,
               named.st_mode & mode_t(S_IFMT) == mode_t(S_IFREG),
-              Fingerprint(opened) == fingerprint, Fingerprint(named) == fingerprint else {
+              SphairaSourceIdentity(opened) == fingerprint, SphairaSourceIdentity(named) == fingerprint else {
             throw SphairaUploadError.sourceChanged
         }
     }

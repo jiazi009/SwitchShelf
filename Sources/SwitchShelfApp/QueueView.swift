@@ -1,5 +1,6 @@
 import SwiftUI
 import SwitchShelfDomain
+import SwitchShelfDevice
 
 struct QueueView: View {
     @Bindable var model: AppModel
@@ -32,6 +33,7 @@ struct QueueView: View {
                                     index: index,
                                     count: model.plan.count
                                 )
+                                .disabled(model.isInstalling || model.isReviewingInstall)
                             }
                         }
                     }
@@ -42,6 +44,13 @@ struct QueueView: View {
             }
         }
         .background(Theme.canvas)
+        .sheet(item: $model.installationReview) { request in
+            MTPInstallConfirmation(request: request) {
+                model.confirmMTPInstallation(request)
+            } onCancel: {
+                model.installationReview = nil
+            }
+        }
         .alert("清空安装队列？", isPresented: $showClearAlert) {
             Button("清空队列", role: .destructive) { model.clearPlan() }
             Button("取消", role: .cancel) {}
@@ -104,25 +113,26 @@ struct QueueView: View {
                 .background(Theme.warning.opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 7) {
-                    Text("sphaira MTP 安装 · 开发中")
+                    Text("sphaira 原生 MTP · 单文件测试")
                         .font(.system(size: 13, weight: .semibold))
-                    BadgePill(text: "未启用", systemImage: "lock.fill", tone: .warning)
+                    BadgePill(text: "试验功能", systemImage: "exclamationmark.shield", tone: .warning)
                 }
-                Text("队列保存在本机。检查计划仅查看本地文件元数据，不读取包内容或连接 USB。后续安装需在 Switch 上进入 sphaira 的 MTP Install 页面；SD／机身存储由 sphaira 端选择，这里的位置仅是计划意向。传输和真实设备测试尚未完成，暂不能开始安装。")
+                Text("先仅勾选一个文件并检查计划，再核对文件、权限与设备端设置后确认发送。Switch 必须进入 sphaira 的 MTP Install 页面；SD／机身存储由设备端选择。原生通道尚未经实机安装验收；文件发送完成不等于安装成功。")
                     .font(.system(size: 10.5))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: 10) {
-                    Button("开始安装") {}
+                    Button(model.isReviewingInstall ? "准备确认…" : "核对并安装一个文件…") {
+                        Task { await model.prepareMTPInstallationReview() }
+                    }
                         .buttonStyle(.borderedProminent)
                         .controlSize(.large)
-                        .disabled(true)
-                        .help("不可用：sphaira MTP 安装通道尚未接入，需先通过经确认的设备测试")
-                        .accessibilityHint("当前不可用。尚未授权安装测试，设备端目标和结果未验证。")
+                        .disabled(!model.canReviewMTPInstallation)
+                        .help("需要检查通过且只勾选一个文件；此按钮先显示确认页，不会立即写设备")
                     Button("检查计划") { Task { await model.checkPlan() } }
                         .buttonStyle(.bordered)
                         .controlSize(.large)
-                        .disabled(model.plan.isEmpty || model.isCheckingPlan)
+                        .disabled(model.plan.isEmpty || model.isCheckingPlan || model.isInstalling || model.isReviewingInstall)
                         .help("仅检查本地来源、普通文件、大小与 MTP 包文件名；不连接设备")
                     Button("查看设备模式说明") { model.showDevice() }
                         .buttonStyle(.bordered)
@@ -130,6 +140,20 @@ struct QueueView: View {
                         .accessibilityLabel("查看设备连接与安装条件说明")
                 }
                 .padding(.top, 2)
+                if model.isInstalling {
+                    ProgressView(value: Double(model.installProgress?.bytesSubmitted ?? 0),
+                                 total: Double(model.installProgress?.totalBytes ?? 1))
+                    Text("已提交 \(formatByteCount(Int64(model.installProgress?.bytesSubmitted ?? 0)))；等待设备响应不等于安装完成。取消后会等待辅助进程退出。")
+                        .font(.system(size: 10.5)).foregroundStyle(.secondary)
+                    Button("取消传输", role: .destructive) { model.cancelMTPInstallation() }
+                        .buttonStyle(.bordered)
+                }
+                if let report = model.installReport {
+                    Text(report.message + (report.processExitVerified ? " 辅助进程已退出。" : " 辅助进程退出未确认，禁止重试。"))
+                        .font(.system(size: 10.5)).foregroundStyle(Theme.warning)
+                }
+                Button("查看本地传输记录") { model.openMTPInstallationRecords() }
+                    .font(.system(size: 10.5))
                 if model.isCheckingPlan {
                     Text("正在检查本地文件元数据…")
                         .font(.system(size: 10.5))

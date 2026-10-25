@@ -1,8 +1,8 @@
 # sphaira MTP installation — proposed field-test gate
 
-Status: **not authorized, not scheduled, not run**. The user's route selection authorizes software development, not an arbitrary source-game read or device installation. Backend testing is not part of this route.
+Status: **native single-file test flow packaged and launched; physical test not run by the agent**. The user requested a native integration/test package and will choose the actual file and device settings in the explicit confirmation flow. No arbitrary source file or destination is approved by that request. Backend testing is not part of this route. Current manual steps: `Docs/Guides/sphaira-mtp-install-test.md`; software/launch evidence: `Docs/Reports/native-sphaira-mtp-2026-10-25.md`.
 
-## Software prerequisites
+## Software prerequisites (implemented with fixture/local-process validation; hardware behavior remains unverified)
 
 - Native bounded streaming adapter verified without hardware first: one SendObject data phase, packet/ZLP handling, 64-bit size, no whole-file Data/copy/hash, no partial-object edit or seek.
 - Same opened session supplies DeviceInfo description/capabilities, Games and one allowlisted Install storage; no cached handles, VID/PID-only provider assertion or implicit fallback to microSD/Contents.

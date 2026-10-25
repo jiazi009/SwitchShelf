@@ -77,6 +77,7 @@ public actor LibraryScanner: LibraryScanning {
         }
 
         var parsedItems: [(content: LocalContent, parsed: ParsedPackage)] = []
+        var coverCandidates: [String: [CoverCandidate]] = [:]
 
         while let fileURL = enumerator.nextObject() as? URL {
             try Task.checkCancellation()
@@ -106,6 +107,20 @@ public actor LibraryScanner: LibraryScanning {
                 continue
             }
 
+            // Sidecar artwork only. Package bytes are never opened to look for a cover.
+            if LocalCoverLocator.isSidecarFilename(filename),
+               resourceValues.isRegularFile == true,
+               let directoryKey = FilenameParser.gameDirectoryKey(fileURL: fileURL, sourceRoot: targetURL) {
+                let byteCount = Int64(resourceValues.fileSize ?? 0)
+                if let relativeDirectory = FilenameParser.relativeDirectory(of: fileURL, sourceRoot: targetURL),
+                   LocalCoverLocator.accepts(byteCount: byteCount) {
+                    coverCandidates[directoryKey, default: []].append(
+                        CoverCandidate(url: fileURL, byteCount: byteCount, relativeDirectory: relativeDirectory)
+                    )
+                }
+                continue
+            }
+
             guard let parsed = FilenameParser.parse(fileURL: fileURL, sourceRoot: targetURL) else {
                 continue
             }
@@ -129,7 +144,7 @@ public actor LibraryScanner: LibraryScanning {
         }
 
         // Group into games
-        let games = groupContentsIntoGames(items: parsedItems)
+        let games = groupContentsIntoGames(items: parsedItems, sourceRoot: targetURL, covers: coverCandidates)
 
         var activeSource = source
         activeSource.availability = .online
@@ -142,13 +157,18 @@ public actor LibraryScanner: LibraryScanning {
         )
     }
 
-    private func groupContentsIntoGames(items: [(content: LocalContent, parsed: ParsedPackage)]) -> [Game] {
+    private func groupContentsIntoGames(
+        items: [(content: LocalContent, parsed: ParsedPackage)],
+        sourceRoot: URL,
+        covers: [String: [CoverCandidate]]
+    ) -> [Game] {
         struct GameBuilder {
             var title: String
             var originalTitle: String?
             var contents: [LocalContent]
             var primaryTitleID: String?
             var gameFolder: String
+            var directoryKey: String
         }
 
         var builders: [String: GameBuilder] = [:] // Keyed by group key
@@ -158,6 +178,17 @@ public actor LibraryScanner: LibraryScanning {
         func uniqueFolderKey(_ folder: String) -> String? {
             guard !folder.isEmpty, let keys = gameFolderToKeys[folder], keys.count == 1 else { return nil }
             return keys.first
+        }
+
+        func makeBuilder(_ item: (content: LocalContent, parsed: ParsedPackage), primaryTitleID: String?) -> GameBuilder {
+            GameBuilder(
+                title: item.parsed.gameTitle,
+                originalTitle: item.parsed.originalTitle,
+                contents: [item.content],
+                primaryTitleID: primaryTitleID,
+                gameFolder: item.parsed.gameFolder,
+                directoryKey: FilenameParser.gameDirectoryKey(fileURL: item.content.fileURL, sourceRoot: sourceRoot) ?? ""
+            )
         }
 
         // Pass 1: Register Base contents
@@ -175,13 +206,7 @@ public actor LibraryScanner: LibraryScanning {
             }
 
             if builders[key] == nil {
-                builders[key] = GameBuilder(
-                    title: parsed.gameTitle,
-                    originalTitle: parsed.originalTitle,
-                    contents: [item.content],
-                    primaryTitleID: baseID,
-                    gameFolder: parsed.gameFolder
-                )
+                builders[key] = makeBuilder(item, primaryTitleID: baseID)
             } else {
                 builders[key]?.contents.append(item.content)
             }
@@ -212,13 +237,7 @@ public actor LibraryScanner: LibraryScanning {
             } else {
                 // Standalone update
                 let standaloneKey = "upd:\(item.content.id)"
-                builders[standaloneKey] = GameBuilder(
-                    title: parsed.gameTitle,
-                    originalTitle: parsed.originalTitle,
-                    contents: [item.content],
-                    primaryTitleID: parsed.titleID,
-                    gameFolder: parsed.gameFolder
-                )
+                builders[standaloneKey] = makeBuilder(item, primaryTitleID: parsed.titleID)
             }
         }
 
@@ -240,13 +259,7 @@ public actor LibraryScanner: LibraryScanning {
             } else {
                 // Standalone DLC
                 let standaloneKey = "dlc:\(item.content.id)"
-                builders[standaloneKey] = GameBuilder(
-                    title: parsed.gameTitle,
-                    originalTitle: parsed.originalTitle,
-                    contents: [item.content],
-                    primaryTitleID: parsed.titleID,
-                    gameFolder: parsed.gameFolder
-                )
+                builders[standaloneKey] = makeBuilder(item, primaryTitleID: parsed.titleID)
             }
         }
 
@@ -265,13 +278,7 @@ public actor LibraryScanner: LibraryScanning {
                 builders[targetKey]?.contents.append(item.content)
             } else {
                 let standaloneKey = "unk:\(item.content.id)"
-                builders[standaloneKey] = GameBuilder(
-                    title: parsed.gameTitle,
-                    originalTitle: parsed.originalTitle,
-                    contents: [item.content],
-                    primaryTitleID: parsed.titleID,
-                    gameFolder: parsed.gameFolder
-                )
+                builders[standaloneKey] = makeBuilder(item, primaryTitleID: parsed.titleID)
             }
         }
 
@@ -302,7 +309,7 @@ public actor LibraryScanner: LibraryScanning {
                 id: gameID,
                 title: builder.title.isEmpty ? "Unknown Game" : builder.title,
                 originalTitle: builder.originalTitle,
-                coverURL: nil,
+                coverURL: LocalCoverLocator.select(covers[builder.directoryKey] ?? [], gameDirectory: builder.directoryKey),
                 contents: sortedContents,
                 identification: identification
             )

@@ -2,7 +2,6 @@ import AppKit
 import CoreGraphics
 import Foundation
 import Observation
-import SwitchShelfBackend
 import SwitchShelfDevice
 import SwitchShelfDomain
 import SwitchShelfLibrary
@@ -25,7 +24,7 @@ final class AppModel {
     private(set) var isDiscovering = false
     private(set) var isReadingInventory = false
     private(set) var isCheckingPlan = false
-    private(set) var preparation: BackendPreflightResult?
+    private(set) var preparation: SphairaPreflightResult?
 
     // MARK: UI state
     private(set) var selection: SidebarItem? = .all
@@ -55,7 +54,7 @@ final class AppModel {
     @ObservationIgnored private let scanner: any LibraryScanning = LibraryScanner()
     @ObservationIgnored private let deviceService = DeviceService()
     @ObservationIgnored private let inventoryReader = BoundedInventoryReader()
-    @ObservationIgnored private let preflightService = BackendPreflightService()
+    @ObservationIgnored private let preflightService = SphairaPreflightService()
     @ObservationIgnored private var repository: (any LibraryPersisting)?
     @ObservationIgnored private let appDirectory: URL
     @ObservationIgnored private let planStore: LocalPlanStore
@@ -934,10 +933,10 @@ final class AppModel {
 
     // MARK: - Installation plan
 
-    private var preflightInput: BackendPreflightInput {
+    private var preflightInput: SphairaPreflightInput {
         let matches = Dictionary(grouping: snapshot.games.flatMap(\.contents), by: \.id)
-        return BackendPreflightInput(items: plan.map { item in
-            BackendPreflightItem(id: item.id, intendedTarget: item.target.rawValue, entries: item.contents.map { content in
+        return SphairaPreflightInput(items: plan.map { item in
+            SphairaPreflightItem(id: item.id, intendedTarget: item.target.rawValue, entries: item.contents.map { content in
                 // An ID is opaque: only a unique current LocalContent mapping supplies a URL.
                 let source = matches[content.id]?.count == 1 ? matches[content.id]?.first : nil
                 let sourceOnline = source.map { local in
@@ -945,7 +944,7 @@ final class AppModel {
                         librarySource.availability == .online && isUnder(local.fileURL, source: librarySource)
                     }
                 } ?? false
-                return BackendPreflightEntry(
+                return SphairaPreflightEntry(
                     id: content.id, name: content.fileName, expectedBytes: content.byteCount,
                     included: content.included, sourceURL: source?.fileURL,
                     sourceAvailable: sourceOnline, snapshotBytes: source?.byteCount

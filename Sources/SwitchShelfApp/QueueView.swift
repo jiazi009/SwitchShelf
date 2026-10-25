@@ -104,11 +104,11 @@ struct QueueView: View {
                 .background(Theme.warning.opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 7) {
-                    Text("安装执行暂不可用")
+                    Text("sphaira MTP 安装 · 开发中")
                         .font(.system(size: 13, weight: .semibold))
                     BadgePill(text: "未启用", systemImage: "lock.fill", tone: .warning)
                 }
-                Text("队列保存在本机。检查计划只查看本地文件元数据，不读取文件内容或连接 USB；SD／机身存储仅是本地意向，Backend 主机协议没有设置目标的命令，设备端选择与结果仍须另行核实。未经授权的安装测试和设备确认前不能开始安装。")
+                Text("队列保存在本机。检查计划仅查看本地文件元数据，不读取包内容或连接 USB。后续安装需在 Switch 上进入 sphaira 的 MTP Install 页面；SD／机身存储由 sphaira 端选择，这里的位置仅是计划意向。传输和真实设备测试尚未完成，暂不能开始安装。")
                     .font(.system(size: 10.5))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -117,13 +117,13 @@ struct QueueView: View {
                         .buttonStyle(.borderedProminent)
                         .controlSize(.large)
                         .disabled(true)
-                        .help("不可用：尚未授权设备安装测试，Backend 传输和设备端目标未验证")
+                        .help("不可用：sphaira MTP 安装通道尚未接入，需先通过经确认的设备测试")
                         .accessibilityHint("当前不可用。尚未授权安装测试，设备端目标和结果未验证。")
                     Button("检查计划") { Task { await model.checkPlan() } }
                         .buttonStyle(.bordered)
                         .controlSize(.large)
                         .disabled(model.plan.isEmpty || model.isCheckingPlan)
-                        .help("仅检查本地来源、普通文件、大小与 Backend 文件名；不连接设备")
+                        .help("仅检查本地来源、普通文件、大小与 MTP 包文件名；不连接设备")
                     Button("查看设备模式说明") { model.showDevice() }
                         .buttonStyle(.bordered)
                         .controlSize(.large)

@@ -6,7 +6,7 @@ SwiftUI native macOS 26+, arm64, 03-liquid-glass.png is the selected visual refe
 ## Modules and ownership
 - SwitchShelfDomain: value models, evidence-based installation assessment; coordinator owns public contract.
 - SwitchShelfLibrary: actor-based read-only recursive SMB/local scanning, filename candidate parsing, source bookmarks, SQLite migrations and cache. agy owns implementation and library tests.
-- SwitchShelfDevice + CDBIBridge: serialized USB discovery and read-only MTP inventory access for sphaira `Games` and DBI `Installed games`; native ImageCaptureCore broker with optional libmtp fallback. pi owns the original module; this follow-up is coordinator-owned integration.
+- SwitchShelfDevice + CDBIBridge: serialized USB discovery and read-only MTP inventory access for sphaira `Games` and DBI `Installed games`; native ImageCaptureCore broker with optional libmtp fallback. Also owns sphaira-specific local installation preflight and an internal, hardware-free upload foundation; no production upload transport is connected. pi owns the original module; this follow-up is coordinator-owned integration.
 - SwitchShelfApp: SwiftUI navigation, library grid/list/search/filter, inspector, device and queue pages, root observable app model; opencode owns UI.
 - Coordinator: Package.swift, shared models, app composition, build/bundle scripts, integration, review and final tests.
 
@@ -49,6 +49,18 @@ SQLite is accessed through the system sqlite3 C interface in the initial depende
 
 ## Scope gates
 First integrated milestone: runnable native app, real NAS scan/cache, real device detection and read-only installed inventory, conservative installation badges and a persistent editable install plan. Installation execution is a separate next wave after protocol, result semantics and an explicit test file/target are established. Maintain the original development document's remaining metadata, installation, recovery and maintenance roadmap; an attractive shell alone does not complete that scope.
+
+## sphaira MTP installation direction — 2026-10-25
+
+The user selected sphaira MTP for both inventory and future installation; Backend is deferred, not removed. The app's local preparation now uses `SphairaInstallPreflight`, without importing Backend. Package.swift and existing uncommitted Backend work were preserved. The install button remains disabled.
+
+- Source baseline: sphaira `338348e74b6d278bc570a9be5373d25197bf6c8d`, which pins R-YaTian/libhaze `f1c9c632b5c615eabfb29a0dab89fedf606588e4`. These are reviewed upstream sources, NOT identification of the connected device's build. Install storage visibility alone does not mean installation mode is active: the user must enter **MTP Install**. Destination is chosen inside sphaira; local SD/NAND intent is not a host command.
+- `SphairaUploadCodec` is separate from the inventory codec. The internal sender uses `SendObjectPropList` (`0x9808`, 64-bit size and filename property) then one streaming `SendObject` (`0x100d`). It never seeks, sends partial-object edits, deletes objects, formats, retries or resumes. All game records/badges remain governed by independent inventory evidence.
+- The sender requires same-session sphaira device-description/capability evidence and an unambiguous exact Install storage plus Games; numeric storage handles are never persisted. Its final success state means **transferredAwaitingConfirmation**, not installed. Lost acknowledgment, cancellation, source change and transport failure after the first write leave device state unknown. A failed release is explicit.
+- `SphairaPackageSource` pins a read-only descriptor under an explicit source root, rejects symlinks in every component, checks inode/size/mtime/ctime and uses bounded positional reads. Preflight only inspects metadata and is not authorization. Its result must not replace execution-time source validation or reviewed file/target consent.
+- No native upload adapter, installation helper/journal or UI execution is wired. ImageCaptureCore's current `outData: Data` path is NOT a demonstrated bounded multi-GB stream; do not extend it by loading an entire package. The future adapter must validate real bulk streaming, final short-packet/ZLP behavior, machine-wide DeviceLease ownership and independent process-exit/hard-deadline behavior before opening installation to the app. Fixture tests are not proof of any of these native properties.
+
+Implementation/validation: `Docs/Reports/sphaira-mtp-install-foundation-2026-10-25.md`. Reviewed device test gate: `Docs/Tasks/sphaira-mtp-install-field-test.md` (proposal only; no test authorized or run).
 
 ## Backend foundation wave — 2026-10-23
 

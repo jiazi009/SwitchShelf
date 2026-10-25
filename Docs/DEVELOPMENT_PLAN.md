@@ -1,7 +1,14 @@
 # SwitchShelf coordinated development plan
 
 ## Current objective
-Integrate the observed sphaira Games inventory into the existing native app, clarify connection/coverage status, preserve conservative local identity matching and deliver a tested local bundle. The coordinator owns this follow-up; existing Backend changes remain separate. Historical Orca waves below describe earlier work, not a newly dispatched run.
+Continue the user-selected **sphaira MTP inventory + installation** route. Preserve the accepted Games inventory and conservative identity matching; implement installation in gated stages. Backend is deferred and its existing uncommitted changes remain separate. Historical Orca waves below describe earlier work, not a newly dispatched run.
+
+## sphaira installation software checkpoint — 2026-10-25
+
+- Completed: pinned upstream source review; sphaira-specific metadata-only plan checks in the app; separate upload wire codec; single-file bounded streaming state machine; read-only descriptor-pinned source access; 32 new fixture/local-temporary-file tests. No manifest or shared domain changes. App guidance now explains MTP Install mode and device-side destination selection, not Backend.
+- Validation: `swift test --skip RealNASScanTests` passed (172 Swift Testing tests plus 11 XCTest tests), release app/probe packaging and strict signature verification passed. No source-game bytes or physical USB installation access occurred. See `Docs/Reports/sphaira-mtp-install-foundation-2026-10-25.md`.
+- Next software gates: implement/verify a bounded native upload adapter and same-session capability inspection; integrate machine-wide lease and process-isolated deadlines with positive exit verification; add durable conservative transfer state and explicit file/target confirmation. Do not materialize large packages into ImageCaptureCore outData, infer device build from upstream, or automatically retry a failed installation stream.
+- Next hardware gate: review `Docs/Tasks/sphaira-mtp-install-field-test.md`, explicitly select one authorized test package and confirm destination/settings on sphaira. Only after that review may an installation test be scheduled. Upload logic is still internal/unwired; the app's Start button remains disabled. A host OK response must not promote installed state.
 
 ## Current connection baseline — 2026-10-25
 
@@ -26,7 +33,7 @@ Outcomes and remaining limits: `Docs/Reports/sphaira-inventory-acceptance-2026-1
 - Package a local .app, include run instructions and summarize remaining capability gates.
 
 ## Wave 3 — installation and metadata
-- Pin DBI Backend protocol reference, implement bounded file transfer and durable per-item state, validate with a specifically selected authorized package/target.
+- Primary route is now sphaira MTP: implement bounded native package streaming and durable per-item state, then validate with a specifically selected authorized package/target. Preserve the existing pinned DBI Backend work as a deferred alternative; do not develop two production installation paths in parallel.
 - Separate transfer completion and device confirmation, test disconnect/retry/cancellation semantics.
 - Add lawful metadata/cover provider with source tracking/cache, correction layer, content-level install planning.
 - P1 SD maintenance remains a separate workflow with preview, backup and recovery before writes.

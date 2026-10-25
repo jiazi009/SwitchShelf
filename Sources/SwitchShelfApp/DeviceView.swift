@@ -229,7 +229,7 @@ struct DeviceView: View {
                     Image(systemName: "lock.shield.fill")
                         .font(.system(size: 10))
                         .foregroundStyle(Theme.installed)
-                    Text("这里只读取 Games / Installed games 的目录和内容元数据。本体、更新和 DLC 分别记录；Mounts、Contents、存档、安装与测速入口不参与清单扫描。安装计划与实际安装结果分别管理。")
+                    Text("这里只读取 Games / Installed games 的目录和内容元数据；Mounts、Contents、存档、安装与测速入口不参与扫描。后续 sphaira MTP 安装需另行进入 MTP Install 页面，并在设备端选择目标存储。安装通道尚未启用；发送完成不等于安装成功。")
                         .font(.system(size: 10))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)

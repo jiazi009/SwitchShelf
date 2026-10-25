@@ -291,4 +291,31 @@ public enum FilenameParser {
             (0x4E00...0x9FFF).contains(scalar.value) || (0x3400...0x4DBF).contains(scalar.value)
         }
     }
+
+    /// Relative directory of the game folder for `fileURL`, such as `Zelda` or `本体/Zelda`.
+    /// Files that sit directly in the source root have no game directory.
+    public static func gameDirectoryKey(fileURL: URL, sourceRoot: URL) -> String? {
+        let components = relativeComponents(of: fileURL, sourceRoot: sourceRoot)
+        guard components.count > 1, let topFolder = components.first else { return nil }
+        if genericFolderNames.contains(topFolder.lowercased()), components.count > 2 {
+            return "\(topFolder)/\(components[1])"
+        }
+        return topFolder
+    }
+
+    /// Directory containing `fileURL`, relative to `sourceRoot`. Nil when the file is not inside the source.
+    public static func relativeDirectory(of fileURL: URL, sourceRoot: URL) -> String? {
+        let components = relativeComponents(of: fileURL, sourceRoot: sourceRoot)
+        guard components.count > 1 else { return nil }
+        return components.dropLast().joined(separator: "/")
+    }
+
+    private static func relativeComponents(of url: URL, sourceRoot: URL) -> [String] {
+        let sourcePath = sourceRoot.standardizedFileURL.path
+        let filePath = url.standardizedFileURL.path
+        guard filePath == sourcePath || filePath.hasPrefix(sourcePath + "/") else { return [] }
+        let relative = filePath == sourcePath ? "" : String(filePath.dropFirst(sourcePath.count + 1))
+        guard !relative.isEmpty else { return [] }
+        return relative.split(separator: "/").map(String.init)
+    }
 }

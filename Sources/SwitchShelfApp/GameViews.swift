@@ -1,22 +1,37 @@
 import AppKit
 import SwiftUI
 import SwitchShelfDomain
+import SwitchShelfLibrary
+
+private final class CachedCover: NSObject {
+    let image: NSImage
+    let isSquare: Bool
+    init(image: NSImage, isSquare: Bool) {
+        self.image = image
+        self.isSquare = isSquare
+    }
+}
 
 @MainActor
 private enum CoverImageCache {
-    private static let images: NSCache<NSURL, NSImage> = {
-        let cache = NSCache<NSURL, NSImage>()
+    private static let images: NSCache<NSURL, CachedCover> = {
+        let cache = NSCache<NSURL, CachedCover>()
         cache.totalCostLimit = 64 * 1024 * 1024
         return cache
     }()
+    static let disk = CoverThumbnailStore(
+        directory: (FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true))
+            .appendingPathComponent("SwitchShelf/CoverThumbnails", isDirectory: true)
+    )
 
-    static func image(for url: URL) -> NSImage? {
+    static func image(for url: URL) -> CachedCover? {
         images.object(forKey: url as NSURL)
     }
 
-    static func insert(_ image: NSImage, for url: URL) {
+    static func insert(_ image: NSImage, isSquare: Bool, for url: URL) {
         let cost = Int(image.size.width * image.size.height * 4)
-        images.setObject(image, forKey: url as NSURL, cost: cost)
+        images.setObject(CachedCover(image: image, isSquare: isSquare), forKey: url as NSURL, cost: cost)
     }
 }
 
@@ -24,16 +39,30 @@ struct CoverArtwork: View {
     var game: Game
     var cornerRadius: CGFloat = 12
     @State private var image: NSImage?
+    @State private var isSquare = false
 
     var body: some View {
         ZStack {
-            if let image {
+            if let image, !isSquare {
                 Image(nsImage: image)
                     .resizable()
                     .scaledToFill()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                CoverPlaceholder(title: game.title, seed: game.id)
+                CoverPlaceholder(
+                    title: game.title,
+                    seed: game.id,
+                    showsMissingCaption: image == nil,
+                    showsMonogram: image == nil
+                )
+                if let image, isSquare {
+                    Image(nsImage: image)
+                        .resizable()
+                        .scaledToFit()
+                        .padding(.horizontal, 18)
+                        .padding(.top, 12)
+                        .padding(.bottom, 36)
+                }
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
@@ -41,32 +70,80 @@ struct CoverArtwork: View {
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .strokeBorder(Color.white.opacity(0.12), lineWidth: 0.6)
         }
-        .task(id: game.coverURL) {
+        .task(id: coverTaskID) {
             await loadCover()
         }
-        .accessibilityLabel(image == nil ? "缺少本地封面：\(game.title)" : "\(game.title) 封面")
+        .accessibilityLabel(image == nil ? "缺少封面：\(game.title)" : "\(game.title) 封面")
+    }
+
+    private var coverTaskID: String {
+        if let local = game.coverURL?.absoluteString { return "local:\(local)" }
+        return "nlib:\(NlibCoverClient.titleID(for: game) ?? "")"
     }
 
     private func loadCover() async {
-        guard let url = game.coverURL, url.isFileURL else {
-            image = nil
-            return
-        }
-        if let cached = CoverImageCache.image(for: url) {
-            image = cached
-            return
-        }
-        let data = await Task.detached(priority: .utility) { () -> Data? in
-            guard let values = try? url.resourceValues(forKeys: [.fileSizeKey]),
-                  (values.fileSize ?? 0) < 32 * 1024 * 1024 else { return nil }
-            return try? Data(contentsOf: url)
-        }.value
-        guard !Task.isCancelled else { return }
-        if let loaded = data.flatMap(NSImage.init(data:)) {
-            CoverImageCache.insert(loaded, for: url)
-            image = loaded
+        if let url = game.coverURL, url.isFileURL {
+            await loadLocalCover(at: url)
+        } else if let titleID = NlibCoverClient.titleID(for: game), let remote = NlibCoverClient.iconURL(for: titleID) {
+            await loadRemoteCover(titleID: titleID, cacheKey: remote)
         } else {
             image = nil
+            isSquare = false
+        }
+    }
+
+    private func loadLocalCover(at url: URL) async {
+        if let cached = CoverImageCache.image(for: url) {
+            image = cached.image
+            isSquare = cached.isSquare
+            return
+        }
+        let store = CoverImageCache.disk
+        let thumbnail = await Task.detached(priority: .utility) { () -> CoverThumbnail? in
+            let keys: Set<URLResourceKey> = [.fileSizeKey, .contentModificationDateKey, .isRegularFileKey, .isSymbolicLinkKey]
+            let values = try? url.resourceValues(forKeys: keys)
+            guard values?.isSymbolicLink != true, values?.isRegularFile != false else { return nil }
+            let byteCount = Int64(values?.fileSize ?? 0)
+            let modifiedAt = values?.contentModificationDate
+            if let cached = store.cachedThumbnail(for: url, byteCount: byteCount, modifiedAt: modifiedAt) {
+                return cached
+            }
+            guard let created = CoverImageLoader.thumbnail(at: url) else { return nil }
+            store.save(created, for: url, byteCount: byteCount, modifiedAt: modifiedAt)
+            return created
+        }.value
+        apply(thumbnail, cacheKey: url)
+    }
+
+    private func loadRemoteCover(titleID: String, cacheKey: URL) async {
+        if let cached = CoverImageCache.image(for: cacheKey) {
+            image = cached.image
+            isSquare = cached.isSquare
+            return
+        }
+        image = nil
+        isSquare = false
+        let store = CoverImageCache.disk
+        let thumbnail = await Task.detached(priority: .utility) { () -> CoverThumbnail? in
+            if let cached = store.cachedThumbnail(for: cacheKey, byteCount: 0, modifiedAt: nil) {
+                return cached
+            }
+            guard let created = await NlibCoverFetcher.shared.thumbnail(for: titleID) else { return nil }
+            store.save(created, for: cacheKey, byteCount: 0, modifiedAt: nil)
+            return created
+        }.value
+        apply(thumbnail, cacheKey: cacheKey)
+    }
+
+    private func apply(_ thumbnail: CoverThumbnail?, cacheKey: URL) {
+        guard !Task.isCancelled else { return }
+        if let thumbnail, let loaded = NSImage(data: thumbnail.jpegData) {
+            CoverImageCache.insert(loaded, isSquare: thumbnail.isSquare, for: cacheKey)
+            image = loaded
+            isSquare = thumbnail.isSquare
+        } else {
+            image = nil
+            isSquare = false
         }
     }
 }
@@ -74,6 +151,8 @@ struct CoverArtwork: View {
 struct CoverPlaceholder: View {
     var title: String
     var seed: String
+    var showsMissingCaption = true
+    var showsMonogram = true
 
     var body: some View {
         GeometryReader { proxy in
@@ -97,11 +176,13 @@ struct CoverPlaceholder: View {
                     endRadius: width * 1.1
                 )
 
-                Text(monogram)
-                    .font(.system(size: width * 0.34, weight: .bold, design: .rounded))
-                    .foregroundStyle(Color.white.opacity(0.16))
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-                    .offset(y: -width * 0.06)
+                if showsMonogram {
+                    Text(monogram)
+                        .font(.system(size: width * 0.34, weight: .bold, design: .rounded))
+                        .foregroundStyle(Color.white.opacity(0.16))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                        .offset(y: -width * 0.06)
+                }
 
                 LinearGradient(
                     colors: [.clear, Color.black.opacity(0.10), Color.black.opacity(0.52)],
@@ -110,7 +191,7 @@ struct CoverPlaceholder: View {
                 )
 
                 VStack(alignment: .leading, spacing: max(2, width * 0.016)) {
-                    if width > 86 {
+                    if showsMissingCaption, width > 86 {
                         Text("本地封面未提供")
                             .font(.system(size: max(7, min(9, width * 0.055)), weight: .medium))
                             .foregroundStyle(Color.white.opacity(0.72))

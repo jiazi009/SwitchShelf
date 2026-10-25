@@ -1,0 +1,18 @@
+{
+  "generator": "Built-in image_gen",
+  "date": "2026-10-25",
+  "variants": [
+    {
+      "file": "01-glass-shelf.png",
+      "prompt": "Use case: logo-brand. Create ONE polished standalone macOS application icon for SwitchShelf, a native game library manager. Square 1024 by 1024 composition. A beautifully simple frosted cobalt-blue glass shelf holding three upright game cartridge cases, the center case slightly taller; one restrained violet accent. The cases are abstract blank rounded rectangles with a subtle cartridge notch, no brand logo. Warm-white pearlescent rounded-square app tile, blue liquid-glass refraction, subtle bevel, soft clean dimensional studio lighting. Bold iconic silhouette readable at 32 pixels, generous spacing, a premium calm Apple-platform utility feeling. Straight-on view with slight sculptural depth. The rounded-square tile occupies about 86 percent of the canvas, fully visible, transparent area outside tile. No words, letters, numbers, labels, typography, Nintendo marks, watermarks, device mockup, comparison sheet, or extra objects."
+    },
+    {
+      "file": "02-library-drawer.png",
+      "prompt": "Use case: logo-brand. Create ONE polished standalone macOS application icon for SwitchShelf, a native game library manager. Square 1024 by 1024. Icon concept: a compact sculptural library drawer / game organizer, an elegant white rounded open-front tray with three thick rounded game cards rising diagonally from it in cobalt blue, periwinkle and a small coral accent. Broad simple geometry, beautifully balanced negative space, clean creamy ceramic and translucent glass materials. A rich luminous blue-to-violet rounded-square tile with a soft inner glow, restrained realistic depth and bevel, not a scene. Strong clear silhouette readable at 32 pixels, sophisticated playful native macOS app-icon craft. Tile occupies about 86 percent of canvas with transparent space outside, full tile in frame. No text, letters, numbers, typography, Nintendo marks, controller logos, watermark, surrounding desktop, comparison sheet, or decorative clutter."
+    },
+    {
+      "file": "03-shelf-monogram.png",
+      "prompt": "Use case: logo-brand. Create ONE polished standalone macOS application icon for SwitchShelf, a native game library manager. Square 1024 by 1024 composition. A distinctive sculptural S-shaped symbol constructed from two offset thick translucent blue glass shelves and a compact rounded game-card shape; the S emerges from clean negative space rather than typography. Deep midnight-navy rounded-square tile, luminous ice-blue edges with subtle violet refraction, precise layered glass, premium minimal liquid-glass macOS icon aesthetic. Bold simple single centered symbol, high contrast and legible at 32 pixels, controlled front view, elegant and memorable. Rounded-square tile occupies about 86 percent of the canvas and is entirely visible with transparent area outside. No written text, fonts, labels, numbers, Nintendo or Switch logo, watermark, physical scene, UI screenshot, comparison sheet, or clutter."
+    }
+  ]
+}

@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#249AF0"/><stop offset=".55" stop-color="#2368DE"/><stop offset="1" stop-color="#443CBD"/>
+    </linearGradient>
+    <linearGradient id="folder" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#FFFFFF"/><stop offset="1" stop-color="#BADCF9"/>
+    </linearGradient>
+    <linearGradient id="left" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#76E7FB"/><stop offset="1" stop-color="#24B8EA"/>
+    </linearGradient>
+    <linearGradient id="right" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#FFB68F"/><stop offset="1" stop-color="#FF7979"/>
+    </linearGradient>
+  </defs>
+  <!-- One blue tile and a single hairline rim; intentionally no bloom/shadow. -->
+  <rect x="64" y="64" width="896" height="896" rx="190" fill="url(#tile)"/>
+  <rect x="66" y="66" width="892" height="892" rx="188" fill="none" stroke="#D7F3FF" stroke-opacity=".38" stroke-width="3"/>
+
+  <!-- Recognizable console silhouette: one thumbstick per side, no button cluster. -->
+  <rect x="165" y="276" width="694" height="328" rx="64" fill="#14387F"/>
+  <rect x="166" y="276" width="120" height="328" rx="60" fill="url(#left)"/>
+  <path d="M263 276h23v328h-23z" fill="#1A9CCA" opacity=".35"/>
+  <rect x="738" y="276" width="120" height="328" rx="60" fill="url(#right)"/>
+  <path d="M738 276h23v328h-23z" fill="#E66875" opacity=".38"/>
+  <rect x="281" y="295" width="462" height="290" rx="29" fill="#102853" stroke="#75B9F0" stroke-opacity=".65" stroke-width="4"/>
+  <circle cx="225" cy="426" r="35" fill="#183C79" stroke="#A8EDFA" stroke-width="6"/>
+  <circle cx="799" cy="426" r="35" fill="#183C79" stroke="#FFD0AE" stroke-width="6"/>
+
+  <!-- A single folder, with one abstract game card, not a logo or wordmark. -->
+  <path d="M391 388q0-24 24-24h70q11 0 19 9l17 21h96q24 0 24 24v115q0 23-24 23H415q-24 0-24-23z" fill="#8BCDF5"/>
+  <path d="M391 427q0-22 22-22h205q23 0 23 23v105q0 23-23 23H414q-23 0-23-23z" fill="url(#folder)" stroke="#ECF9FF" stroke-width="3"/>
+  <rect x="483" y="434" width="58" height="82" rx="10" fill="#174A93"/>
+  <path d="M497 450h29" stroke="#CDE9FF" stroke-width="6" stroke-linecap="round"/>
+
+  <!-- Two flat, separated transfer arrows; no beveled loops or neon edges. -->
+  <path d="M329 722c77-69 184-87 292-40" fill="none" stroke="#88E8F7" stroke-width="37" stroke-linecap="round"/>
+  <path d="M611 628l89 72-101 39z" fill="#88E8F7"/>
+  <path d="M695 797c-91 67-199 72-290 35" fill="none" stroke="#FFB29F" stroke-width="37" stroke-linecap="round"/>
+  <path d="M417 885l-91-72 103-40z" fill="#FFB29F"/>
+</svg>

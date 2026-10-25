@@ -71,7 +71,7 @@ enum DiscoveryClassifier {
                                     vendorID: candidate.vendorID, productID: candidate.productID)
         }
         if devices.isEmpty {
-            return DeviceDiscovery(state: .disconnected, message: "未检测到受支持的 Switch/DBI USB 描述符；请连接数据线并打开 DBI → Run MTP responder。")
+            return DeviceDiscovery(state: .disconnected, message: "未检测到 Switch USB 设备；请连接数据线，并开启 sphaira 的 MTP 或 DBI 的 Run MTP responder。")
         }
         if devices.count > 1 {
             return DeviceDiscovery(state: .detected, devices: devices, message: "检测到多个候选设备；只读清单目前要求仅连接一台目标设备，尚未验证 MTP。")
@@ -79,11 +79,11 @@ enum DiscoveryClassifier {
         let message: String
         switch candidates[0].productID {
         case 0x201d:
-            message = "检测到 057e:201d MTP 候选描述符，尚未握手；请停留在 DBI Run MTP responder，再读取清单。USB 识别不代表可安装。"
+            message = "已发现 Switch MTP 候选设备，尚未握手。请保持 sphaira 或 DBI 的 MTP 开启，再读取清单；USB 识别不代表可安装。"
         case 0x3000:
-            message = "检测到 057e:3000 Backend 候选描述符；读取清单需要手动进入 DBI → Run MTP responder，尚未验证通道。"
+            message = "检测到 DBI Backend 候选设备；读取清单需要切换到 sphaira 或 DBI 的 MTP 模式，尚未验证通道。"
         default:
-            message = "检测到 057e:2000 Nintendo Switch USB 候选描述符，连接存在但当前协议和 DBI 模式未确认；请打开 DBI → Run MTP responder，不能据此读取清单或安装。"
+            message = "检测到 Nintendo Switch USB 候选设备，当前协议未确认；请开启 sphaira 或 DBI 的 MTP，不能据此读取清单或安装。"
         }
         return DeviceDiscovery(state: .waitingForMTP, devices: devices, message: message)
     }

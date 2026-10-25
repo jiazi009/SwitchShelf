@@ -26,7 +26,7 @@ extension DeviceConnectionState {
         case .disconnected: "未检测到设备"
         case .detected: "已检测到 USB 设备"
         case .waitingForMTP: "等待 MTP 响应"
-        case .ready: "MTP 已就绪"
+        case .ready: "MTP 已连接"
         case .reading: "正在读取"
         case .busy: "设备忙碌"
         case .error: "连接错误"

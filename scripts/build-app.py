@@ -6,11 +6,16 @@ import os
 import plistlib
 import shutil
 import subprocess
+import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--with-libmtp", action="store_true", help="Bundle optional libmtp fallback and its native dependencies")
+parser.add_argument("--icon", type=Path, help="Selected PNG app icon; otherwise use Assets/AppIcon.png if present")
 args = parser.parse_args()
+icon = args.icon or ROOT / "Assets" / "AppIcon.png"
+if args.icon and not icon.is_file():
+    parser.error(f"Icon does not exist: {icon}")
 subprocess.run(["swift", "build", "-c", "release", "--product", "SwitchShelf"], cwd=ROOT, check=True)
 subprocess.run(["swift", "build", "-c", "release", "--product", "switchshelf-probe"], cwd=ROOT, check=True)
 bin_dir = Path(subprocess.check_output(["swift", "build", "-c", "release", "--show-bin-path"], cwd=ROOT, text=True).strip())
@@ -24,14 +29,30 @@ for directory in (macos, frameworks, resources):
 for executable in ("SwitchShelf", "switchshelf-probe"):
     shutil.copy2(bin_dir / executable, macos / executable)
     os.chmod(macos / executable, 0o755)
+icon_info = {}
+if not icon.is_file():
+    (resources / "AppIcon.icns").unlink(missing_ok=True)  # Do not retain a previously selected icon.
+if icon.is_file():
+    with tempfile.TemporaryDirectory(prefix="SwitchShelf-icon-") as temporary:
+        iconset = Path(temporary) / "AppIcon.iconset"
+        iconset.mkdir()
+        for size in (16, 32, 128, 256, 512):
+            for scale in (1, 2):
+                pixels = size * scale
+                name = f"icon_{size}x{size}" + ("@2x" if scale == 2 else "") + ".png"
+                subprocess.run(["sips", "-z", str(pixels), str(pixels), str(icon),
+                                "--out", str(iconset / name)], check=True, stdout=subprocess.DEVNULL)
+        subprocess.run(["iconutil", "-c", "icns", str(iconset), "-o", str(resources / "AppIcon.icns")], check=True)
+    icon_info["CFBundleIconFile"] = "AppIcon"
 with (contents / "Info.plist").open("wb") as f:
     plistlib.dump({
         "CFBundleIdentifier": "local.switchshelf.app",
         "CFBundleName": "SwitchShelf", "CFBundleDisplayName": "SwitchShelf",
         "CFBundleExecutable": "SwitchShelf", "CFBundlePackageType": "APPL",
-        "CFBundleShortVersionString": "0.1.0", "CFBundleVersion": "1",
+        "CFBundleShortVersionString": "0.2.0", "CFBundleVersion": "2",
         "LSMinimumSystemVersion": "26.0", "NSHighResolutionCapable": True,
         "NSPrincipalClass": "NSApplication",
+        **icon_info,
     }, f)
 
 copied = {}

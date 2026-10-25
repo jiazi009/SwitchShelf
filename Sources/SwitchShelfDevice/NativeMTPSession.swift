@@ -90,18 +90,18 @@ actor NativeMTPSession: InventoryTransport {
         case 3:
             code = .busy; message = "只读 MTP 会话正在使用中；请等待当前操作完成。"
         case 4:
-            code = .noDevice; message = "未发现 057e:201d MTP 候选设备；请连接数据线并进入 DBI → Run MTP responder。"
+            code = .noDevice; message = "未发现 Switch MTP 候选设备；请连接数据线并开启 sphaira 或 DBI 的 MTP。"
         case 5:
             code = .multipleDevices; message = "检测到多个 Switch MTP 候选设备；目前只支持一台活动设备，请由用户选择保留目标连接。"
         case 6:
             code = .accessDeniedOrBusy
-            message = "libmtp 未能打开 MTP 会话：可能为访问权限、ptpcamerad/其他客户端占用、模式不符或断开，底层 API 未提供可区分的错误码。请优先使用原生 ImageCaptureCore 通道，关闭用户启动的其他 MTP 客户端，并停留在 DBI Run MTP responder；不要杀系统进程或修改全局相机设置。"
+            message = "libmtp 未能打开 MTP 会话，访问权限、其他客户端占用、模式不符或断开均有可能。请优先使用原生通道，退出 OpenMTP 等客户端，并保持 sphaira / DBI 的 MTP 开启；不要停止系统服务。"
         case 8:
             code = .invalidMetadata; message = "MTP 返回无效或过长的对象/存储元数据；清单不能视为完整。"
         case 9:
             code = .resourceLimit; message = "MTP 元数据分配失败；清单不能视为完整。"
         default:
-            code = .transport; message = "MTP 枚举失败或连接中断；请检查 DBI 模式、连接及其他客户端后手动重试，不能据此判断设备为空。"
+            code = .transport; message = "MTP 枚举失败或连接中断；请检查 sphaira / DBI 的 MTP 模式、连接及其他客户端后重试，不能据此判断设备为空。"
         }
         throw DeviceServiceError(code: code, message: message, nativeCode: error.native_code == 0 ? nil : Int(error.native_code))
     }

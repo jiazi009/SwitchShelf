@@ -105,6 +105,7 @@ public actor BoundedInventoryReader {
                 return fail(.previousProcessUnverified, exited: false)
             }
             if response.error?.code == "busy" { return fail(.deviceBusy) }
+            if response.error?.code == "accessDeniedOrBusy" { return fail(.sessionUnavailable) }
             return fail(response.error?.code == "timeout" ? .timeout : .readFailed)
         }
         guard let inventory = response.inventory,
@@ -117,7 +118,7 @@ public actor BoundedInventoryReader {
 
 public enum ProbeError: Error, LocalizedError, Sendable {
     case invalidTimeout, missingExecutable, temporaryOutput, launchFailed
-    case timeout, readFailed, invalidResponse, previousProcessUnverified, deviceBusy
+    case timeout, readFailed, invalidResponse, previousProcessUnverified, deviceBusy, sessionUnavailable
 
     public var errorDescription: String? {
         switch self {
@@ -125,11 +126,12 @@ public enum ProbeError: Error, LocalizedError, Sendable {
         case .missingExecutable: "应用缺少已打包的 switchshelf-probe；请重新安装完整应用。"
         case .temporaryOutput: "无法创建私有探测结果文件；未读取设备。"
         case .launchFailed: "无法启动独立的只读设备探测进程。"
-        case .timeout: "只读清单读取超时，未确认完整性；请检查 DBI 模式和其他 MTP 客户端后手动重试。"
-        case .readFailed: "只读设备探测失败；清单保持未知，请检查 DBI 模式和连接。"
+        case .timeout: "只读清单读取超时，完整性未确认；请检查 sphaira / DBI 的 MTP 模式与其他客户端后重试。"
+        case .readFailed: "只读设备探测失败；清单保持未知，请检查 sphaira / DBI 的 MTP 模式和连接。"
         case .invalidResponse: "只读探测返回无效或不一致的结果；清单保持未知。"
         case .previousProcessUnverified: "无法确认上次探测进程已退出；为避免并发访问设备，请重启应用后再试。"
         case .deviceBusy: "另一个进程正在使用 Switch USB 会话（例如 Backend 传输）；请等待该操作结束后重试。"
+        case .sessionUnavailable: "MTP 会话无法打开，可能被其他客户端占用或权限不足。请退出 OpenMTP，并保持 sphaira / DBI 的 MTP 开启后重试。"
         }
     }
 }

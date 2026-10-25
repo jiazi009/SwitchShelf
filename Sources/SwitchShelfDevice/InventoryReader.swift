@@ -65,7 +65,9 @@ struct InventoryReader: Sendable {
 
     static func isInstalledGames(_ name: String) -> Bool {
         let value = name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return value == "installed games" || value == "4: installed games"
+        // Games is sphaira's observed virtual installed-content projection. This
+        // allowlist applies only to storage descriptions, never SD folder names.
+        return value == "installed games" || value == "4: installed games" || value == "games"
     }
 
     private static func storageDiagnostic(_ storages: [MTPStorage]) -> String {
@@ -88,6 +90,13 @@ struct InventoryReader: Sendable {
         let storages = try await transport.storages()
         try Task.checkCancellation()
         var inventory = InstalledInventory(deviceID: sessionID, environmentContext: nil, isComplete: false)
+        let targets = storages.filter { Self.isInstalledGames($0.name) }
+        func boundedNames(_ values: [MTPStorage]) -> [String] {
+            values.prefix(32).map { String($0.name.prefix(128)) }
+        }
+        inventory.mtpEvidence = MTPInventoryEvidence(
+            reportedStorageCount: storages.count, reportedStorageNames: boundedNames(storages),
+            inventoryStorageNames: boundedNames(targets), storageDiagnosticsOnly: storageDiagnosticsOnly)
         if storageDiagnosticsOnly {
             inventory.issues = [
                 "本次仅枚举 MTP 存储名称，未遍历任何内容对象，不构成已安装清单。",
@@ -95,10 +104,9 @@ struct InventoryReader: Sendable {
             ]
             return inventory
         }
-        let targets = storages.filter { Self.isInstalledGames($0.name) }
         guard !targets.isEmpty else {
             inventory.issues = [
-                "未识别出 DBI 的 Installed games 存储；入口未暴露或名称不匹配均有可能，请核对入口开关与下列实际存储名称。当前结果不代表设备没有已安装游戏。",
+                "MTP 已连接，但未提供可识别的游戏清单入口。支持 sphaira 的 Games 和 DBI 的 Installed games；请对照实际存储名称。当前结果不代表设备没有已安装游戏。",
                 Self.storageDiagnostic(storages)
             ]
             return inventory
@@ -120,8 +128,10 @@ struct InventoryReader: Sendable {
         var stop = false
         for storage in targets {
             guard storage.id != 0, seenStorages.insert(storage.id).inserted else {
-                issue("Installed games storage identity is invalid or duplicated."); continue
+                issue("Installed-content storage identity is invalid or duplicated."); continue
             }
+            let sphairaGames = storage.name.trimmingCharacters(in: .whitespacesAndNewlines)
+                .caseInsensitiveCompare("Games") == .orderedSame
             var pending: [(parent: UInt32, path: String, depth: Int)] = [(Self.root, storage.name, 0)]
             while let folder = pending.popLast(), !stop {
                 if Task.isCancelled { throw CancellationError() }
@@ -138,7 +148,7 @@ struct InventoryReader: Sendable {
                     continue
                 }
                 if children.isEmpty && folder.depth > 0 {
-                    issue("An Installed games subfolder has no content objects; its identity/coverage cannot be verified.")
+                    issue("An installed-content subfolder has no content objects; its identity/coverage cannot be verified.")
                 }
                 for id in children {
                     if Task.isCancelled { throw CancellationError() }
@@ -155,20 +165,32 @@ struct InventoryReader: Sendable {
                         try Task.checkCancellation()
                     } catch is CancellationError { throw CancellationError() }
                     catch { issue("Cannot read object metadata \(id) (\(safeError(error))); coverage is incomplete."); continue }
+                    // sphaira's Games projection reports 0xFFFFFFFE as the
+                    // object storage and its Games storage handle as the
+                    // top-level parent. GetObjectHandles is still scoped to
+                    // that storage; do not apply this alias to DBI or SD.
+                    let storageMatches = object.storageID == storage.id ||
+                        (sphairaGames && object.storageID == UInt32.max - 1)
                     let parentMatches = object.parentID == folder.parent ||
-                        (folder.parent == Self.root && object.parentID == 0)
-                    guard object.id == id, object.storageID == storage.id, parentMatches,
+                        (folder.parent == Self.root && (object.parentID == 0 ||
+                            (sphairaGames && object.parentID == storage.id)))
+                    guard object.id == id, storageMatches, parentMatches,
                           !object.name.isEmpty, !object.name.contains("/"), !object.name.contains("\0"),
                           object.name != ".", object.name != ".." else {
-                        issue("Object \(id) has inconsistent location or invalid name metadata."); continue
+                        // Numeric, session-scoped diagnostics only: never echo device filenames.
+                        let location = "storage \(object.storageID)/\(storage.id), parent \(object.parentID)/\(folder.parent)"
+                        issue("Object \(id) has inconsistent location (\(location)) or invalid name metadata.")
+                        continue
                     }
                     let path = folder.path + "/" + object.name
+                    inventory.mtpEvidence?.metadataObjectCount += 1
                     if object.isFolder {
                         // Official DBI docs: this is a redirection to SD mods/cheats, NOT installed content.
                         if object.name.caseInsensitiveCompare("Mods & Cheats") == .orderedSame { continue }
                         guard folder.depth < maximumDepth else {
-                            issue("Installed games traversal reached its depth safety limit."); continue
+                            issue("Installed-content traversal reached its depth safety limit."); continue
                         }
+                        if folder.depth == 0 { inventory.mtpEvidence?.gameDirectoryCount += 1 }
                         candidateFolders.insert(id)
                         folderParents[id] = folder.parent
                         if folder.depth == 0, let titleID = InstalledObjectParser.parse(object.name).titleID {
@@ -207,7 +229,7 @@ struct InventoryReader: Sendable {
             if stop { break }
         }
         if !candidateFolders.subtracting(contentFolders).isEmpty {
-            issue("One or more Installed games folders lack an attributable content object; this cannot establish an empty/complete content inventory.")
+            issue("One or more installed-content folders lack an attributable content object; this cannot establish an empty/complete content inventory.")
         }
         let traversalComplete = complete
         for projection in rootProjections {

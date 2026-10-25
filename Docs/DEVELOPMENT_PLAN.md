@@ -1,7 +1,16 @@
 # SwitchShelf coordinated development plan
 
 ## Current objective
-Use the selected liquid-glass design to develop the native app under Orca supervision with opencode, agy and pi. The coordinator owns architecture, integration and acceptance. Deliver working code and evidence; keep real hardware dependencies visible.
+Integrate the observed sphaira Games inventory into the existing native app, clarify connection/coverage status, preserve conservative local identity matching and deliver a tested local bundle. The coordinator owns this follow-up; existing Backend changes remain separate. Historical Orca waves below describe earlier work, not a newly dispatched run.
+
+## Current connection baseline — 2026-10-25
+
+- DBI 647-zhcn / FW 19.0.1E was verified in the user's screenshots. Both the current device config and DBI's own UI enable Installed games, yet two host clients report nine storages without that entry. DBI build/config behavior remains unresolved; this no longer blocks another MTP provider.
+- After the user opened sphaira, OpenMTP displayed Games with ten game directories and explicit nested BASE/UPD/DLC filenames. All enabled MTP entries were DevNull, Mounts, Install, Games, three Contents entries, Album (Image SD), and microSD card. These are actual observations; coverage must also be validated with the project's own bounded reader.
+- Integrate Games, show bounded source/storage evidence, preserve old helper JSON compatibility and test actual observed names plus failure/coverage boundaries. The exclusive read-only native probe and app path were exercised after quitting OpenMTP; a live virtual-handle mismatch required a narrowly scoped correction and follow-up probes. No package transfer or device write was part of this acceptance.
+- Keep local filename identities as candidates. A complete device catalog alone cannot verify NAS packages. Generate app-icon concepts for user selection and add ICNS packaging; do not choose a final icon on the user's behalf.
+
+Outcomes and remaining limits: `Docs/Reports/sphaira-inventory-acceptance-2026-10-25.md`. Final native read and app retry both reported Games, ten directories and 29 BASE/UPD/DLC records, complete with no issues. The first app read failed transiently; investigate reliability rather than assuming a guaranteed first-try connection. Cached local package identities still display 待确认. The selected icon direction 05 has a simpler 07 review candidate, not a confirmed bundle icon.
 
 ## Wave 1 — parallel foundations
 1. opencode / UI: native three-column library, search/list/filter/multi-select, inspector, device/connect instructions, persistent install plan with honest disabled execution until transport exists.
@@ -23,7 +32,7 @@ Use the selected liquid-glass design to develop the native app under Orca superv
 - P1 SD maintenance remains a separate workflow with preview, backup and recovery before writes.
 
 ## Real-device test instructions
-Keep Switch connected by a data-capable USB cable; open DBI and choose Run MTP responder (X is a shortcut on versions documenting it). Stay on that screen. First test only enumerates storage and installed content; do not copy files to SD install/NAND install. Quit other MTP clients before the probe. For missing storage, inspect Installed games visibility in DBI settings; no config changes without explanation. Record DBI version and active sysMMC/emuMMC if known. Do not switch mode during a probe. The coordinator will request a switch to Backend only for a later installation test.
+Keep Switch connected by a data-capable USB cable. Enable MTP and Games in sphaira, or use DBI Run MTP responder with Installed games exposed. Keep that mode running. Tests enumerate storage descriptions and recognized game-content metadata only; do not copy files to installation storages. Quit OpenMTP and other MTP clients first. Record provider/version/environment only when independently known. Missing source, partial coverage and disconnected USB are different outcomes. Do not switch mode during a probe. Backend installation needs its separate reviewed file/target test.
 
 ## Completion criteria and tracking
 Every task records implementation paths, tests, commit, hardware evidence and limitations. Place persistent reports in Docs/Reports. Completed UI does not prove device capability; passing fixture tests does not prove SMB disconnect or Switch protocol behavior. Update this plan with actual outcomes as development proceeds.

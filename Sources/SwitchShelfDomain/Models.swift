@@ -101,9 +101,12 @@ public struct InstalledInventory: Codable, Sendable, Equatable {
     public var isComplete: Bool
     public var records: [InstalledRecord]
     public var issues: [String]
-    public init(deviceID: String, environmentContext: String? = nil, observedAt: Date = Date(), isComplete: Bool = false, records: [InstalledRecord] = [], issues: [String] = []) {
+    /// Optional so inventories produced by earlier helpers still decode.
+    public var mtpEvidence: MTPInventoryEvidence?
+    public init(deviceID: String, environmentContext: String? = nil, observedAt: Date = Date(), isComplete: Bool = false, records: [InstalledRecord] = [], issues: [String] = [], mtpEvidence: MTPInventoryEvidence? = nil) {
         self.deviceID = deviceID; self.environmentContext = environmentContext; self.observedAt = observedAt
         self.isComplete = isComplete; self.records = records; self.issues = issues
+        self.mtpEvidence = mtpEvidence
     }
 }
 public enum InstallationState: String, Codable, Sendable { case installed, notInstalled, partial, unknown }

@@ -218,6 +218,7 @@ final class AppModel {
     }
 
     var deviceSubtitle: String {
+        if isReadingInventory { return "正在通过 MTP 读取设备清单" }
         guard let deviceDiscovery else { return "尚未检测 USB 设备" }
         return deviceDiscovery.message
     }
@@ -838,7 +839,7 @@ final class AppModel {
     /// reports `.ready`; the read performs the actual handshake itself.
     private var mtpCandidateSignature: String? {
         guard let discovery = deviceDiscovery,
-              discovery.state == .waitingForMTP else { return nil }
+              [.waitingForMTP, .ready].contains(discovery.state) else { return nil }
         let candidates = discovery.devices.filter {
             $0.vendorID == 0x057e && $0.productID == 0x201d
         }
@@ -874,22 +875,43 @@ final class AppModel {
             notice = AppNotice(
                 level: .warning,
                 title: "未检测到可读取的 MTP 候选设备",
-                message: "请只连接一台 Switch 并用数据线连接，打开 DBI 的 MTP 响应模式后重新检测。读取会在握手成功后才产生清单。",
+                message: "请连接一台 Switch，开启 sphaira 的 MTP 或 DBI 的 Run MTP responder 后重新检测。",
                 action: .refreshDevices,
                 actionLabel: "重新检测"
             )
             return
         }
+        // A third-party MTP client does not participate in our advisory lease.
+        // This is a preflight hint, not a claim about OS interface ownership.
+        if NSWorkspace.shared.runningApplications.contains(where: { $0.bundleIdentifier == "io.ganeshrvel.openmtp" }) {
+            inventory = nil
+            inventorySessionSignature = nil
+            deviceDiscovery?.state = .waitingForMTP
+            deviceDiscovery?.message = "OpenMTP 正在运行；请完整退出后读取，避免两个客户端同时访问设备。"
+            notice = AppNotice(level: .warning, title: "请先退出 OpenMTP",
+                               message: "OpenMTP 可能仍持有 MTP 会话。请使用菜单中的退出功能，再返回读取设备清单。")
+            return
+        }
         isReadingInventory = true
+        inventory = nil
+        inventorySessionSignature = nil
+        notice = nil
         do {
             let value = try await inventoryReader.readInventory()
             inventory = value
             inventorySessionSignature = signature
+            let sources = value.mtpEvidence?.inventoryStorageNames.joined(separator: "、") ?? ""
+            deviceDiscovery?.state = .ready
+            deviceDiscovery?.message = "MTP 已连接" + (sources.isEmpty ? "" : " · \(sources)")
+                + (value.isComplete ? " · 已读取完整内容清单。" : " · 安装清单尚未完整确认。")
             if !value.isComplete {
+                let missingSource = value.mtpEvidence?.inventoryStorageNames.isEmpty == true
                 notice = AppNotice(
                     level: .warning,
-                    title: "已安装清单不完整",
-                    message: "已读取 \(value.records.count) 条记录，但遍历未完成。安装状态只在存在正向记录时显示。",
+                    title: missingSource ? "MTP 已连接，未提供游戏清单入口" : "已连接，清单仍有未确认内容",
+                    message: missingSource
+                        ? "已取得设备存储列表，但没有 Games 或 Installed games。可在下方查看实际入口；这不代表设备没有游戏。"
+                        : "已读取 \(value.records.count) 条记录，部分内容或覆盖范围尚未确认。请查看清单中的具体问题。",
                     action: .readInventory,
                     actionLabel: "重新读取"
                 )
@@ -897,6 +919,8 @@ final class AppModel {
         } catch {
             inventory = nil
             inventorySessionSignature = nil
+            deviceDiscovery?.state = .waitingForMTP
+            deviceDiscovery?.message = "已发现 USB 候选设备，本次 MTP 读取未成功；请检查 MTP 模式和其他客户端。"
             notice = AppNotice(
                 level: .error,
                 title: "读取已安装内容失败",
@@ -1172,6 +1196,7 @@ final class AppModel {
         let inventoryLine: String
         if let inventory {
             inventoryLine = "记录 \(inventory.records.count) 条 · \(inventory.isComplete ? "完整" : "不完整") · 读取于 \(absoluteTime(inventory.observedAt))"
+                + (inventory.mtpEvidence.map { " · 来源 \($0.inventoryStorageNames.joined(separator: "、")) · 游戏目录 \($0.gameDirectoryCount) · MTP 存储 \($0.reportedStorageCount) 项" } ?? "")
         } else {
             inventoryLine = "未读取"
         }

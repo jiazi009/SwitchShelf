@@ -22,6 +22,7 @@ Usage: switchshelf-probe [discover|inventory|storages] [--timeout 1...120] [--tr
 
 Default: discover (IOKit only; never opens MTP). JSON is always emitted.
 inventory is explicitly opt-in, metadata-only, and must not overlap another device client.
+Supported inventory storages: sphaira Games and DBI Installed games. Other storages are never traversed.
 storages is explicitly opt-in and lists storage descriptions only; it never lists content objects.
 Default transport: native (system ImageCaptureCore broker); libmtp is an explicit fallback.
 Exit: 0 successful, 2 incomplete inventory (also successful storage-only diagnostics), 1 error, 64 usage, 124 deadline exceeded.
@@ -153,7 +154,7 @@ if finished.wait(timeout: .now() + .seconds(seconds)) == .timedOut {
         }
     }
     try? manager.removeItem(at: directory)
-    emit(failure(mode: mode, code: "timeout", message: "Read-only probe exceeded \(seconds)s; worker stopped, coverage unknown. Keep DBI in Run MTP responder and check permissions/other clients before a manual retry.", transport: mode == "discover" ? nil : transport), exitCode: 124)
+    emit(failure(mode: mode, code: "timeout", message: "Read-only probe exceeded \(seconds)s; worker stopped, coverage unknown. Keep sphaira/DBI in MTP mode and check permissions/other clients before a manual retry.", transport: mode == "discover" ? nil : transport), exitCode: 124)
 }
 let result: ProbeResult
 do {

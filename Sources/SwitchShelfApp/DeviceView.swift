@@ -8,10 +8,11 @@ struct DeviceView: View {
     private var state: DeviceConnectionState { model.deviceDiscovery?.state ?? .disconnected }
     private var statusLabel: String {
         if model.isDiscovering { return "正在检测 USB 设备" }
+        if model.isReadingInventory { return "正在读取已安装清单" }
         if model.deviceDiscovery == nil { return "尚未检测设备" }
         return state.label
     }
-    private var statusSymbol: String { model.deviceDiscovery == nil ? "cable.connector" : state.symbol }
+    private var statusSymbol: String { model.isReadingInventory ? "arrow.triangle.2.circlepath" : (model.deviceDiscovery == nil ? "cable.connector" : state.symbol) }
     private var canRead: Bool { model.canReadInventory }
 
     var body: some View {
@@ -89,9 +90,9 @@ struct DeviceView: View {
                                 .font(.system(size: 16, weight: .semibold))
                             if !model.isDiscovering, model.deviceDiscovery != nil {
                                 BadgePill(
-                                    text: model.inventoryIsCurrentSession ? "清单已读取" : "尚未握手",
+                                    text: model.inventoryIsCurrentSession ? (model.inventory?.isComplete == true ? "清单完整" : "清单待确认") : "尚未握手",
                                     systemImage: model.inventoryIsCurrentSession ? "checkmark.shield.fill" : "lock.slash",
-                                    tone: model.inventoryIsCurrentSession ? .success : .neutral
+                                    tone: model.inventoryIsCurrentSession ? (model.inventory?.isComplete == true ? .success : .warning) : .neutral
                                 )
                             }
                         }
@@ -166,7 +167,7 @@ struct DeviceView: View {
                     } else {
                         Text(canRead
                              ? "读取会执行一次只读 MTP 握手，仅枚举存储与安装记录，不下载 NSP，不写入设备。"
-                             : "未检测到单一 057e:201d MTP 候选设备；请连接数据线并进入 DBI 的 MTP 响应模式后重新检测。")
+                             : "请连接一台 Switch，开启 sphaira 或 DBI 的 MTP 后重新检测。")
                             .font(.system(size: 10))
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -181,7 +182,7 @@ struct DeviceView: View {
     private var deviceMessage: String {
         if model.isDiscovering { return "正在通过 IOKit 执行只读 USB 枚举。" }
         guard let discovery = model.deviceDiscovery else {
-            return "尚未执行设备检测。连接 Switch 并进入 DBI 的 MTP 响应模式后再检测。"
+            return "尚未执行设备检测。连接 Switch 并开启 sphaira 或 DBI 的 MTP 后再检测。"
         }
         return discovery.message
     }
@@ -193,7 +194,7 @@ struct DeviceView: View {
                     Image(systemName: "book.pages")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(Theme.accent)
-                    Text("使用 DBI 连接（只读）")
+                    Text("使用 sphaira / DBI 连接")
                         .font(.system(size: 13, weight: .semibold))
                     Spacer()
                     Text("首次读取前请按步骤操作")
@@ -209,18 +210,18 @@ struct DeviceView: View {
                     )
                     instructionStep(
                         2,
-                        title: "打开 DBI 并进入 MTP 响应模式",
-                        detail: "在 Switch 上打开 DBI，选择“Run MTP responder”（部分版本可按 X 快捷进入），并停留在该界面。"
+                        title: "在 Switch 上开启 MTP",
+                        detail: "sphaira：在网络菜单开启 MTP 和 Games 存储。DBI：选择 Run MTP responder，并开启 Installed games。保持该模式。"
                     )
                     instructionStep(
                         3,
                         title: "保持单一客户端",
-                        detail: "关闭 Finder、Android File Transfer 等其他 MTP/文件传输客户端，避免并发的 USB 会话干扰读取。"
+                        detail: "完整退出 OpenMTP、Android File Transfer 等其他 MTP 客户端。若 OpenMTP 曾提示设备忙，可先退出“预览”。不要停止系统相机服务。"
                     )
                     instructionStep(
                         4,
                         title: "返回此处检测并读取",
-                        detail: "点击“重新检测”；检测到单一 057e:201d 候选设备后即可主动读取，读取按钮会执行实际握手。读取期间不要切换 DBI 模式。"
+                        detail: "点击“重新检测”，再点击“读取已安装内容”。USB 发现、MTP 连接和清单完整性会分别显示；读取期间保持设备模式不变。"
                     )
                 }
 
@@ -228,7 +229,7 @@ struct DeviceView: View {
                     Image(systemName: "lock.shield.fill")
                         .font(.system(size: 10))
                         .foregroundStyle(Theme.installed)
-                    Text("MTP（057e:201d）用于只读已安装清单；DBI 的 USB Backend（057e:3000）是另一模式，当前仅能作描述符候选检测，不会打开或传输。两种模式不能并行占用 USB。安装队列的“检查计划”只看 Mac 本地文件，与设备连接无关。SD／机身存储是计划意向：Backend 主机协议没有目标设置命令，设备端选择和安装结果尚未验证。当前不安装、不删除设备对象或修改存档。")
+                    Text("这里只读取 Games / Installed games 的目录和内容元数据。本体、更新和 DLC 分别记录；Mounts、Contents、存档、安装与测速入口不参与清单扫描。安装计划与实际安装结果分别管理。")
                         .font(.system(size: 10))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -310,6 +311,10 @@ struct DeviceView: View {
                     .foregroundStyle(.secondary)
                 }
 
+                if let evidence = inventory.mtpEvidence {
+                    inventoryEvidence(evidence, inventory: inventory)
+                }
+
                 if !inventory.issues.isEmpty {
                     VStack(alignment: .leading, spacing: 5) {
                         ForEach(Array(inventory.issues.enumerated()), id: \.offset) { _, issue in
@@ -364,7 +369,7 @@ struct DeviceView: View {
                     }
                 } else {
                     Text(inventory.isComplete
-                         ? "本次读取到的清单为空。若设备上确有已安装游戏，请检查 DBI 是否显示 Installed games 存储。"
+                         ? "本次已识别的游戏存储返回空清单。若与设备本机显示不符，请核对 sphaira 的 Games 或 DBI 的 Installed games。"
                          : "清单不完整且没有可展示的记录；不会据此声称设备未安装任何游戏。")
                         .font(.system(size: 10.5))
                         .foregroundStyle(.secondary)
@@ -381,6 +386,50 @@ struct DeviceView: View {
                 }
             }
         }
+    }
+
+    private func inventoryEvidence(_ evidence: MTPInventoryEvidence, inventory: InstalledInventory) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Label(evidence.inventoryStorageNames.isEmpty ? "未提供游戏清单入口" : evidence.inventoryStorageNames.joined(separator: "、"),
+                      systemImage: "externaldrive.connected.to.line.below")
+                    .font(.system(size: 11, weight: .semibold))
+                Spacer()
+                if !evidence.storageDiagnosticsOnly && !evidence.inventoryStorageNames.isEmpty {
+                    Text("\(evidence.gameDirectoryCount) 个游戏目录")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            if !inventory.records.isEmpty {
+                HStack(spacing: 8) {
+                    ForEach([ContentKind.base, .update, .dlc], id: \.self) { kind in
+                        BadgePill(text: "\(kind.label) \(inventory.records.filter { $0.kind == kind }.count)", tone: .accent)
+                    }
+                }
+            }
+            DisclosureGroup("设备报告的存储入口（\(evidence.reportedStorageCount) 项）") {
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(Array(evidence.reportedStorageNames.enumerated()), id: \.offset) { _, name in
+                        HStack {
+                            Text(name).font(.system(size: 10.5))
+                            Spacer()
+                            Text(evidence.inventoryStorageNames.contains(name) ? "清单来源" : "已发现")
+                                .font(.system(size: 9.5))
+                                .foregroundStyle(evidence.inventoryStorageNames.contains(name) ? Theme.accent : .secondary)
+                        }
+                    }
+                    if evidence.reportedStorageCount > evidence.reportedStorageNames.count {
+                        Text("仅显示前 \(evidence.reportedStorageNames.count) 项。")
+                            .font(.system(size: 9.5)).foregroundStyle(.secondary)
+                    }
+                }
+                .padding(.top, 6)
+            }
+            .font(.system(size: 10.5))
+        }
+        .padding(12)
+        .background(Theme.surfaceAlt, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
     private func filteredRecords(_ inventory: InstalledInventory) -> [InstalledRecord] {

@@ -40,7 +40,7 @@ final class NativePTPTransport: NSObject, @preconcurrency ICDeviceBrowserDelegat
                     continuation.resume(throwing: DeviceServiceError(
                         code: self.candidates.isEmpty ? .noDevice : .multipleDevices,
                         message: self.candidates.isEmpty
-                            ? "ImageCaptureCore 未发现可访问的 057e:201d MTP 候选设备；请停留在 DBI Run MTP responder 并检查连接/应用权限。"
+                            ? "ImageCaptureCore 未发现可访问的 Switch MTP 候选设备；请开启 sphaira 或 DBI 的 MTP，并检查连接和应用权限。"
                             : "发现多个 MTP 候选设备；只读清单要求一台活动目标设备。"))
                     return
                 }
@@ -61,13 +61,13 @@ final class NativePTPTransport: NSObject, @preconcurrency ICDeviceBrowserDelegat
     }
     private func open() async throws {
         guard let camera, camera.capabilities.contains(ICDeviceCapability.cameraDeviceCanAcceptPTPCommands.rawValue) else {
-            throw DeviceServiceError(code: .transport, message: "候选设备未提供 PTP 命令能力；尚未验证 DBI MTP。")
+            throw DeviceServiceError(code: .transport, message: "候选设备未提供 PTP 命令能力；尚未建立 MTP 连接。")
         }
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
             camera.requestOpenSession(options: nil) { error in
                 if let error {
                     continuation.resume(throwing: DeviceServiceError(code: .accessDeniedOrBusy,
-                        message: "系统 MTP 会话无法打开；请关闭用户启动的其他客户端、确认权限和 DBI 模式，不要修改系统相机设置。",
+                        message: "系统 MTP 会话无法打开；请退出 OpenMTP 等其他客户端，确认 sphaira / DBI 的 MTP 模式与权限。",
                         nativeCode: (error as NSError).code))
                 } else { continuation.resume() }
             }

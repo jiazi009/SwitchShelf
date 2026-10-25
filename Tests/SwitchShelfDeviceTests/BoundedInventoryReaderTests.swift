@@ -42,6 +42,19 @@ struct BoundedInventoryReaderTests {
         }
     }
 
+    @Test("Session access failure retains an actionable MTP error")
+    func sessionAccessFailure() async throws {
+        let json = #"{"schemaVersion":1,"mode":"inventory","status":"error","error":{"code":"accessDeniedOrBusy","message":"fixture"}}"#
+        let url = try script("printf '%s\\n' '\(json)'\nexit 1\n")
+        defer { try? FileManager.default.removeItem(at: url) }
+        do {
+            _ = try await BoundedInventoryReader(probeURL: url).readInventory(timeoutSeconds: 1)
+            Issue.record("Expected a session access failure")
+        } catch ProbeError.sessionUnavailable {
+            #expect(ProbeError.sessionUnavailable.localizedDescription.contains("OpenMTP"))
+        }
+    }
+
     @Test("An unverified USB worker exit fences all retries in this app process")
     func unverifiedWorkerExit() async throws {
         let url = try script("printf '%s\\n' '{\"schemaVersion\":1,\"mode\":\"inventory\",\"status\":\"error\",\"error\":{\"code\":\"workerExitUnverified\",\"message\":\"unknown\"}}'\nexit 1\n")

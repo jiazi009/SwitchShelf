@@ -1,12 +1,14 @@
 # Installed-game badge concepts
 
+Selected direction: **B**, implemented in `GameViews.swift`. Actual SwiftUI fixture renders: [light](implementation/B-swiftui-light.png), [dark](implementation/B-swiftui-dark.png). Implementation and validation: `Docs/Reports/installed-badges-b.md`.
+
 These three image-generated UI concepts use only the live SwitchShelf screenshot captured on 2026-10-26 (Asia/Shanghai), not the earlier design demos.
 
 - Branch: `codex/installed-game-badges`
 - Base commit: `9c81bec`
 - Reference: `00-live-app-reference.png`
 - Generator: built-in `image_gen`, one call per variant.
-- Scope: design concepts only. No application source changes or device tests.
+- Concept-generation scope (commit `16839f2`): design images only. The selected B implementation is documented above.
 - Example “已安装” labels on 1-2-Switch and 路易吉鬼屋 3 are mock states. The screenshot actually reports 设备未检测; these concepts do not establish any game's installation state.
 
 | Concept | Treatment |
@@ -65,4 +67,4 @@ VARIANT C — metadata status row. Leave ALL cover artwork and the white titles 
 
 All three generated outputs were visually reviewed: each retains the latest screenshot's three-column library, six game covers, sidebar, toolbar and empty inspector; each marks only the two intended sample cards. “已安装” text and checkmarks are legible in each variant. Image generation can subtly redraw artwork and small incidental text; these are design concepts rather than exact app captures. Only 00-live-app-reference.png is the unmodified live capture.
 
-No runtime tests were run because this commit changes only concept images and their documentation. No game-source or device operations were performed. Source code implementation follows selection of a visual direction.
+The concept-generation stage changed only images and documentation, so no runtime tests were needed at that stage. The subsequent B implementation passed build, state-assessment tests and SwiftUI visual checks; see its implementation report above. No game-source or device operations were performed.

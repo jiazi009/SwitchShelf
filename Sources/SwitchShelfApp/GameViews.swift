@@ -6,9 +6,14 @@ import SwitchShelfLibrary
 private final class CachedCover: NSObject {
     let image: NSImage
     let isSquare: Bool
+    let tint: Color
+
     init(image: NSImage, isSquare: Bool) {
         self.image = image
         self.isSquare = isSquare
+        let palette = image.cgImage(forProposedRect: nil, context: nil, hints: nil)
+            .map(CoverPalette.sample) ?? .fallback
+        tint = Color(.sRGB, red: palette.red, green: palette.green, blue: palette.blue, opacity: 1)
     }
 }
 
@@ -29,41 +34,72 @@ private enum CoverImageCache {
         images.object(forKey: url as NSURL)
     }
 
-    static func insert(_ image: NSImage, isSquare: Bool, for url: URL) {
-        let cost = Int(image.size.width * image.size.height * 4)
-        images.setObject(CachedCover(image: image, isSquare: isSquare), forKey: url as NSURL, cost: cost)
+    static func insert(_ cover: CachedCover, for url: URL) {
+        let cost = Int(cover.image.size.width * cover.image.size.height * 4)
+        images.setObject(cover, forKey: url as NSURL, cost: cost)
     }
 }
 
 struct CoverArtwork: View {
     var game: Game
     var cornerRadius: CGFloat = 12
-    @State private var image: NSImage?
-    @State private var isSquare = false
+    var showsTitle = false
+    var installationAssessment: InstallationAssessment?
+    @State private var cover: CachedCover?
+
+    private var tint: Color {
+        cover?.tint ?? Color(.sRGB, red: 0.10, green: 0.13, blue: 0.18, opacity: 1)
+    }
 
     var body: some View {
-        ZStack {
-            if let image, !isSquare {
-                Image(nsImage: image)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                CoverPlaceholder(
-                    title: game.title,
-                    seed: game.id,
-                    showsMissingCaption: image == nil,
-                    showsMonogram: image == nil
-                )
-                if let image, isSquare {
-                    Image(nsImage: image)
+        GeometryReader { proxy in
+            ZStack(alignment: .top) {
+                if let cover {
+                    tint
+                    Image(nsImage: cover.image)
                         .resizable()
-                        .scaledToFit()
-                        .padding(.horizontal, 18)
-                        .padding(.top, 12)
-                        .padding(.bottom, 36)
+                        .aspectRatio(contentMode: cover.isSquare && !showsTitle ? .fit : .fill)
+                        .frame(
+                            width: proxy.size.width,
+                            height: cover.isSquare && showsTitle ? proxy.size.width : proxy.size.height,
+                            alignment: showsTitle ? .top : .center
+                        )
+                        .clipped()
+                } else {
+                    CoverPlaceholder(title: game.title, seed: game.id, showsTitle: !showsTitle)
+                }
+
+                if showsTitle {
+                    LinearGradient(stops: [
+                        .init(color: .clear, location: 0.30),
+                        .init(color: tint.opacity(0.10), location: 0.46),
+                        .init(color: tint.opacity(0.76), location: 0.64),
+                        .init(color: tint, location: 0.75),
+                        .init(color: tint, location: 1)
+                    ], startPoint: .top, endPoint: .bottom)
+
+                    VStack(alignment: .leading, spacing: 5) {
+                        if cover == nil {
+                            Text("暂无封面")
+                                .font(.system(size: 9, weight: .medium))
+                                .foregroundStyle(.white.opacity(0.72))
+                        }
+                        if let installationAssessment, installationAssessment.state == .installed {
+                            InstalledGameLabel(onCover: true)
+                                .help(installationAssessment.explanation)
+                        }
+                        Text(game.title)
+                            .font(.system(size: max(12, min(20, proxy.size.width * 0.085)), weight: .semibold))
+                            .foregroundStyle(.white)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.leading)
+                            .shadow(color: .black.opacity(0.25), radius: 2, y: 1)
+                    }
+                    .padding(max(10, proxy.size.width * 0.065))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
                 }
             }
+            .frame(width: proxy.size.width, height: proxy.size.height)
         }
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
         .overlay {
@@ -73,7 +109,7 @@ struct CoverArtwork: View {
         .task(id: coverTaskID) {
             await loadCover()
         }
-        .accessibilityLabel(image == nil ? "缺少封面：\(game.title)" : "\(game.title) 封面")
+        .accessibilityLabel(cover == nil ? "缺少封面：\(game.title)" : "\(game.title) 封面")
     }
 
     private var coverTaskID: String {
@@ -82,20 +118,19 @@ struct CoverArtwork: View {
     }
 
     private func loadCover() async {
+        cover = nil
         if let url = game.coverURL, url.isFileURL {
             await loadLocalCover(at: url)
         } else if let titleID = NlibCoverClient.titleID(for: game), let remote = NlibCoverClient.iconURL(for: titleID) {
             await loadRemoteCover(titleID: titleID, cacheKey: remote)
         } else {
-            image = nil
-            isSquare = false
+            cover = nil
         }
     }
 
     private func loadLocalCover(at url: URL) async {
         if let cached = CoverImageCache.image(for: url) {
-            image = cached.image
-            isSquare = cached.isSquare
+            cover = cached
             return
         }
         let store = CoverImageCache.disk
@@ -117,12 +152,10 @@ struct CoverArtwork: View {
 
     private func loadRemoteCover(titleID: String, cacheKey: URL) async {
         if let cached = CoverImageCache.image(for: cacheKey) {
-            image = cached.image
-            isSquare = cached.isSquare
+            cover = cached
             return
         }
-        image = nil
-        isSquare = false
+        cover = nil
         let store = CoverImageCache.disk
         let thumbnail = await Task.detached(priority: .utility) { () -> CoverThumbnail? in
             if let cached = store.cachedThumbnail(for: cacheKey, byteCount: 0, modifiedAt: nil) {
@@ -138,19 +171,33 @@ struct CoverArtwork: View {
     private func apply(_ thumbnail: CoverThumbnail?, cacheKey: URL) {
         guard !Task.isCancelled else { return }
         if let thumbnail, let loaded = NSImage(data: thumbnail.jpegData) {
-            CoverImageCache.insert(loaded, isSquare: thumbnail.isSquare, for: cacheKey)
-            image = loaded
-            isSquare = thumbnail.isSquare
+            let loadedCover = CachedCover(image: loaded, isSquare: thumbnail.isSquare)
+            CoverImageCache.insert(loadedCover, for: cacheKey)
+            cover = loadedCover
         } else {
-            image = nil
-            isSquare = false
+            cover = nil
         }
+    }
+}
+
+struct InstalledGameLabel: View {
+    var onCover = false
+
+    var body: some View {
+        Label("已安装", systemImage: "checkmark.circle.fill")
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(onCover
+                ? Color(.sRGB, red: 0.35, green: 0.95, blue: 0.72, opacity: 1)
+                : Theme.installed)
+            .labelStyle(.titleAndIcon)
+            .fixedSize()
     }
 }
 
 struct CoverPlaceholder: View {
     var title: String
     var seed: String
+    var showsTitle = true
     var showsMissingCaption = true
     var showsMonogram = true
 
@@ -205,6 +252,7 @@ struct CoverPlaceholder: View {
                         .shadow(color: .black.opacity(0.35), radius: 2, y: 1)
                 }
                 .padding(max(6, width * 0.065))
+                .opacity(showsTitle ? 1 : 0)
             }
         }
         .accessibilityHidden(true)
@@ -229,13 +277,10 @@ struct GameCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            CoverArtwork(game: game)
+            CoverArtwork(game: game, showsTitle: true, installationAssessment: assessment)
                 .aspectRatio(3 / 4, contentMode: .fit)
                 .overlay(alignment: .topLeading) {
                     VStack(alignment: .leading, spacing: 4) {
-                        if assessment.state == .installed {
-                            BadgePill(text: "已安装", systemImage: "checkmark.seal.fill", tone: .success, solid: true)
-                        }
                         if isOffline {
                             BadgePill(text: "离线", systemImage: "wifi.slash", tone: .neutral, solid: true)
                         }
@@ -264,10 +309,6 @@ struct GameCard: View {
                 .scaleEffect(isHovering ? 1.012 : 1)
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(game.title)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.primary)
-                    .lineLimit(2)
                 HStack(spacing: 5) {
                     Text(game.contentSummary)
                         .lineLimit(1)
@@ -297,7 +338,7 @@ struct GameCard: View {
         .contextMenu { contextActions }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(game.title)，\(game.contentSummary)，\(formatByteCount(game.byteCount))")
-        .accessibilityValue(isSelected ? "已选择" : "未选择")
+        .accessibilityValue("\(isSelected ? "已选择" : "未选择")，\(assessment.state.label)")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .accessibilityAction(named: "选择或取消选择") { model.handleGridTap(game) }
         .accessibilityAction(named: "加入安装队列") { model.addToQueue(game) }
@@ -335,9 +376,15 @@ struct GameListRow: View {
             CoverArtwork(game: game, cornerRadius: 6)
                 .frame(width: 40, height: 52)
             VStack(alignment: .leading, spacing: 3) {
-                Text(game.title)
-                    .font(.system(size: 13, weight: .semibold))
-                    .lineLimit(1)
+                HStack(spacing: 8) {
+                    Text(game.title)
+                        .font(.system(size: 13, weight: .semibold))
+                        .lineLimit(1)
+                    if assessment.state == .installed {
+                        InstalledGameLabel()
+                            .help(assessment.explanation)
+                    }
+                }
                 HStack(spacing: 6) {
                     Text(game.contentSummary)
                     Text("·")
@@ -354,9 +401,6 @@ struct GameListRow: View {
             Spacer(minLength: 12)
             if isOffline {
                 BadgePill(text: "离线", systemImage: "wifi.slash", tone: .neutral)
-            }
-            if assessment.state == .installed {
-                BadgePill(text: "已安装", systemImage: "checkmark.seal.fill", tone: .success)
             }
             if game.identification.isPending {
                 BadgePill(text: game.identification.label, systemImage: "questionmark", tone: .warning)
@@ -385,6 +429,7 @@ struct GameListRow: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(game.title)，\(game.contentSummary)，\(formatByteCount(game.byteCount))")
+        .accessibilityValue(assessment.state.label)
     }
 }
 

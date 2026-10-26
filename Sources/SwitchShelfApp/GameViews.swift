@@ -247,6 +247,8 @@ struct GameCard: View {
     var game: Game
     var isSelected: Bool
     @State private var isHovering = false
+    @FocusState private var isFocused: Bool
+    @Environment(\.colorScheme) private var colorScheme
 
     private var assessment: InstallationAssessment { model.assessment(for: game) }
     private var isOffline: Bool {
@@ -271,15 +273,12 @@ struct GameCard: View {
                     }
                     .padding(7)
                 }
-                .overlay {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .strokeBorder(
-                            isSelected ? Theme.accent : (isHovering ? Theme.accent.opacity(0.45) : Theme.hairline),
-                            lineWidth: isSelected ? 2.5 : 1
-                        )
-                }
+                .overlay { selectionEdge }
                 .shadow(color: .black.opacity(isHovering ? 0.16 : 0.08), radius: isHovering ? 12 : 6, y: isHovering ? 6 : 3)
                 .scaleEffect(isHovering ? 1.012 : 1)
+                .animation(.smooth(duration: 0.22), value: isSelected)
+                .animation(.smooth(duration: 0.16), value: isHovering)
+                .animation(.smooth(duration: 0.16), value: isFocused)
 
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 5) {
@@ -301,6 +300,8 @@ struct GameCard: View {
             withAnimation(.smooth(duration: 0.16)) { isHovering = hovering }
         }
         .focusable()
+        .focused($isFocused)
+        .focusEffectDisabled()
         .onKeyPress(.space) {
             model.handleGridTap(game)
             return .handled
@@ -316,6 +317,43 @@ struct GameCard: View {
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .accessibilityAction(named: "选择或取消选择") { model.handleGridTap(game) }
         .accessibilityAction(named: "加入安装队列") { model.addToQueue(game) }
+    }
+
+    /// Selected light stays in a thin rim on the cover. Clipped so it cannot paint the caption below.
+    private var selectionEdge: some View {
+        let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
+        return ZStack {
+            if isSelected {
+                shape
+                    .stroke(edgeGradient, lineWidth: 8)
+                    .blur(radius: 3.5)
+                    .mask { shape.stroke(Color.white, lineWidth: 11) }
+                shape.strokeBorder(edgeGradient, lineWidth: 1)
+            } else {
+                shape.strokeBorder(
+                    (isHovering || isFocused) ? Theme.accent.opacity(0.32) : Theme.hairline,
+                    lineWidth: 1
+                )
+            }
+        }
+        .clipShape(shape)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
+    private var edgeGradient: LinearGradient {
+        let dark = colorScheme == .dark
+        return LinearGradient(
+            stops: [
+                .init(color: Color.white.opacity(dark ? 0.28 : 0.55), location: 0),
+                .init(color: Color.white.opacity(dark ? 0.05 : 0.10), location: 0.28),
+                .init(color: Theme.accent.opacity(dark ? 0.22 : 0.14), location: 0.52),
+                .init(color: Theme.accent.opacity(dark ? 0.92 : 0.78), location: 0.84),
+                .init(color: Theme.violet.opacity(dark ? 0.88 : 0.70), location: 1)
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
     }
 
     private var availabilityBadges: some View {

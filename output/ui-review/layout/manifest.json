@@ -1,0 +1,205 @@
+{
+  "captureMethod" : "NSHostingView.cacheDisplay (offscreen)",
+  "captures" : [
+    {
+      "height" : 640,
+      "name" : "grid-960x640-light",
+      "pixelHeight" : 1280,
+      "pixelWidth" : 1920,
+      "pngBytes" : 1269226,
+      "width" : 960
+    },
+    {
+      "height" : 640,
+      "name" : "list-960x640-light",
+      "pixelHeight" : 1280,
+      "pixelWidth" : 1920,
+      "pngBytes" : 881874,
+      "width" : 960
+    },
+    {
+      "height" : 640,
+      "name" : "queue-960x640-light",
+      "pixelHeight" : 1280,
+      "pixelWidth" : 1920,
+      "pngBytes" : 890495,
+      "width" : 960
+    },
+    {
+      "height" : 640,
+      "name" : "maintenance-960x640-light",
+      "pixelHeight" : 1280,
+      "pixelWidth" : 1920,
+      "pngBytes" : 824405,
+      "width" : 960
+    },
+    {
+      "height" : 640,
+      "name" : "device-960x640-light",
+      "pixelHeight" : 1280,
+      "pixelWidth" : 1920,
+      "pngBytes" : 900040,
+      "width" : 960
+    },
+    {
+      "height" : 820,
+      "name" : "grid-1280x820-light",
+      "pixelHeight" : 1640,
+      "pixelWidth" : 2560,
+      "pngBytes" : 1789851,
+      "width" : 1280
+    },
+    {
+      "height" : 820,
+      "name" : "list-1280x820-light",
+      "pixelHeight" : 1640,
+      "pixelWidth" : 2560,
+      "pngBytes" : 1292187,
+      "width" : 1280
+    },
+    {
+      "height" : 820,
+      "name" : "queue-1280x820-light",
+      "pixelHeight" : 1640,
+      "pixelWidth" : 2560,
+      "pngBytes" : 1084009,
+      "width" : 1280
+    },
+    {
+      "height" : 820,
+      "name" : "maintenance-1280x820-light",
+      "pixelHeight" : 1640,
+      "pixelWidth" : 2560,
+      "pngBytes" : 1018004,
+      "width" : 1280
+    },
+    {
+      "height" : 820,
+      "name" : "device-1280x820-light",
+      "pixelHeight" : 1640,
+      "pixelWidth" : 2560,
+      "pngBytes" : 1091267,
+      "width" : 1280
+    },
+    {
+      "height" : 640,
+      "name" : "grid-compact120-960x640-light",
+      "pixelHeight" : 1280,
+      "pixelWidth" : 1920,
+      "pngBytes" : 1155304,
+      "width" : 960
+    },
+    {
+      "height" : 440,
+      "name" : "settings-light",
+      "pixelHeight" : 880,
+      "pixelWidth" : 1040,
+      "pngBytes" : 102842,
+      "width" : 520
+    },
+    {
+      "height" : 640,
+      "name" : "grid-960x640-dark",
+      "pixelHeight" : 1280,
+      "pixelWidth" : 1920,
+      "pngBytes" : 1270740,
+      "width" : 960
+    },
+    {
+      "height" : 640,
+      "name" : "list-960x640-dark",
+      "pixelHeight" : 1280,
+      "pixelWidth" : 1920,
+      "pngBytes" : 894968,
+      "width" : 960
+    },
+    {
+      "height" : 640,
+      "name" : "queue-960x640-dark",
+      "pixelHeight" : 1280,
+      "pixelWidth" : 1920,
+      "pngBytes" : 917651,
+      "width" : 960
+    },
+    {
+      "height" : 640,
+      "name" : "maintenance-960x640-dark",
+      "pixelHeight" : 1280,
+      "pixelWidth" : 1920,
+      "pngBytes" : 850744,
+      "width" : 960
+    },
+    {
+      "height" : 640,
+      "name" : "device-960x640-dark",
+      "pixelHeight" : 1280,
+      "pixelWidth" : 1920,
+      "pngBytes" : 941552,
+      "width" : 960
+    },
+    {
+      "height" : 820,
+      "name" : "grid-1280x820-dark",
+      "pixelHeight" : 1640,
+      "pixelWidth" : 2560,
+      "pngBytes" : 1764824,
+      "width" : 1280
+    },
+    {
+      "height" : 820,
+      "name" : "list-1280x820-dark",
+      "pixelHeight" : 1640,
+      "pixelWidth" : 2560,
+      "pngBytes" : 1277448,
+      "width" : 1280
+    },
+    {
+      "height" : 820,
+      "name" : "queue-1280x820-dark",
+      "pixelHeight" : 1640,
+      "pixelWidth" : 2560,
+      "pngBytes" : 1088743,
+      "width" : 1280
+    },
+    {
+      "height" : 820,
+      "name" : "maintenance-1280x820-dark",
+      "pixelHeight" : 1640,
+      "pixelWidth" : 2560,
+      "pngBytes" : 1021695,
+      "width" : 1280
+    },
+    {
+      "height" : 820,
+      "name" : "device-1280x820-dark",
+      "pixelHeight" : 1640,
+      "pixelWidth" : 2560,
+      "pngBytes" : 1111667,
+      "width" : 1280
+    },
+    {
+      "height" : 640,
+      "name" : "grid-compact120-960x640-dark",
+      "pixelHeight" : 1280,
+      "pixelWidth" : 1920,
+      "pngBytes" : 1158833,
+      "width" : 960
+    },
+    {
+      "height" : 440,
+      "name" : "settings-dark",
+      "pixelHeight" : 880,
+      "pixelWidth" : 1040,
+      "pngBytes" : 105529,
+      "width" : 520
+    }
+  ],
+  "fixtureOnly" : true,
+  "limitations" : [
+    "Native materials, menu\/button foreground colors, and dynamic NSColor\/inspector colors are not faithfully represented by offscreen cacheDisplay; verify in the live app.",
+    "The unbundled harness has a generic app icon; app icon correctness is verified in the packaged app.",
+    "Fixtures are synthetic; these captures do not establish NAS, USB, package identity, or installation behavior."
+  ],
+  "noBootstrapUSBOrInstall" : true,
+  "productionSources" : true
+}

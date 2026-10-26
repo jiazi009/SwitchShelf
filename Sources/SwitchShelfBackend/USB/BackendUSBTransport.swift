@@ -155,7 +155,12 @@ private final class NativeHandle: @unchecked Sendable {
 
 final class NativeBackendUSBDriver: BackendUSBDriver, @unchecked Sendable {
     private let handle = NativeHandle()
+    private static let debugEnabled = ProcessInfo.processInfo.environment["SWITCHSHELF_BACKEND_USB_DEBUG"] == "1"
     public init() {} // No discovery, open, or hardware access here.
+    private func debug(_ message: String) {
+        guard Self.debugEnabled else { return }
+        FileHandle.standardError.write(Data("usb-debug: \(message)\n".utf8))
+    }
     private func status(_ value: Int32) -> BackendError {
         switch value {
         case Int32(SS_USB_BUSY): .busy
@@ -169,9 +174,11 @@ final class NativeBackendUSBDriver: BackendUSBDriver, @unchecked Sendable {
     public func open() async throws {
         let result = await Task.detached { [handle] in
             var code: Int32 = 0
-            return Int32(ss_usb_open(&handle.pointer, &code))
+            let status = Int32(ss_usb_open(&handle.pointer, &code))
+            return (status, code)
         }.value
-        guard result == SS_USB_OK else { throw status(result) }
+        debug("open status=\(result.0) native=\(result.1)")
+        guard result.0 == SS_USB_OK else { throw status(result.0) }
     }
     public func read(maximumLength: Int, timeoutMilliseconds: UInt32) async throws -> Data {
         let result = await Task.detached { [handle] in
@@ -180,26 +187,31 @@ final class NativeBackendUSBDriver: BackendUSBDriver, @unchecked Sendable {
             let status = data.withUnsafeMutableBytes { bytes in
                 ss_usb_read(handle.pointer, bytes.baseAddress, &count, timeoutMilliseconds, &code)
             }
-            return (Int32(status), data.prefix(Int(count)))
+            return (Int32(status), Int(count), code, Data(data.prefix(Int(count))))
         }.value
+        debug("read status=\(result.0) native=\(result.2) n=\(result.1) requested=\(maximumLength) timeout=\(timeoutMilliseconds)")
         guard result.0 == SS_USB_OK else { throw status(result.0) }
-        return Data(result.1)
+        return result.3
     }
     public func write(_ data: Data, timeoutMilliseconds: UInt32) async throws {
         let result = await Task.detached { [handle] in
             var code: Int32 = 0
-            return data.withUnsafeBytes { bytes in
+            let status = data.withUnsafeBytes { bytes in
                 Int32(ss_usb_write(handle.pointer, bytes.baseAddress, UInt32(data.count), timeoutMilliseconds, &code))
             }
+            return (status, code)
         }.value
-        guard result == SS_USB_OK else { throw status(result) }
+        debug("write n=\(data.count) status=\(result.0) native=\(result.1) timeout=\(timeoutMilliseconds)")
+        guard result.0 == SS_USB_OK else { throw status(result.0) }
     }
     public func close() async throws {
         let result = await Task.detached { [handle] in
             var code: Int32 = 0
-            return Int32(ss_usb_close(handle.pointer, &code))
+            let status = Int32(ss_usb_close(handle.pointer, &code))
+            return (status, code)
         }.value
-        guard result == SS_USB_OK else { throw status(result) }
+        debug("close status=\(result.0) native=\(result.1)")
+        guard result.0 == SS_USB_OK else { throw status(result.0) }
         handle.pointer = nil
     }
 }

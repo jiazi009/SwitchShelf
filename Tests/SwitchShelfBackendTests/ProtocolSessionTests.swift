@@ -111,7 +111,6 @@ final class BackendProtocolSessionTests: XCTestCase {
                              header(.request, .list, 1), header(.request, .fileRange, 65_537),
                              header(.request, .list) + header(.response, .list),
                              header(.request, .list) + header(.acknowledgement, .exit),
-                             header(.request, .list) + header(.acknowledgement, .list, 65_537),
                              range(n, 0, 1).dropLast(16) + header(.response, .fileRange)]
         for (index, bytes) in cases.enumerated() {
             let (session, peer, _) = make(bytes)
@@ -119,6 +118,21 @@ final class BackendProtocolSessionTests: XCTestCase {
             let (_, closes) = await peer.snapshot()
             XCTAssertEqual(closes, 1)
         }
+    }
+
+    func testAcknowledgmentLengthIsIgnoredAndTypeCommandStillChecked() async throws {
+        let n = Data(offer.name.utf8)
+        // The official host ignores the ACK length field entirely; a DBI build may
+        // echo a 1 MiB-级 range size here, so any UInt32 length must be tolerated.
+        let (tolerant, _, _) = make(header(.request, .list) + header(.acknowledgement, .list, UInt32.max) +
+                                    range(n, 0, 10) + exit())
+        let result = try await tolerant.run(offers: [offer])
+        XCTAssertEqual(result.totalBytesSent, 10)
+
+        let (badType, _, _) = make(header(.request, .list) + header(.response, .list))
+        await fails(badType, [offer], as: .protocolViolation)
+        let (badCommand, _, _) = make(header(.request, .list) + header(.acknowledgement, .exit))
+        await fails(badCommand, [offer], as: .protocolViolation)
     }
 
     func testNamesRangesAndPlans() async {

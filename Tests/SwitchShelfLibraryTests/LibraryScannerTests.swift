@@ -204,18 +204,23 @@ struct LibraryScannerTests {
         #expect(looseGame.contents[0].kind == .dlc)
     }
 
-    @Test("Filename-only NAS identity cannot become a confirmed installed badge")
-    func filenameCandidateDoesNotConfirmInstallation() async throws {
+    @Test("Filename Title ID can match a current base without becoming verified")
+    func filenameTitleIDMatchesInstalledBaseWithoutVerification() async throws {
         let root = try createTempDirectory()
         defer { try? FileManager.default.removeItem(at: root) }
         try createDummyFile(at: root.appendingPathComponent("Game [0100111000000000][v0].nsp"))
         let snapshot = try await LibraryScanner().scan(LibrarySource(url: root, name: "Candidate"))
         let game = try #require(snapshot.games.first)
         #expect(game.identification == .matched)
+        #expect(game.identification != .verified)
         let inventory = InstalledInventory(deviceID: "fixture-session", isComplete: true,
             records: [InstalledRecord(id: "fixture", titleID: "0100111000000000", kind: .base,
                                       name: "Game", objectPath: "/Installed games/Game")])
-        #expect(InstallationAssessor.assess(game, inventory: inventory, isCurrentSession: true).state == .unknown)
+        let assessment = InstallationAssessor.assess(game, inventory: inventory, isCurrentSession: true)
+        #expect(assessment.state == .installed)
+        #expect(assessment.explanation.contains("文件名"))
+        #expect(assessment.explanation.contains("未验证"))
+        #expect(game.identification == .matched)
     }
 
     @Test("A matching display title alone never attaches an unidentified update")

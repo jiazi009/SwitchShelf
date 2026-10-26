@@ -105,7 +105,7 @@ struct MaintenanceView: View {
             StatTile(
                 title: "设备清单",
                 value: model.inventory.map { "\($0.records.count) 条" } ?? "未读取",
-                detail: model.inventory.map { "\($0.isComplete ? "完整" : "不完整") · 本地匹配 \(model.installedGameCount)" } ?? "连接后手动读取",
+                detail: model.inventory.map { "\($0.isComplete ? "完整" : "不完整") · 本地匹配 \(model.locallyMatchedGameCount)" } ?? "启动后会自动检测并读取",
                 symbol: "list.bullet.rectangle.portrait",
                 tone: model.inventory == nil ? .neutral : (model.inventory?.isComplete == true ? .success : .warning)
             )

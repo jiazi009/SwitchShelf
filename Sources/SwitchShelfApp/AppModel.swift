@@ -190,7 +190,8 @@ final class AppModel {
         if installFilter != .all {
             result = result.filter { game in
                 let state = assessment(for: game).state
-                return installFilter == .installed ? state == .installed : state != .installed
+                let onDevice = state == .installed || state == .partial
+                return installFilter == .installed ? onDevice : !onDevice
             }
         }
 
@@ -233,6 +234,15 @@ final class AppModel {
     var installedGameCount: Int {
         guard inventory != nil else { return 0 }
         return games.filter { assessment(for: $0).state == .installed }.count
+    }
+
+    /// Games with installed or partial evidence in the current USB session.
+    var locallyMatchedGameCount: Int {
+        guard inventoryIsCurrentSession else { return 0 }
+        return games.filter {
+            let state = assessment(for: $0).state
+            return state == .installed || state == .partial
+        }.count
     }
 
     var totalContentCount: Int { games.reduce(0) { $0 + $1.contents.count } }
@@ -376,15 +386,14 @@ final class AppModel {
     }
 
     func assessment(for content: LocalContent) -> InstallationAssessment {
-        guard InstallationAssessor.normalizedID(content.titleID) != nil else {
-            return InstallationAssessment(state: .unknown, explanation: "本地文件名未提供可核对的 Title ID；不推断单项状态。")
+        guard let game = games.first(where: { $0.contents.contains { $0.id == content.id } }) else {
+            return InstallationAssessment(state: .unknown, explanation: "这项内容不在当前游戏库中，不推断安装状态。")
         }
-        // LocalContent has no independently verified package identity. Even a
-        // positive device Title ID match cannot confirm this filename candidate.
-        return InstallationAssessment(
-            state: .unknown,
-            explanation: "本地文件名中的 Title ID 仅为候选，未核对包身份；不推断单项安装状态。",
-            observedAt: inventoryIsCurrentSession ? inventory?.observedAt : nil
+        return InstallationAssessor.assess(
+            content,
+            in: game,
+            inventory: inventory,
+            isCurrentSession: inventoryIsCurrentSession
         )
     }
 
@@ -465,6 +474,7 @@ final class AppModel {
         if snapshot.games.isEmpty || refreshOnLaunch {
             scanAll()
         }
+        await detectAndRead(announceWhenMissing: false)
     }
 
     func reloadCache() async {
@@ -876,33 +886,89 @@ final class AppModel {
         isDiscovering = false
     }
 
-    func readInventory() async {
-        guard !isReadingInventory, !isInstalling else { return }
+    /// Detect USB, then read when there is a single 057e:201d candidate and OpenMTP is not running.
+    /// A failed re-read keeps the last success only when that candidate signature is unchanged.
+    /// Rediscovery itself still drops the previous inventory before the read.
+    func detectAndRead(announceWhenMissing: Bool = true) async {
+        guard !isDiscovering, !isReadingInventory, !isInstalling else { return }
+        if openMTPIsRunning {
+            if deviceDiscovery == nil {
+                await refreshDevices()
+            }
+            presentOpenMTPPreflight()
+            return
+        }
+        let preservedInventory = inventory
+        let preservedSignature = inventorySessionSignature
+        await refreshDevices()
+        guard !isInstalling else { return }
+        if openMTPIsRunning {
+            if mtpCandidateSignature == preservedSignature {
+                inventory = preservedInventory
+                inventorySessionSignature = preservedSignature
+            }
+            presentOpenMTPPreflight()
+            return
+        }
+        guard let signature = mtpCandidateSignature else {
+            if announceWhenMissing {
+                notice = AppNotice(
+                    level: .warning,
+                    title: "未检测到可读取的 MTP 候选设备",
+                    message: "请连接一台 Switch，开启 sphaira 的 MTP 或 DBI 的 Run MTP responder 后再次检测并读取。",
+                    action: .refreshDevices,
+                    actionLabel: "检测并读取"
+                )
+            }
+            return
+        }
+        let succeeded = await readInventory()
+        if openMTPIsRunning {
+            if inventory == nil, signature == preservedSignature {
+                inventory = preservedInventory
+                inventorySessionSignature = preservedSignature
+            }
+            presentOpenMTPPreflight()
+            return
+        }
+        guard !succeeded, inventory == nil, signature == preservedSignature, let preservedInventory else { return }
+        inventory = preservedInventory
+        inventorySessionSignature = preservedSignature
+        deviceDiscovery?.state = .ready
+        deviceDiscovery?.message = retainedInventoryMessage(preservedInventory)
+        notice = AppNotice(
+            level: .warning,
+            title: "重新读取失败，已保留上次清单",
+            message: "USB 候选签名没有变化，未清除已读到的清单。这不是新的安装结果。",
+            action: .readInventory,
+            actionLabel: "重新读取"
+        )
+    }
+
+    @discardableResult
+    func readInventory() async -> Bool {
+        guard !isReadingInventory, !isInstalling else { return false }
         guard canReadInventory, let signature = mtpCandidateSignature else {
             notice = AppNotice(
                 level: .warning,
                 title: "未检测到可读取的 MTP 候选设备",
-                message: "请连接一台 Switch，开启 sphaira 的 MTP 或 DBI 的 Run MTP responder 后重新检测。",
+                message: "请连接一台 Switch，开启 sphaira 的 MTP 或 DBI 的 Run MTP responder 后再次检测并读取。",
                 action: .refreshDevices,
-                actionLabel: "重新检测"
+                actionLabel: "检测并读取"
             )
-            return
+            return false
         }
         // A third-party MTP client does not participate in our advisory lease.
         // This is a preflight hint, not a claim about OS interface ownership.
-        if NSWorkspace.shared.runningApplications.contains(where: { $0.bundleIdentifier == "io.ganeshrvel.openmtp" }) {
-            inventory = nil
-            inventorySessionSignature = nil
-            deviceDiscovery?.state = .waitingForMTP
-            deviceDiscovery?.message = "OpenMTP 正在运行；请完整退出后读取，避免两个客户端同时访问设备。"
-            notice = AppNotice(level: .warning, title: "请先退出 OpenMTP",
-                               message: "OpenMTP 可能仍持有 MTP 会话。请使用菜单中的退出功能，再返回读取设备清单。")
-            return
+        if openMTPIsRunning {
+            presentOpenMTPPreflight()
+            return false
         }
         isReadingInventory = true
-        inventory = nil
-        inventorySessionSignature = nil
+        let preservedInventory = inventory
+        let preservedSignature = inventorySessionSignature
         notice = nil
+        var succeeded = false
         do {
             let value = try await inventoryReader.readInventory()
             inventory = value
@@ -923,20 +989,114 @@ final class AppModel {
                     actionLabel: "重新读取"
                 )
             }
+            succeeded = true
         } catch {
-            inventory = nil
-            inventorySessionSignature = nil
-            deviceDiscovery?.state = .waitingForMTP
-            deviceDiscovery?.message = "已发现 USB 候选设备，本次 MTP 读取未成功；请检查 MTP 模式和其他客户端。"
-            notice = AppNotice(
-                level: .error,
-                title: "读取已安装内容失败",
-                message: error.localizedDescription,
-                action: .readInventory,
-                actionLabel: "重试"
-            )
+            if preservedSignature == signature, let preservedInventory {
+                inventory = preservedInventory
+                inventorySessionSignature = preservedSignature
+                deviceDiscovery?.state = .ready
+                deviceDiscovery?.message = retainedInventoryMessage(preservedInventory)
+                notice = AppNotice(
+                    level: .error,
+                    title: "重新读取失败，已保留上次清单",
+                    message: "\(error.localizedDescription) USB 候选未变化，已保留上次成功清单。",
+                    action: .readInventory,
+                    actionLabel: "重试"
+                )
+            } else {
+                inventory = nil
+                inventorySessionSignature = nil
+                deviceDiscovery?.state = .waitingForMTP
+                deviceDiscovery?.message = "已发现 USB 候选设备，本次 MTP 读取未成功；请检查 MTP 模式和其他客户端。"
+                notice = AppNotice(
+                    level: .error,
+                    title: "读取已安装内容失败",
+                    message: error.localizedDescription,
+                    action: .readInventory,
+                    actionLabel: "重试"
+                )
+            }
         }
         isReadingInventory = false
+        return succeeded
+    }
+
+    func inventoryDirectoryGroups(from records: [InstalledRecord]) -> [InventoryDirectoryGroup] {
+        let buckets = Dictionary(grouping: records, by: { directoryIdentity(for: $0) })
+        return buckets.map { key, items in
+            let sorted = items.sorted { left, right in
+                if left.kind.order != right.kind.order { return left.kind.order < right.kind.order }
+                return left.name.localizedStandardCompare(right.name) == .orderedAscending
+            }
+            return InventoryDirectoryGroup(
+                id: key,
+                directoryName: directoryTitle(for: key),
+                records: sorted,
+                localGameTitles: localGameTitles(matching: sorted)
+            )
+        }
+        .sorted { $0.directoryName.localizedStandardCompare($1.directoryName) == .orderedAscending }
+    }
+
+    private var openMTPIsRunning: Bool {
+        NSWorkspace.shared.runningApplications.contains { $0.bundleIdentifier == "io.ganeshrvel.openmtp" }
+    }
+
+    private func presentOpenMTPPreflight() {
+        if inventorySessionSignature != mtpCandidateSignature {
+            inventory = nil
+            inventorySessionSignature = nil
+        }
+        deviceDiscovery?.state = .waitingForMTP
+        if inventory == nil {
+            deviceDiscovery?.message = "OpenMTP 正在运行；请完整退出后读取，避免两个客户端同时访问设备。"
+        } else {
+            deviceDiscovery?.message = "OpenMTP 正在运行，未重新读取。USB 候选未变化，已保留上次成功清单。"
+        }
+        notice = AppNotice(
+            level: .warning,
+            title: "请先退出 OpenMTP",
+            message: inventory == nil
+                ? "OpenMTP 可能仍持有 MTP 会话。请使用菜单中的退出功能，再返回检测并读取。"
+                : "OpenMTP 可能仍持有 MTP 会话。已保留上次成功清单，退出后再重新读取。"
+        )
+    }
+
+    private func retainedInventoryMessage(_ inventory: InstalledInventory) -> String {
+        let sources = inventory.mtpEvidence?.inventoryStorageNames.joined(separator: "、") ?? ""
+        return "本次读取未成功，USB 候选未变化，已保留上次清单"
+            + (sources.isEmpty ? "" : " · \(sources)")
+            + (inventory.isComplete ? " · 清单完整。" : " · 清单尚未完整确认。")
+    }
+
+    /// Game directory is the first folder under the storage name. Do not use the human
+    /// directory title or Title ID arithmetic to decide which local game it is.
+    private func directoryIdentity(for record: InstalledRecord) -> String {
+        let parts = record.objectPath.split(separator: "/", omittingEmptySubsequences: true).map(String.init)
+        if parts.count >= 3 { return "\(parts[0])/\(parts[1])" }
+        if parts.count == 2 { return parts[0] }
+        return record.objectPath.isEmpty ? record.id : record.objectPath
+    }
+
+    private func directoryTitle(for key: String) -> String {
+        key.split(separator: "/", omittingEmptySubsequences: true).last.map(String.init) ?? key
+    }
+
+    private func localGameTitles(matching records: [InstalledRecord]) -> [String] {
+        var titles: [String] = []
+        var seen = Set<String>()
+        for record in records {
+            guard record.kind != .unknown, let titleID = InstallationAssessor.normalizedID(record.titleID) else { continue }
+            for game in games where game.identification == .matched || game.identification == .verified {
+                let matches = game.contents.contains { content in
+                    content.kind == record.kind && InstallationAssessor.normalizedID(content.titleID) == titleID
+                }
+                if matches, seen.insert(game.id).inserted {
+                    titles.append(game.title)
+                }
+            }
+        }
+        return titles.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
     }
 
     // MARK: - Installation plan
@@ -1283,7 +1443,8 @@ final class AppModel {
         }
         let inventoryLine: String
         if let inventory {
-            inventoryLine = "记录 \(inventory.records.count) 条 · \(inventory.isComplete ? "完整" : "不完整") · 读取于 \(absoluteTime(inventory.observedAt))"
+            let match = inventoryIsCurrentSession ? " · 本地匹配 \(locallyMatchedGameCount) 款" : " · 非当前会话，不统计本地匹配"
+            inventoryLine = "记录 \(inventory.records.count) 条 · \(inventory.isComplete ? "完整" : "不完整")\(match) · 读取于 \(absoluteTime(inventory.observedAt))"
                 + (inventory.mtpEvidence.map { " · 来源 \($0.inventoryStorageNames.joined(separator: "、")) · 游戏目录 \($0.gameDirectoryCount) · MTP 存储 \($0.reportedStorageCount) 项" } ?? "")
         } else {
             inventoryLine = "未读取"
@@ -1317,7 +1478,7 @@ final class AppModel {
         case .scanAll:
             scanAll()
         case .refreshDevices:
-            Task { await refreshDevices() }
+            Task { await detectAndRead() }
         case .readInventory:
             Task { await readInventory() }
         case .reloadCache:

@@ -58,6 +58,13 @@ enum ContentFilter: String, CaseIterable, Identifiable {
     }
 }
 
+struct InventoryDirectoryGroup: Identifiable, Equatable {
+    var id: String
+    var directoryName: String
+    var records: [InstalledRecord]
+    var localGameTitles: [String]
+}
+
 enum InstallFilter: String, CaseIterable, Identifiable {
     case all, installed, pending
     var id: String { rawValue }

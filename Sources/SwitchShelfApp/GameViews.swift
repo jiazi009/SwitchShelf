@@ -84,8 +84,8 @@ struct CoverArtwork: View {
                                 .font(.system(size: 9, weight: .medium))
                                 .foregroundStyle(.white.opacity(0.72))
                         }
-                        if let installationAssessment, installationAssessment.state == .installed {
-                            InstalledGameLabel(onCover: true)
+                        if let installationAssessment, installationAssessment.state == .installed || installationAssessment.state == .partial {
+                            InstallationMark(state: installationAssessment.state, onCover: true)
                                 .help(installationAssessment.explanation)
                         }
                         Text(game.title)
@@ -178,15 +178,35 @@ struct CoverArtwork: View {
     }
 }
 
-struct InstalledGameLabel: View {
+struct InstallationMark: View {
+    var state: InstallationState
     var onCover = false
 
+    private var title: String {
+        switch state {
+        case .installed: "已安装"
+        case .partial: "部分安装"
+        default: ""
+        }
+    }
+
+    private var symbol: String {
+        state == .partial ? "circle.lefthalf.filled" : "checkmark.circle.fill"
+    }
+
+    private var color: Color {
+        if onCover {
+            return state == .partial
+                ? Color(.sRGB, red: 1, green: 0.78, blue: 0.42, opacity: 1)
+                : Color(.sRGB, red: 0.35, green: 0.95, blue: 0.72, opacity: 1)
+        }
+        return state == .partial ? Theme.warning : Theme.installed
+    }
+
     var body: some View {
-        Label("已安装", systemImage: "checkmark.circle.fill")
+        Label(title, systemImage: symbol)
             .font(.system(size: 11, weight: .semibold))
-            .foregroundStyle(onCover
-                ? Color(.sRGB, red: 0.35, green: 0.95, blue: 0.72, opacity: 1)
-                : Theme.installed)
+            .foregroundStyle(color)
             .labelStyle(.titleAndIcon)
             .fixedSize()
     }
@@ -371,8 +391,8 @@ struct GameListRow: View {
                     Text(game.title)
                         .font(.system(size: 13, weight: .semibold))
                         .lineLimit(1)
-                    if assessment.state == .installed {
-                        InstalledGameLabel()
+                    if assessment.state == .installed || assessment.state == .partial {
+                        InstallationMark(state: assessment.state)
                             .help(assessment.explanation)
                     }
                 }

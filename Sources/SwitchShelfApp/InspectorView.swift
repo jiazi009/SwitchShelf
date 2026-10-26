@@ -230,7 +230,7 @@ private struct GameInspector: View {
             }
             .padding(.top, 2)
 
-            Text("安装状态依据设备清单证据：只有本体正向记录才会显示已安装，缺失记录仅在清单完整时作为证据。")
+            Text("安装状态依据当前设备清单。已验证的包仍按原有证据判断。文件名已匹配的游戏只对照 Title ID 与内容类型，不代表包字节已验证。本体正向记录显示已安装；本地更新或 DLC 缺失或版本更低时显示部分安装。")
                 .font(.system(size: 9.5))
                 .foregroundStyle(.tertiary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -301,7 +301,12 @@ private struct GameInspector: View {
                         Image(systemName: "checkmark.seal.fill")
                             .font(.system(size: 9))
                             .foregroundStyle(Theme.installed)
-                            .help("设备清单中存在匹配的 Title ID")
+                            .help(state.explanation)
+                    } else if state.state == .notInstalled {
+                        Image(systemName: "minus.circle")
+                            .font(.system(size: 9))
+                            .foregroundStyle(.secondary)
+                            .help(state.explanation)
                     }
                     if content.availability == .offline {
                         Image(systemName: "wifi.slash")

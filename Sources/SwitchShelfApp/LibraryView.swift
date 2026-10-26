@@ -186,7 +186,7 @@ struct LibraryView: View {
             }
             .pickerStyle(.inline)
         } label: {
-            FilterPillLabel(text: model.installFilter == .all ? "全部状态" : model.installFilter == .installed ? "已安装" : "未确认")
+            FilterPillLabel(text: model.installFilter == .all ? "全部状态" : model.installFilter == .installed ? "设备已安装" : "未确认")
         }
         .menuStyle(.button)
         .buttonStyle(.plain)
@@ -197,7 +197,7 @@ struct LibraryView: View {
         .overlay {
             Capsule().strokeBorder(Theme.hairline, lineWidth: 0.7)
         }
-        .help("依据当前设备清单证据：本体正向记录才算已安装")
+        .help("设备已安装包含已安装和部分安装。文件名已匹配的游戏按 Title ID 与内容类型对照当前清单，不是包字节验证。")
         .accessibilityLabel("安装状态筛选，当前\(model.installFilter.label)")
     }
 
@@ -399,7 +399,7 @@ struct LibraryView: View {
             EmptyStateView(
                 symbol: "line.3.horizontal.decrease.circle",
                 title: "没有匹配的游戏",
-                message: "当前搜索、内容类型或安装状态筛选没有结果。安装状态只在当前设备清单提供本体证据时才标记为已安装。",
+                    message: "当前搜索、内容类型或安装状态筛选没有结果。设备已安装包含已安装和部分安装，且只使用当前清单里的本体 Title ID。",
                 actionTitle: "清除搜索与筛选",
                 action: { model.clearFilters() }
             )

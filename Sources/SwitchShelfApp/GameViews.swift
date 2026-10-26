@@ -44,6 +44,7 @@ struct CoverArtwork: View {
     var game: Game
     var cornerRadius: CGFloat = 12
     var showsTitle = false
+    var installationAssessment: InstallationAssessment?
     @State private var cover: CachedCover?
 
     private var tint: Color {
@@ -77,11 +78,15 @@ struct CoverArtwork: View {
                         .init(color: tint, location: 1)
                     ], startPoint: .top, endPoint: .bottom)
 
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: 5) {
                         if cover == nil {
                             Text("暂无封面")
                                 .font(.system(size: 9, weight: .medium))
                                 .foregroundStyle(.white.opacity(0.72))
+                        }
+                        if let installationAssessment, installationAssessment.state == .installed {
+                            InstalledGameLabel(onCover: true)
+                                .help(installationAssessment.explanation)
                         }
                         Text(game.title)
                             .font(.system(size: max(12, min(20, proxy.size.width * 0.085)), weight: .semibold))
@@ -173,6 +178,20 @@ struct CoverArtwork: View {
     }
 }
 
+struct InstalledGameLabel: View {
+    var onCover = false
+
+    var body: some View {
+        Label("已安装", systemImage: "checkmark.circle.fill")
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(onCover
+                ? Color(.sRGB, red: 0.35, green: 0.95, blue: 0.72, opacity: 1)
+                : Theme.installed)
+            .labelStyle(.titleAndIcon)
+            .fixedSize()
+    }
+}
+
 struct CoverPlaceholder: View {
     var title: String
     var seed: String
@@ -212,8 +231,6 @@ struct CoverPlaceholder: View {
                     startPoint: .center,
                     endPoint: .bottom
                 )
-
-
             }
         }
         .accessibilityHidden(true)
@@ -238,7 +255,7 @@ struct GameCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            CoverArtwork(game: game, showsTitle: true)
+            CoverArtwork(game: game, showsTitle: true, installationAssessment: assessment)
                 .aspectRatio(3 / 4, contentMode: .fit)
                 .overlay(alignment: .topLeading) {
                     ViewThatFits(in: .horizontal) {
@@ -295,7 +312,7 @@ struct GameCard: View {
         .contextMenu { contextActions }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(game.title)，\(game.contentSummary)，\(formatByteCount(game.byteCount))")
-        .accessibilityValue(isSelected ? "已选择" : "未选择")
+        .accessibilityValue("\(isSelected ? "已选择" : "未选择")，\(assessment.state.label)")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .accessibilityAction(named: "选择或取消选择") { model.handleGridTap(game) }
         .accessibilityAction(named: "加入安装队列") { model.addToQueue(game) }
@@ -303,9 +320,6 @@ struct GameCard: View {
 
     private var availabilityBadges: some View {
         VStack(alignment: .leading, spacing: 4) {
-            if assessment.state == .installed {
-                BadgePill(text: "已安装", systemImage: "checkmark.seal.fill", tone: .success, solid: true)
-            }
             if isOffline {
                 BadgePill(text: "离线", systemImage: "wifi.slash", tone: .neutral, solid: true)
             }
@@ -353,9 +367,15 @@ struct GameListRow: View {
             CoverArtwork(game: game, cornerRadius: 6)
                 .frame(width: 44, height: 44)
             VStack(alignment: .leading, spacing: 3) {
-                Text(game.title)
-                    .font(.system(size: 13, weight: .semibold))
-                    .lineLimit(1)
+                HStack(spacing: 8) {
+                    Text(game.title)
+                        .font(.system(size: 13, weight: .semibold))
+                        .lineLimit(1)
+                    if assessment.state == .installed {
+                        InstalledGameLabel()
+                            .help(assessment.explanation)
+                    }
+                }
                 HStack(spacing: 6) {
                     Text(game.contentSummary)
                     Text("·")
@@ -372,9 +392,6 @@ struct GameListRow: View {
             Spacer(minLength: 12)
             if isOffline {
                 BadgePill(text: "离线", systemImage: "wifi.slash", tone: .neutral)
-            }
-            if assessment.state == .installed {
-                BadgePill(text: "已安装", systemImage: "checkmark.seal.fill", tone: .success)
             }
             if game.identification.isPending {
                 BadgePill(text: game.identification.label, systemImage: "questionmark", tone: .warning)
@@ -404,6 +421,7 @@ struct GameListRow: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(game.title)，\(game.contentSummary)，\(formatByteCount(game.byteCount))")
+        .accessibilityValue(assessment.state.label)
     }
 }
 

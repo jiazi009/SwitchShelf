@@ -33,21 +33,8 @@ struct SidebarView: View {
 
     private var brand: some View {
         HStack(spacing: 9) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [Theme.accent, Theme.violet],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 31, height: 31)
-                Image(systemName: "gamecontroller.fill")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.white)
-            }
-            .shadow(color: Theme.accent.opacity(0.30), radius: 5, y: 2)
+            AppBrandIcon()
+                .frame(width: 34, height: 34)
             VStack(alignment: .leading, spacing: 0) {
                 Text("SwitchShelf")
                     .font(.system(size: 15, weight: .bold))

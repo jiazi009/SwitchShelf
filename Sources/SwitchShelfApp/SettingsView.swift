@@ -46,16 +46,17 @@ struct SettingsView: View {
 
             Section("关于") {
                 LabeledContent("SwitchShelf", value: version)
-                LabeledContent("访问方式", value: "本地与 USB · 只读")
-                Text("安装执行尚未启用；需要已验证的传输协议与明确的测试目标后才会提供。")
+                LabeledContent("游戏库", value: "本地文件 · 只读扫描")
+                LabeledContent("设备", value: "USB 清单 · 单文件安装测试")
+                Text("安装队列提供试验性的 sphaira 单文件发送，需逐项核对并确认。发送完成不等于安装成功，设备端安装结果仍需自行确认。")
                     .font(.system(size: 10.5))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
         .formStyle(.grouped)
-        .frame(width: 480, height: 360)
-        .alert("无法打开应用数据目录", isPresented: Binding(
+        .frame(width: 520, height: 440)
+        .alert("无法打开本地数据", isPresented: Binding(
             get: { errorMessage != nil },
             set: { if !$0 { errorMessage = nil } }
         )) {
@@ -67,7 +68,7 @@ struct SettingsView: View {
 
     private var version: String {
         let short = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
-        return short ?? "0.1.0 · Wave 1"
+        return short ?? "开发版本"
     }
 
     private func openDataDirectory() {

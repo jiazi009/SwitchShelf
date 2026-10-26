@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 
 enum Theme {
+    static let controlHeight: CGFloat = 32
     static let accent = Color(red: 0.12, green: 0.39, blue: 0.96)
     static let accentDeep = Color(red: 0.08, green: 0.28, blue: 0.82)
     static let violet = Color(red: 0.48, green: 0.34, blue: 0.94)
@@ -63,6 +64,17 @@ enum StatusTone {
     }
 
     var soft: Color { color.opacity(0.13) }
+
+    /// Solid cover badges always carry white text, including in dark appearance.
+    var solidFill: Color {
+        switch self {
+        case .neutral: Color(red: 0.20, green: 0.24, blue: 0.30)
+        case .accent: Theme.accentDeep
+        case .success: Color(red: 0.06, green: 0.43, blue: 0.25)
+        case .warning: Color(red: 0.62, green: 0.32, blue: 0.07)
+        case .danger: Theme.danger
+        }
+    }
 }
 
 struct WindowWash: View {

@@ -89,8 +89,10 @@ struct QueueView: View {
                     .frame(width: 30, height: 30)
                     .contentShape(Rectangle())
             }
-            .menuStyle(.borderlessButton)
+            .menuStyle(.button)
+            .buttonStyle(.plain)
             .menuIndicator(.hidden)
+            .frame(width: Theme.controlHeight, height: Theme.controlHeight)
             .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
             .help("更多队列操作")
             .accessibilityLabel("更多安装队列操作")
@@ -102,6 +104,31 @@ struct QueueView: View {
         .overlay(alignment: .bottom) {
             Rectangle().fill(Theme.hairline).frame(height: 0.5)
         }
+    }
+
+    @ViewBuilder
+    private var executionButtons: some View {
+        Button(model.isReviewingInstall ? "准备确认…" : "核对并安装一个文件…") {
+            Task { await model.prepareMTPInstallationReview() }
+        }
+        .buttonStyle(.borderedProminent)
+        .controlSize(.large)
+        .fixedSize(horizontal: true, vertical: false)
+        .disabled(!model.canReviewMTPInstallation)
+        .help("需要检查通过且只勾选一个文件；此按钮先显示确认页，不会立即写设备")
+
+        Button("检查计划") { Task { await model.checkPlan() } }
+            .buttonStyle(.bordered)
+            .controlSize(.large)
+            .fixedSize(horizontal: true, vertical: false)
+            .disabled(model.plan.isEmpty || model.isCheckingPlan || model.isInstalling || model.isReviewingInstall)
+            .help("仅检查本地来源、普通文件、大小与 MTP 包文件名；不连接设备")
+
+        Button("查看设备模式说明") { model.showDevice() }
+            .buttonStyle(.bordered)
+            .controlSize(.large)
+            .fixedSize(horizontal: true, vertical: false)
+            .accessibilityLabel("查看设备连接与安装条件说明")
     }
 
     private var executionCard: some View {
@@ -121,23 +148,9 @@ struct QueueView: View {
                     .font(.system(size: 10.5))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                HStack(spacing: 10) {
-                    Button(model.isReviewingInstall ? "准备确认…" : "核对并安装一个文件…") {
-                        Task { await model.prepareMTPInstallationReview() }
-                    }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.large)
-                        .disabled(!model.canReviewMTPInstallation)
-                        .help("需要检查通过且只勾选一个文件；此按钮先显示确认页，不会立即写设备")
-                    Button("检查计划") { Task { await model.checkPlan() } }
-                        .buttonStyle(.bordered)
-                        .controlSize(.large)
-                        .disabled(model.plan.isEmpty || model.isCheckingPlan || model.isInstalling || model.isReviewingInstall)
-                        .help("仅检查本地来源、普通文件、大小与 MTP 包文件名；不连接设备")
-                    Button("查看设备模式说明") { model.showDevice() }
-                        .buttonStyle(.bordered)
-                        .controlSize(.large)
-                        .accessibilityLabel("查看设备连接与安装条件说明")
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 10) { executionButtons }
+                    VStack(alignment: .leading, spacing: 8) { executionButtons }
                 }
                 .padding(.top, 2)
                 if model.isInstalling {
@@ -226,7 +239,7 @@ private struct PlanItemCard: View {
                                 .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
                         }
                     }
-                    .frame(width: 50, height: 67)
+                    .frame(width: 50, height: 50)
 
                     VStack(alignment: .leading, spacing: 5) {
                         HStack(alignment: .firstTextBaseline, spacing: 7) {
@@ -246,8 +259,9 @@ private struct PlanItemCard: View {
                                     .foregroundStyle(.tertiary)
                                     .textSelection(.enabled)
                             }
-                            Text("·")
-                                .foregroundStyle(.tertiary)
+                            if item.titleID != nil {
+                                Text("·").foregroundStyle(.tertiary)
+                            }
                             Text("\(includedCount)/\(item.contents.count) 项 · \(formatByteCount(item.byteCount))")
                                 .font(.system(size: 10))
                                 .foregroundStyle(.secondary)

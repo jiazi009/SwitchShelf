@@ -91,7 +91,9 @@ struct DeviceView: View {
                             if !model.isDiscovering, model.deviceDiscovery != nil {
                                 BadgePill(
                                     text: model.inventoryIsCurrentSession ? (model.inventory?.isComplete == true ? "清单完整" : "清单待确认") : "尚未握手",
-                                    systemImage: model.inventoryIsCurrentSession ? "checkmark.shield.fill" : "lock.slash",
+                                    systemImage: model.inventoryIsCurrentSession
+                                        ? (model.inventory?.isComplete == true ? "checkmark.shield.fill" : "exclamationmark.shield")
+                                        : "lock.slash",
                                     tone: model.inventoryIsCurrentSession ? (model.inventory?.isComplete == true ? .success : .warning) : .neutral
                                 )
                             }
@@ -130,10 +132,14 @@ struct DeviceView: View {
                                     .foregroundStyle(Theme.accent)
                                 Text(device.name)
                                     .font(.system(size: 11.5, weight: .medium))
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                                    .help(device.name)
                                 Spacer()
                                 Text("VID \(hexDeviceID(device.vendorID)) · PID \(hexDeviceID(device.productID))")
                                     .font(.system(size: 9.5, design: .monospaced))
                                     .foregroundStyle(.secondary)
+                                    .fixedSize()
                             }
                         }
                     }
@@ -361,7 +367,7 @@ struct DeviceView: View {
                             .foregroundStyle(.secondary)
                             .padding(.vertical, 8)
                     } else {
-                        VStack(spacing: 6) {
+                        LazyVStack(spacing: 6) {
                             ForEach(records) { record in
                                 recordRow(record)
                             }

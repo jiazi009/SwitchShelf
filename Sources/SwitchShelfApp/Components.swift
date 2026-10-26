@@ -2,6 +2,27 @@ import AppKit
 import SwiftUI
 import SwitchShelfDomain
 
+struct AppBrandIcon: View {
+    private static let image: NSImage = {
+        let name = (Bundle.main.object(forInfoDictionaryKey: "CFBundleIconFile") as? String) ?? "AppIcon"
+        let filename = (name as NSString).deletingPathExtension
+        if let url = Bundle.main.url(forResource: filename, withExtension: "icns"),
+           let image = NSImage(contentsOf: url) {
+            return image
+        }
+        return NSApplication.shared.applicationIconImage
+    }()
+
+    var body: some View {
+        Image(nsImage: Self.image)
+            .resizable()
+            .interpolation(.high)
+            .scaledToFit()
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .accessibilityHidden(true)
+    }
+}
+
 extension AppNotice.Level {
     var tone: StatusTone {
         switch self {
@@ -73,7 +94,7 @@ struct BadgePill: View {
         .foregroundStyle(solid ? .white : tone.color)
         .padding(.horizontal, 7)
         .padding(.vertical, 3)
-        .background(solid ? tone.color : tone.soft, in: Capsule())
+        .background(solid ? tone.solidFill : tone.soft, in: Capsule())
         .overlay {
             if !solid {
                 Capsule().strokeBorder(tone.color.opacity(0.22), lineWidth: 0.6)
@@ -198,7 +219,7 @@ struct DeviceStatusPill: View {
                     .foregroundStyle(Theme.sidebarText.opacity(0.5))
             }
             .padding(.horizontal, 11)
-            .frame(height: 30)
+            .frame(height: Theme.controlHeight)
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -220,7 +241,7 @@ struct InspectorToggleButton: View {
             Image(systemName: "sidebar.right")
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(Theme.sidebarText.opacity(0.75))
-                .frame(width: 30, height: 30)
+                .frame(width: Theme.controlHeight, height: Theme.controlHeight)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

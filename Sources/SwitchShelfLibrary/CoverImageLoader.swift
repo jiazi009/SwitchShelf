@@ -2,8 +2,8 @@ import CoreGraphics
 import Foundation
 import ImageIO
 
-/// A downscaled JPEG thumbnail. Square artwork is flagged so the UI can show it
-/// whole on the placeholder instead of cropping it into a poster.
+/// A downscaled JPEG thumbnail. Square artwork is flagged so the UI can keep its
+/// full composition above the title gradient, or display a compact square icon.
 public struct CoverThumbnail: Sendable, Equatable {
     public var pixelWidth: Int
     public var pixelHeight: Int

@@ -63,10 +63,9 @@ struct MaintenanceView: View {
         }
     }
 
-    private static let statColumns = Array(
-        repeating: GridItem(.flexible(minimum: 150), spacing: 10),
-        count: 3
-    )
+    private static let statColumns = [
+        GridItem(.adaptive(minimum: 210), spacing: 10, alignment: .top)
+    ]
 
     private var statsGrid: some View {
         LazyVGrid(columns: Self.statColumns, spacing: 10) {

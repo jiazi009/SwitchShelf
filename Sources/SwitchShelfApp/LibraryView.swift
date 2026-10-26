@@ -27,26 +27,38 @@ struct LibraryView: View {
 
     private var header: some View {
         VStack(spacing: 12) {
-            HStack(alignment: .center, spacing: 10) {
-                PageHeading(title: model.pageTitle, subtitle: model.pageSubtitle)
-                Spacer(minLength: 8)
-                addFolderButton
-                DeviceStatusPill(
-                    discovery: model.deviceDiscovery,
-                    isDiscovering: model.isDiscovering
-                ) { model.select(.device) }
-                InspectorToggleButton(isPresented: model.inspectorPresented) { model.toggleInspector() }
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 10) {
+                    PageHeading(title: model.pageTitle, subtitle: model.pageSubtitle)
+                    Spacer(minLength: 8)
+                    headerActions
+                }
+                VStack(alignment: .leading, spacing: 10) {
+                    PageHeading(title: model.pageTitle, subtitle: model.pageSubtitle)
+                    HStack { Spacer(minLength: 0); headerActions }
+                }
             }
 
-            HStack(spacing: 8) {
-                searchField
-                    .frame(minWidth: 150, idealWidth: 250, maxWidth: 330)
-                contentMenu
-                installMenu
-                sortMenu
-                layoutSwitch
-                if model.layout == .grid { coverSizeButton }
-                Spacer(minLength: 0)
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 8) {
+                    searchField.frame(minWidth: 200, idealWidth: 280, maxWidth: 420)
+                    filterControls
+                    layoutControls
+                }
+                VStack(spacing: 10) {
+                    searchField
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 8) {
+                            filterControls
+                            Spacer(minLength: 0)
+                            layoutControls
+                        }
+                        VStack(alignment: .leading, spacing: 10) {
+                            filterControls
+                            layoutControls
+                        }
+                    }
+                }
             }
         }
         .padding(.horizontal, 24)
@@ -58,16 +70,49 @@ struct LibraryView: View {
         }
     }
 
+    private var headerActions: some View {
+        HStack(spacing: 8) {
+            addFolderButton
+            DeviceStatusPill(
+                discovery: model.deviceDiscovery,
+                isDiscovering: model.isDiscovering
+            ) { model.select(.device) }
+            InspectorToggleButton(isPresented: model.inspectorPresented) { model.toggleInspector() }
+        }
+        .fixedSize(horizontal: true, vertical: false)
+    }
+
+    private var filterControls: some View {
+        HStack(spacing: 8) {
+            contentMenu
+            installMenu
+            sortMenu
+        }
+        .fixedSize(horizontal: true, vertical: false)
+    }
+
+    private var layoutControls: some View {
+        HStack(spacing: 8) {
+            layoutSwitch
+            if model.layout == .grid { coverSizeButton }
+        }
+        .fixedSize(horizontal: true, vertical: false)
+    }
+
     private var addFolderButton: some View {
         Button {
             model.chooseFolder()
         } label: {
             Label("添加文件夹", systemImage: "folder.badge.plus")
                 .font(.system(size: 11.5, weight: .medium))
-                .foregroundStyle(Theme.accent)
+                .padding(.horizontal, 2)
+                .frame(height: 20)
         }
-        .buttonStyle(.glass)
-        .controlSize(.regular)
+        .buttonStyle(.glassProminent)
+        .buttonBorderShape(.capsule)
+        .tint(Theme.accent)
+        .controlSize(.large)
+        .frame(height: Theme.controlHeight)
         .help("添加包含游戏文件的文件夹（⌘O）")
         .accessibilityLabel("添加文件夹来源")
     }
@@ -97,7 +142,7 @@ struct LibraryView: View {
             }
         }
         .padding(.horizontal, 11)
-        .frame(height: 30)
+        .frame(height: Theme.controlHeight)
         .glassEffect(.regular, in: Capsule())
         .overlay {
             Capsule().strokeBorder(
@@ -119,9 +164,11 @@ struct LibraryView: View {
         } label: {
             FilterPillLabel(text: model.contentFilter.label)
         }
-        .menuStyle(.borderlessButton)
+        .menuStyle(.button)
         .buttonStyle(.plain)
         .menuIndicator(.hidden)
+        .tint(.primary)
+        .frame(height: Theme.controlHeight)
         .glassEffect(.regular, in: Capsule())
         .overlay {
             Capsule().strokeBorder(Theme.hairline, lineWidth: 0.7)
@@ -141,9 +188,11 @@ struct LibraryView: View {
         } label: {
             FilterPillLabel(text: model.installFilter == .all ? "全部状态" : model.installFilter == .installed ? "已安装" : "未确认")
         }
-        .menuStyle(.borderlessButton)
+        .menuStyle(.button)
         .buttonStyle(.plain)
         .menuIndicator(.hidden)
+        .tint(.primary)
+        .frame(height: Theme.controlHeight)
         .glassEffect(.regular, in: Capsule())
         .overlay {
             Capsule().strokeBorder(Theme.hairline, lineWidth: 0.7)
@@ -163,9 +212,11 @@ struct LibraryView: View {
         } label: {
             FilterPillLabel(text: model.sortOrder.label)
         }
-        .menuStyle(.borderlessButton)
+        .menuStyle(.button)
         .buttonStyle(.plain)
         .menuIndicator(.hidden)
+        .tint(.primary)
+        .frame(height: Theme.controlHeight)
         .glassEffect(.regular, in: Capsule())
         .overlay {
             Capsule().strokeBorder(Theme.hairline, lineWidth: 0.7)
@@ -180,6 +231,7 @@ struct LibraryView: View {
             layoutButton(.list)
         }
         .padding(3)
+        .frame(height: Theme.controlHeight)
         .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 9, style: .continuous)
@@ -196,7 +248,7 @@ struct LibraryView: View {
             Image(systemName: layout.symbol)
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(model.layout == layout ? Color.white : Theme.sidebarText.opacity(0.7))
-                .frame(width: 26, height: 24)
+                .frame(width: 28, height: Theme.controlHeight - 6)
                 .background {
                     if model.layout == layout {
                         RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Theme.accent)
@@ -217,7 +269,7 @@ struct LibraryView: View {
             Image(systemName: "photo.on.rectangle.angled")
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(Theme.sidebarText.opacity(0.75))
-                .frame(width: 28, height: 28)
+                .frame(width: Theme.controlHeight, height: Theme.controlHeight)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -556,7 +608,8 @@ struct FilterPillLabel: View {
         }
         .foregroundStyle(.primary)
         .padding(.horizontal, 10)
-        .frame(height: 30)
+        .frame(height: Theme.controlHeight)
         .contentShape(Capsule())
+        .accessibilityElement(children: .combine)
     }
 }

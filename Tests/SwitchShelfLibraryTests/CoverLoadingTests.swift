@@ -1,4 +1,5 @@
 import CoreGraphics
+import CryptoKit
 import Foundation
 import ImageIO
 import SwitchShelfDomain
@@ -138,6 +139,142 @@ struct CoverLoadingTests {
         #expect(names.allSatisfy { $0.lastPathComponent == "notes.txt" || $0.pathExtension == "scover" })
     }
 
+    @Test("A reopened store can retrieve local artwork after its source disappears")
+    func offlineCoverSurvivesRestart() throws {
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let source = root.appendingPathComponent("source/icon.png")
+        try writeSolidPNG(width: 60, height: 60, to: source)
+        let values = try source.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey])
+        let thumbnail = try #require(CoverImageLoader.thumbnail(at: source))
+        let cache = root.appendingPathComponent("cache", isDirectory: true)
+        #expect(CoverThumbnailStore(directory: cache).save(thumbnail, for: source,
+                                                         byteCount: Int64(values.fileSize ?? 0),
+                                                         modifiedAt: values.contentModificationDate))
+        try FileManager.default.removeItem(at: source.deletingLastPathComponent())
+
+        let reopened = CoverThumbnailStore(directory: cache)
+        #expect(reopened.latestCachedThumbnail(for: source) == thumbnail)
+        // Missing metadata is not an exact match. Only the explicit offline API
+        // may return the last cover; an online changed source remains a miss.
+        #expect(reopened.cachedThumbnail(for: source, byteCount: 0, modifiedAt: nil) == nil)
+        #expect(reopened.latestCachedThumbnail(for: URL(string: "https://example.com/icon.png")!) == nil)
+        #expect(!FileManager.default.fileExists(atPath: source.path))
+    }
+
+    @Test("Latest artwork replaces the previous version without masking online metadata changes")
+    func latestCoverTracksUpdatesAndExactMetadata() throws {
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let source = root.appendingPathComponent("icon.png")
+        let cache = root.appendingPathComponent("cache", isDirectory: true)
+        let store = CoverThumbnailStore(directory: cache)
+        let first = CoverThumbnail(pixelWidth: 20, pixelHeight: 20, jpegData: Data(repeating: 1, count: 100))
+        let second = CoverThumbnail(pixelWidth: 20, pixelHeight: 20, jpegData: Data(repeating: 2, count: 100))
+        let firstDate = Date(timeIntervalSince1970: 10)
+        let secondDate = Date(timeIntervalSince1970: 20)
+        #expect(store.save(first, for: source, byteCount: 1000, modifiedAt: firstDate))
+        #expect(store.cachedThumbnail(for: source, byteCount: 1001, modifiedAt: firstDate) == nil)
+        #expect(store.cachedThumbnail(for: source, byteCount: 1000, modifiedAt: secondDate) == nil)
+        #expect(store.save(second, for: source, byteCount: 1001, modifiedAt: secondDate))
+        #expect(store.cachedThumbnail(for: source, byteCount: 1000, modifiedAt: firstDate) == nil)
+        #expect(store.cachedThumbnail(for: source, byteCount: 1001, modifiedAt: secondDate) == second)
+        #expect(CoverThumbnailStore(directory: cache).latestCachedThumbnail(for: source) == second)
+        #expect(try FileManager.default.contentsOfDirectory(at: cache, includingPropertiesForKeys: nil).count == 1)
+    }
+
+    @Test("An online hit migrates a legacy thumbnail for a later offline restart")
+    func legacyCoverMigratesOnExactHit() throws {
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let source = root.appendingPathComponent("icon.png")
+        let cache = root.appendingPathComponent("cache", isDirectory: true)
+        try FileManager.default.createDirectory(at: cache, withIntermediateDirectories: true)
+        let date = Date(timeIntervalSince1970: 12)
+        let identity = "\(source.standardizedFileURL.path)\n200\n\(date.timeIntervalSince1970)"
+        let filename = SHA256.hash(data: Data(identity.utf8)).map { String(format: "%02x", $0) }.joined() + ".scover"
+        let jpeg = Data(repeating: 9, count: 100)
+        var legacy = Data("SCVR".utf8)
+        legacy.append(contentsOf: [0, 0, 0, 20, 0, 0, 0, 30])
+        legacy.append(jpeg)
+        try legacy.write(to: cache.appendingPathComponent(filename))
+        let expected = CoverThumbnail(pixelWidth: 20, pixelHeight: 30, jpegData: jpeg)
+        let store = CoverThumbnailStore(directory: cache)
+        #expect(store.latestCachedThumbnail(for: source) == nil)
+        #expect(store.cachedThumbnail(for: source, byteCount: 200, modifiedAt: date) == expected)
+        #expect(CoverThumbnailStore(directory: cache).latestCachedThumbnail(for: source) == expected)
+        #expect(!FileManager.default.fileExists(atPath: cache.appendingPathComponent(filename).path))
+        #expect(try FileManager.default.contentsOfDirectory(at: cache, includingPropertiesForKeys: nil).count == 1)
+    }
+
+    @Test("Replacing a URL's thumbnail preserves other entries when the final cache fits")
+    func coverReplacementRespectsCapacity() throws {
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let cache = root.appendingPathComponent("cache", isDirectory: true)
+        let store = CoverThumbnailStore(directory: cache, byteLimit: 700)
+        let firstURL = root.appendingPathComponent("first.png")
+        let secondURL = root.appendingPathComponent("second.png")
+        func thumbnail(_ byte: UInt8) -> CoverThumbnail {
+            CoverThumbnail(pixelWidth: 20, pixelHeight: 20, jpegData: Data(repeating: byte, count: 300))
+        }
+        #expect(store.save(thumbnail(1), for: firstURL, byteCount: 10, modifiedAt: nil))
+        #expect(store.save(thumbnail(2), for: secondURL, byteCount: 10, modifiedAt: nil))
+        #expect(store.save(thumbnail(3), for: firstURL, byteCount: 11, modifiedAt: nil))
+        #expect(store.latestCachedThumbnail(for: secondURL) == thumbnail(2))
+        #expect(store.latestCachedThumbnail(for: firstURL) == thumbnail(3))
+        let files = try FileManager.default.contentsOfDirectory(at: cache, includingPropertiesForKeys: [.fileSizeKey])
+        let used = try files.reduce(0) { try $0 + ($1.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0) }
+        #expect(used <= 700)
+        #expect(files.count == 2)
+    }
+
+    @Test("Offline cache reads and saves reject symbolic links without changing their target")
+    func offlineCacheRejectsSymlinkEntries() throws {
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let cache = root.appendingPathComponent("cache", isDirectory: true)
+        let source = root.appendingPathComponent("icon.png")
+        let store = CoverThumbnailStore(directory: cache)
+        let thumbnail = CoverThumbnail(pixelWidth: 20, pixelHeight: 20, jpegData: Data(repeating: 1, count: 100))
+        #expect(store.save(thumbnail, for: source, byteCount: 10, modifiedAt: nil))
+        let entry = try #require(FileManager.default.contentsOfDirectory(at: cache, includingPropertiesForKeys: nil).first)
+        let target = root.appendingPathComponent("external.data")
+        let preserved = try Data(contentsOf: entry)
+        try preserved.write(to: target)
+        try FileManager.default.removeItem(at: entry)
+        try FileManager.default.createSymbolicLink(at: entry, withDestinationURL: target)
+        #expect(store.latestCachedThumbnail(for: source) == nil)
+        #expect(store.cachedThumbnail(for: source, byteCount: 10, modifiedAt: nil) == nil)
+        #expect(!store.save(thumbnail, for: source, byteCount: 10, modifiedAt: nil))
+        #expect(try Data(contentsOf: target) == preserved)
+        #expect(try FileManager.default.destinationOfSymbolicLink(atPath: entry.path) == target.path)
+
+        let linkedDirectory = root.appendingPathComponent("cache-link", isDirectory: true)
+        try FileManager.default.createSymbolicLink(at: linkedDirectory, withDestinationURL: cache)
+        let linkedStore = CoverThumbnailStore(directory: linkedDirectory)
+        #expect(linkedStore.latestCachedThumbnail(for: source) == nil)
+        #expect(!linkedStore.save(thumbnail, for: source, byteCount: 10, modifiedAt: nil))
+    }
+
+    @Test("Malformed and oversized offline entries are not returned")
+    func offlineCacheRejectsMalformedEntries() throws {
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let cache = root.appendingPathComponent("cache", isDirectory: true)
+        let source = root.appendingPathComponent("icon.png")
+        let store = CoverThumbnailStore(directory: cache, byteLimit: 500)
+        let thumbnail = CoverThumbnail(pixelWidth: 20, pixelHeight: 20, jpegData: Data(repeating: 1, count: 100))
+        #expect(store.save(thumbnail, for: source, byteCount: 10, modifiedAt: nil))
+        let entry = try #require(FileManager.default.contentsOfDirectory(at: cache, includingPropertiesForKeys: nil).first)
+        try Data(repeating: 2, count: 50).write(to: entry)
+        #expect(store.latestCachedThumbnail(for: source) == nil)
+        #expect(!FileManager.default.fileExists(atPath: entry.path))
+        #expect(store.save(thumbnail, for: source, byteCount: 10, modifiedAt: nil))
+        try Data(repeating: 3, count: 501).write(to: entry)
+        #expect(store.latestCachedThumbnail(for: source) == nil)
+    }
+
     @Test("Nlib uses the base Title ID and only the public icon URL")
     func nlibSelectsBaseTitle() {
         let base = "0100000000010000"
@@ -219,7 +356,8 @@ struct CoverLoadingTests {
         let names = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
         for url in names where url.pathExtension == "scover" {
             let data = try Data(contentsOf: url)
-            if data.count > 12, data[12] == jpegByte {
+            let payloadOffset = data.prefix(4) == Data("SCV2".utf8) ? 44 : 12
+            if data.count > payloadOffset, data[payloadOffset] == jpegByte {
                 try FileManager.default.setAttributes([.modificationDate: date], ofItemAtPath: url.path)
                 return
             }

@@ -91,7 +91,7 @@ private struct GameInspector: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             CoverArtwork(game: game, cornerRadius: 16)
-                .aspectRatio(3 / 4, contentMode: .fit)
+                .aspectRatio(1, contentMode: .fit)
                 .frame(maxWidth: 300)
                 .shadow(color: .black.opacity(0.16), radius: 16, y: 8)
                 .frame(maxWidth: .infinity, alignment: .center)
@@ -118,7 +118,7 @@ private struct GameInspector: View {
                         systemImage: assessment.state.symbol,
                         tone: assessmentTone
                     )
-                    if game.contents.allSatisfy({ $0.availability == .offline }) {
+                    if !game.contents.isEmpty && game.contents.allSatisfy({ $0.availability == .offline }) {
                         BadgePill(text: "来源离线", systemImage: "wifi.slash", tone: .neutral)
                     }
                 }

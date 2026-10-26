@@ -873,6 +873,16 @@ final class AppModel {
         return signature == mtpCandidateSignature
     }
 
+    var deviceSessionOverview: DeviceSessionOverview {
+        DeviceSessionOverview.make(
+            discovery: deviceDiscovery,
+            inventory: inventory,
+            inventoryBelongsToCurrentSession: inventoryIsCurrentSession,
+            isDiscovering: isDiscovering,
+            isReadingInventory: isReadingInventory
+        )
+    }
+
     func refreshDevices() async {
         guard !isDiscovering, !isReadingInventory, !isInstalling else { return }
         isDiscovering = true
@@ -1441,13 +1451,14 @@ final class AppModel {
         } else {
             device = "尚未检测"
         }
-        let inventoryLine: String
-        if let inventory {
-            let match = inventoryIsCurrentSession ? " · 本地匹配 \(locallyMatchedGameCount) 款" : " · 非当前会话，不统计本地匹配"
-            inventoryLine = "记录 \(inventory.records.count) 条 · \(inventory.isComplete ? "完整" : "不完整")\(match) · 读取于 \(absoluteTime(inventory.observedAt))"
-                + (inventory.mtpEvidence.map { " · 来源 \($0.inventoryStorageNames.joined(separator: "、")) · 游戏目录 \($0.gameDirectoryCount) · MTP 存储 \($0.reportedStorageCount) 项" } ?? "")
+        let observation = inventory.map { absoluteTime($0.observedAt) } ?? "未知"
+        let match: String
+        if inventory == nil {
+            match = "本地匹配：未知"
+        } else if inventoryIsCurrentSession {
+            match = "本地匹配：\(locallyMatchedGameCount) 款"
         } else {
-            inventoryLine = "未读取"
+            match = "本地匹配：非当前会话，不统计"
         }
         let lines = [
             "SwitchShelf 诊断摘要",
@@ -1456,7 +1467,8 @@ final class AppModel {
             "最后扫描：\(absoluteTime(snapshot.scannedAt))",
             "安装计划：\(plan.count) 项，\(formatByteCount(planTotalBytes))",
             "设备：\(device)",
-            "已安装清单：\(inventoryLine)",
+            deviceSessionOverview.summaryLines(observationTime: observation).joined(separator: "\n"),
+            match,
             "扫描问题：\(scanIssues.count) 条",
             "缓存：\(cacheLoaded ? "已载入" : "未载入") \(cacheURL.path)",
             "应用数据：\(appDirectory.path)"

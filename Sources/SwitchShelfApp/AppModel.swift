@@ -17,6 +17,10 @@ final class AppModel {
     private(set) var inventory: InstalledInventory?
     private(set) var inventorySessionSignature: String?
     private(set) var deviceDiscovery: DeviceDiscovery?
+    private(set) var wifi = WiFiFTPSnapshot.notConnected
+    var wifiHost = ""
+    var wifiPort = ""
+    private(set) var isWiFiBusy = false
     private(set) var cacheLoaded = false
     private(set) var isBootstrapped = false
     private(set) var isScanning = false
@@ -58,6 +62,7 @@ final class AppModel {
     // MARK: Services
     @ObservationIgnored private let scanner: any LibraryScanning = LibraryScanner()
     @ObservationIgnored private let deviceService = DeviceService()
+    @ObservationIgnored private let wifiClient = WiFiFTPClient()
     @ObservationIgnored private let inventoryReader = BoundedInventoryReader()
     @ObservationIgnored private let preflightService = SphairaPreflightService()
     @ObservationIgnored private let mtpInstaller = SphairaInstaller()
@@ -106,6 +111,7 @@ final class AppModel {
         case .unidentified: "待识别"
         case .queue: "安装队列"
         case .device: "我的 Switch"
+        case .wifi: "无线连接"
         case .maintenance: "维护"
         case .source(let id): snapshot.sources.first { $0.id == id }?.name ?? "游戏来源"
         }
@@ -126,6 +132,8 @@ final class AppModel {
             return "\(plan.count) 项计划 · \(formatByteCount(planTotalBytes)) · " + (isInstalling ? "正在发送单文件" : "需确认后发送")
         case .device:
             return deviceSubtitle
+        case .wifi:
+            return wifiSubtitle
         case .maintenance:
             return "本地缓存、扫描与来源诊断"
         }
@@ -175,7 +183,7 @@ final class AppModel {
                 break
             }
             result = games.filter { gameBelongs($0, to: source) }
-        case .queue, .device, .maintenance:
+        case .queue, .device, .wifi, .maintenance:
             result = []
         }
 
@@ -231,6 +239,16 @@ final class AppModel {
         return deviceDiscovery.message
     }
 
+    var wifiSubtitle: String {
+        if wifi.host.isEmpty { return "DBI FTP · 与 USB 分开" }
+        let port = wifi.port.map(String.init) ?? "端口未定"
+        return "\(wifi.phase.label) · \(wifi.host):\(port)"
+    }
+
+    var wifiBlocksUSB: Bool {
+        isWiFiBusy || wifi.phase == .connecting || wifi.phase == .connected
+    }
+
     var installedGameCount: Int {
         guard inventory != nil else { return 0 }
         return games.filter { assessment(for: $0).state == .installed }.count
@@ -258,7 +276,7 @@ final class AppModel {
         case .recent: recentGameIDs.count
         case .unidentified: unidentifiedCount
         case .queue: plan.count
-        case .device, .maintenance: nil
+        case .device, .wifi, .maintenance: nil
         case .source(let id): sourceGameCount(id)
         }
     }
@@ -289,6 +307,7 @@ final class AppModel {
     func showAllGames() { select(.all) }
     func showQueue() { select(.queue) }
     func showDevice() { select(.device) }
+    func showWiFi() { select(.wifi) }
     func showMaintenance() { select(.maintenance) }
 
     func focusSearch() {
@@ -865,7 +884,7 @@ final class AppModel {
     }
 
     var canReadInventory: Bool {
-        mtpCandidateSignature != nil && !isReadingInventory && !isDiscovering && !isInstalling
+        mtpCandidateSignature != nil && !isReadingInventory && !isDiscovering && !isInstalling && !wifiBlocksUSB
     }
 
     var inventoryIsCurrentSession: Bool {
@@ -875,6 +894,10 @@ final class AppModel {
 
     func refreshDevices() async {
         guard !isDiscovering, !isReadingInventory, !isInstalling else { return }
+        if wifiBlocksUSB {
+            notice = wifiBlocksUSBNotice
+            return
+        }
         isDiscovering = true
         // Discovery exposes only VID/PID, not a stable session identity. A new USB
         // enumeration cannot prove this is the same device that supplied the last
@@ -891,6 +914,10 @@ final class AppModel {
     /// Rediscovery itself still drops the previous inventory before the read.
     func detectAndRead(announceWhenMissing: Bool = true) async {
         guard !isDiscovering, !isReadingInventory, !isInstalling else { return }
+        if wifiBlocksUSB {
+            if announceWhenMissing { notice = wifiBlocksUSBNotice }
+            return
+        }
         if openMTPIsRunning {
             if deviceDiscovery == nil {
                 await refreshDevices()
@@ -948,6 +975,10 @@ final class AppModel {
     @discardableResult
     func readInventory() async -> Bool {
         guard !isReadingInventory, !isInstalling else { return false }
+        if wifiBlocksUSB {
+            notice = wifiBlocksUSBNotice
+            return false
+        }
         guard canReadInventory, let signature = mtpCandidateSignature else {
             notice = AppNotice(
                 level: .warning,
@@ -1138,7 +1169,7 @@ final class AppModel {
 
     var canReviewMTPInstallation: Bool {
         !isInstalling && !isReviewingInstall && !isReadingInventory && !isDiscovering && !isScanning &&
-        !isCheckingPlan && preparationIsCurrent && preparation?.isPrepared == true && preparation?.offers.count == 1
+        !isCheckingPlan && !wifiBlocksUSB && preparationIsCurrent && preparation?.isPrepared == true && preparation?.offers.count == 1
     }
 
     func prepareMTPInstallationReview() async {
@@ -1164,7 +1195,11 @@ final class AppModel {
     }
 
     func confirmMTPInstallation(_ request: SphairaInstallRequest) {
-        guard !isInstalling, !isReadingInventory, !isDiscovering, !isScanning,
+        if wifiBlocksUSB {
+            notice = wifiBlocksUSBNotice
+            return
+        }
+        guard !isInstalling, !isReadingInventory, !isDiscovering, !isScanning, !wifiBlocksUSB,
               installationReview?.id == request.id, reviewedPlan == preflightInput, preparationIsCurrent else {
             installationReview = nil
             return
@@ -1490,6 +1525,51 @@ final class AppModel {
         case .openAppSupport:
             openAppSupport()
         }
+    }
+
+    // MARK: - DBI FTP, separate from USB
+
+    func connectWiFi() async {
+        guard !isWiFiBusy else { return }
+        if isDiscovering || isReadingInventory || isInstalling {
+            notice = AppNotice(
+                level: .warning,
+                title: "USB 会话还在进行",
+                message: "请等 USB 检测、清单读取或安装测试结束后再连接无线 FTP。两条会话不能同时进行。",
+                action: nil,
+                actionLabel: nil
+            )
+            return
+        }
+        switch WiFiFTPEndpointParser.parse(host: wifiHost, portText: wifiPort) {
+        case .rejected(let rejected):
+            wifi = rejected
+        case .ready(let host, let port):
+            isWiFiBusy = true
+            wifi = .connecting(host: host, port: port)
+            wifi = await wifiClient.connect(host: host, port: port)
+            isWiFiBusy = false
+        }
+    }
+
+    func disconnectWiFi() async {
+        guard isWiFiBusy || wifi.phase == .connected || wifi.phase == .connecting else {
+            wifi = await wifiClient.disconnect()
+            return
+        }
+        isWiFiBusy = true
+        wifi = await wifiClient.disconnect()
+        isWiFiBusy = false
+    }
+
+    private var wifiBlocksUSBNotice: AppNotice {
+        AppNotice(
+            level: .warning,
+            title: "无线 FTP 仍占用这条连接",
+            message: "已跳过 USB 检测、清单读取和安装测试，避免与无线会话并发。请先在「无线连接」断开。",
+            action: nil,
+            actionLabel: nil
+        )
     }
 
     // MARK: - Helpers

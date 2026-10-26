@@ -192,10 +192,12 @@ public actor BackendSession {
     private func acknowledge(_ command: BackendCodec.Command, clock: ContinuousClock,
                              deadline: ContinuousClock.Instant) async throws {
         let ack = try await readHeader(clock: clock, deadline: deadline)
-        guard ack.type == .acknowledgement, ack.command == command,
-              Int(ack.payloadSize) <= options.maximumCommandPayload else { throw BackendError.protocolViolation }
-        // The pinned host script reads only the ACK header and ignores its length
-        // field; it does not read an ACK payload or assert an echoed size.
+        // The pinned official host reads only the 16-byte ACK header and ignores
+        // every field, including length. DBI builds may echo the requested range
+        // size (up to 1 MiB) instead of zero. Keep the documented type/command
+        // check, but never trust, bound or read an ACK payload: the official host
+        // does not consume one, so rejecting a nonzero length would break interop.
+        guard ack.type == .acknowledgement, ack.command == command else { throw BackendError.protocolViolation }
     }
 
     private func write(_ bytes: Data, clock: ContinuousClock, deadline: ContinuousClock.Instant) async throws {

@@ -13,7 +13,6 @@ struct DeviceView: View {
         return state.label
     }
     private var statusSymbol: String { model.isReadingInventory ? "arrow.triangle.2.circlepath" : (model.deviceDiscovery == nil ? "cable.connector" : state.symbol) }
-    private var canRead: Bool { model.canReadInventory }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -39,7 +38,7 @@ struct DeviceView: View {
         .background(Theme.canvas)
         .task {
             if model.deviceDiscovery == nil {
-                await model.refreshDevices()
+                await model.detectAndRead()
             }
         }
     }
@@ -49,15 +48,15 @@ struct DeviceView: View {
             PageHeading(title: "我的 Switch", subtitle: model.deviceSubtitle)
             Spacer()
             Button {
-                Task { await model.refreshDevices() }
+                Task { await model.detectAndRead() }
             } label: {
-                Label("重新检测", systemImage: "arrow.clockwise")
+                Label("检测并读取", systemImage: "arrow.clockwise")
                     .font(.system(size: 11.5, weight: .medium))
             }
             .buttonStyle(.glass)
             .disabled(model.isDiscovering || model.isReadingInventory || model.isInstalling)
-            .help("重新执行只读 USB 检测")
-            .accessibilityLabel("重新检测 USB 设备")
+            .help("只读检测 USB。若发现单一 057e:201d 且 OpenMTP 未运行，会继续读取清单。")
+            .accessibilityLabel("检测并读取，只读")
         }
         .padding(.horizontal, 24)
         .padding(.top, 16)
@@ -104,19 +103,6 @@ struct DeviceView: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer(minLength: 8)
-                    Button {
-                        Task { await model.refreshDevices() }
-                    } label: {
-                        if model.isDiscovering {
-                            ProgressView().controlSize(.small)
-                        } else {
-                            Text("检测")
-                        }
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.regular)
-                    .disabled(model.isDiscovering || model.isReadingInventory || model.isInstalling)
-                    .accessibilityLabel("检测 Switch USB 设备")
                 }
 
                 if let devices = model.deviceDiscovery?.devices, !devices.isEmpty {
@@ -149,31 +135,26 @@ struct DeviceView: View {
 
                 HStack(spacing: 10) {
                     Button {
-                        Task { await model.readInventory() }
+                        Task { await model.detectAndRead() }
                     } label: {
-                        Label(
-                            model.inventory == nil ? "读取已安装内容" : "重新读取已安装内容",
-                            systemImage: "list.bullet.rectangle.portrait"
-                        )
-                        .font(.system(size: 11.5, weight: .medium))
+                        Label("检测并读取", systemImage: "list.bullet.rectangle.portrait")
+                            .font(.system(size: 11.5, weight: .medium))
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
-                    .disabled(!canRead)
-                    .help(canRead ? "只读枚举设备存储中的已安装条目" : "需要单一 057e:201d MTP 候选设备；检测后可直接读取并执行握手")
-                    .accessibilityLabel("读取设备已安装内容，只读")
+                    .disabled(model.isDiscovering || model.isReadingInventory || model.isInstalling)
+                    .help("只读检测 USB。若发现单一 057e:201d 且 OpenMTP 未运行，会继续读取清单，不下载 NSP，不写入设备。重新枚举会使旧清单失效；读取失败且 USB 候选未变时保留上次成功清单。")
+                    .accessibilityLabel("检测并读取，只读")
 
-                    if model.isReadingInventory {
+                    if model.isDiscovering || model.isReadingInventory {
                         HStack(spacing: 6) {
                             ProgressView().controlSize(.mini).scaleEffect(0.75)
-                            Text("正在读取清单…")
+                            Text(model.isDiscovering ? "正在检测 USB…" : "正在读取清单…")
                                 .font(.system(size: 10.5))
                                 .foregroundStyle(.secondary)
                         }
                     } else {
-                        Text(canRead
-                             ? "读取会执行一次只读 MTP 握手，仅枚举存储与安装记录，不下载 NSP，不写入设备。"
-                             : "请连接一台 Switch，开启 sphaira 或 DBI 的 MTP 后重新检测。")
+                        Text("先检测 USB。只有一台 057e:201d 且 OpenMTP 未运行时，会继续只读读取 Games 或 Installed games。")
                             .font(.system(size: 10))
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -188,7 +169,7 @@ struct DeviceView: View {
     private var deviceMessage: String {
         if model.isDiscovering { return "正在通过 IOKit 执行只读 USB 枚举。" }
         guard let discovery = model.deviceDiscovery else {
-            return "尚未执行设备检测。连接 Switch 并开启 sphaira 或 DBI 的 MTP 后再检测。"
+            return "尚未执行设备检测。连接 Switch 并开启 sphaira 或 DBI 的 MTP 后，点击检测并读取。"
         }
         return discovery.message
     }
@@ -227,7 +208,7 @@ struct DeviceView: View {
                     instructionStep(
                         4,
                         title: "返回此处检测并读取",
-                        detail: "点击“重新检测”，再点击“读取已安装内容”。USB 发现、MTP 连接和清单完整性会分别显示；读取期间保持设备模式不变。"
+                        detail: "点击“检测并读取”，启动后也会自动走这一次。单一 057e:201d 且没有 OpenMTP 时会继续读取。重新枚举 USB 会使旧清单失效；同一次 USB 候选上读取失败时，保留上次成功清单。"
                     )
                 }
 
@@ -280,12 +261,10 @@ struct DeviceView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer()
-                if model.canReadInventory {
-                    Button("立即读取") { Task { await model.readInventory() } }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
-                        .disabled(!canRead)
-                }
+                Button("检测并读取") { Task { await model.detectAndRead() } }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .disabled(model.isDiscovering || model.isReadingInventory || model.isInstalling)
             }
         }
     }
@@ -301,6 +280,13 @@ struct DeviceView: View {
                         systemImage: inventory.isComplete ? "checkmark.circle.fill" : "exclamationmark.triangle.fill",
                         tone: inventory.isComplete ? .success : .warning
                     )
+                    if model.inventoryIsCurrentSession {
+                        BadgePill(
+                            text: "本地匹配 \(model.locallyMatchedGameCount) 款",
+                            systemImage: "gamecontroller.fill",
+                            tone: .accent
+                        )
+                    }
                     Spacer()
                     Text("\(inventory.records.count) 条记录 · \(relativeTime(inventory.observedAt))")
                         .font(.system(size: 9.5))
@@ -340,7 +326,7 @@ struct DeviceView: View {
                         Image(systemName: "magnifyingglass")
                             .font(.system(size: 10, weight: .semibold))
                             .foregroundStyle(.secondary)
-                        TextField("筛选已安装内容、Title ID 或路径", text: $recordQuery)
+                        TextField("筛选目录、本地游戏、Title ID 或路径", text: $recordQuery)
                             .textFieldStyle(.plain)
                             .font(.system(size: 11))
                             .accessibilityLabel("筛选已安装内容")
@@ -360,16 +346,16 @@ struct DeviceView: View {
                     .frame(height: 28)
                     .background(Theme.surfaceAlt, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
 
-                    let records = filteredRecords(inventory)
-                    if records.isEmpty {
+                    let groups = filteredGroups(inventory)
+                    if groups.isEmpty {
                         Text("没有匹配的记录。")
                             .font(.system(size: 10.5))
                             .foregroundStyle(.secondary)
                             .padding(.vertical, 8)
                     } else {
-                        LazyVStack(spacing: 6) {
-                            ForEach(records) { record in
-                                recordRow(record)
+                        LazyVStack(alignment: .leading, spacing: 12) {
+                            ForEach(groups) { group in
+                                directorySection(group)
                             }
                         }
                     }
@@ -438,18 +424,57 @@ struct DeviceView: View {
         .background(Theme.surfaceAlt, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
-    private func filteredRecords(_ inventory: InstalledInventory) -> [InstalledRecord] {
+    private func filteredGroups(_ inventory: InstalledInventory) -> [InventoryDirectoryGroup] {
         let query = recordQuery.trimmingCharacters(in: .whitespacesAndNewlines)
             .folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: .current)
-        let records = inventory.records.filter { record in
-            guard !query.isEmpty else { return true }
-            let haystack = "\(record.name) \(record.titleID ?? "") \(record.objectPath) \(record.kind.label)"
-                .folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: .current)
-            return haystack.localizedStandardContains(query)
+        let groups = model.inventoryDirectoryGroups(from: inventory.records)
+        guard !query.isEmpty else { return groups }
+        return groups.compactMap { group in
+            let folded: (String) -> String = {
+                $0.folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: .current)
+            }
+            let titleHit = group.localGameTitles.contains { folded($0).localizedStandardContains(query) }
+            let directoryHit = folded(group.directoryName).localizedStandardContains(query)
+            if titleHit || directoryHit { return group }
+            let records = group.records.filter { record in
+                let haystack = folded("\(record.name) \(record.titleID ?? "") \(record.objectPath) \(record.kind.label)")
+                return haystack.localizedStandardContains(query)
+            }
+            guard !records.isEmpty else { return nil }
+            return InventoryDirectoryGroup(
+                id: group.id,
+                directoryName: group.directoryName,
+                records: records,
+                localGameTitles: group.localGameTitles
+            )
         }
-        return records.sorted { left, right in
-            if left.kind.order != right.kind.order { return left.kind.order < right.kind.order }
-            return left.name.localizedStandardCompare(right.name) == .orderedAscending
+    }
+
+    private func directorySection(_ group: InventoryDirectoryGroup) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(group.directoryName)
+                    .font(.system(size: 12, weight: .semibold))
+                    .lineLimit(1)
+                Spacer(minLength: 8)
+                if group.localGameTitles.isEmpty {
+                    Text("没有对应的本地游戏")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text(group.localGameTitles.joined(separator: "、"))
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(Theme.accent)
+                        .lineLimit(1)
+                        .help(group.localGameTitles.joined(separator: "、"))
+                }
+            }
+            Text("按游戏目录分组 · \(group.records.count) 条记录")
+                .font(.system(size: 9.5))
+                .foregroundStyle(.tertiary)
+            ForEach(group.records) { record in
+                recordRow(record)
+            }
         }
     }
 

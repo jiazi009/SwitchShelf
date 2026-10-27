@@ -1,5 +1,9 @@
 # SwitchShelf coordinated development plan
 
+## Empty-library startup crash fix — 2026-10-27
+
+Removing the last source exposed an AppKit/SwiftUI constraint-update loop, reproduced in an isolated real production WindowGroup. Empty libraries now omit the native inspector entirely (hiding it alone was insufficient); minimum dimensions are declared by the SwiftUI root instead of being written during NSView attachment. Empty startup, resize, populated-to-empty source removal and device-page round trips pass in light/dark native-window regressions. The full 285-test offline suite, release packaging and signing pass. The actual test app now opens the user's unchanged zero-source library without a new crash. Automatic device inventory still reports a separate read failure; no installation was attempted. See `Docs/Reports/empty-library-startup-crash-2026-10-27.md`.
+
 ## libusb inventory comparison follow-up — 2026-10-27
 
 The user narrowed the independent connection experiment to libusb versus the existing ImageCaptureCore route, using OpenMTP as a reference; libmtp comparison is excluded. Branch `codex/mtp-transport-comparison` provides a metadata-only libusb transport, explicit probe selection and a session-only device-page selector. Installation, default startup route and source-game files are unchanged. Previously captured physical read-only probes on both routes agree on 9 storages, 8 Games directories and 22 records; the continuation verified those saved results rather than repeating hardware access. Remaining acceptance: GUI first-use authorization behavior and repeated physical reconnects, not installation tests. Independent app and manual instructions: `Docs/Reports/libusb-inventory-comparison-2026-10-27.md`. No merge into main is part of this work.

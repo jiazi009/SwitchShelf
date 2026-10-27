@@ -10,14 +10,21 @@ struct RootView: View {
                 SidebarView(model: model)
                     .navigationSplitViewColumnWidth(min: 214, ideal: 236, max: 286)
             } detail: {
-                detail
-                    .inspector(isPresented: Binding(
-                        get: { model.inspectorPresented && model.isLibraryPage },
-                        set: { model.inspectorPresented = $0 }
-                    )) {
-                        InspectorView(model: model)
-                            .inspectorColumnWidth(min: 300, ideal: 336, max: 440)
-                    }
+                if model.games.isEmpty {
+                    // On macOS, attaching even a hidden inspector to the empty
+                    // library can loop NSHostingView/NSWindow size constraints.
+                    // Do not install the native inspector until it has content.
+                    detail
+                } else {
+                    detail
+                        .inspector(isPresented: Binding(
+                            get: { model.inspectorPresented && model.isLibraryPage },
+                            set: { model.inspectorPresented = $0 }
+                        )) {
+                            InspectorView(model: model)
+                                .inspectorColumnWidth(min: 300, ideal: 336, max: 440)
+                        }
+                }
             }
         .navigationSplitViewStyle(.balanced)
         .onGeometryChange(for: CGFloat.self) { proxy in
@@ -26,7 +33,7 @@ struct RootView: View {
             model.adaptInspector(to: width)
         }
         .background(WindowWash())
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(minWidth: 960, maxWidth: .infinity, minHeight: 640, maxHeight: .infinity)
         .background(WindowChrome())
         .tint(Theme.accent)
         .alert(

@@ -75,7 +75,7 @@ struct AppCommands: Commands {
                 model.toggleInspector()
             }
             .keyboardShortcut("i", modifiers: [.command, .option])
-            .disabled(!model.isLibraryPage)
+            .disabled(!model.isLibraryPage || model.games.isEmpty)
 
             Button("全部游戏") {
                 model.showAllGames()

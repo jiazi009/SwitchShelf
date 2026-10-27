@@ -78,6 +78,7 @@ struct LibraryView: View {
                 isDiscovering: model.isDiscovering
             ) { model.select(.device) }
             InspectorToggleButton(isPresented: model.inspectorPresented) { model.toggleInspector() }
+                .disabled(model.games.isEmpty)
         }
         .fixedSize(horizontal: true, vertical: false)
     }

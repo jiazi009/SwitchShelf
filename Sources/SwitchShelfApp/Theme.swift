@@ -138,7 +138,6 @@ private final class ChromeView: NSView {
         super.viewDidMoveToWindow()
         window?.backgroundColor = NSColor(Theme.canvas)
         window?.isMovableByWindowBackground = true
-        window?.contentMinSize = NSSize(width: 960, height: 640)
         window?.titleVisibility = .hidden
         window?.titlebarAppearsTransparent = true
     }

@@ -4,9 +4,11 @@ import SwitchShelfDomain
 struct DeviceView: View {
     @Bindable var model: AppModel
     @State private var recordQuery = ""
+    @State private var showInstructions = false
 
     private var state: DeviceConnectionState { model.deviceDiscovery?.state ?? .disconnected }
     private var statusLabel: String {
+        if model.isInstalling { return "正在发送，自动检测已暂停" }
         if model.isDiscovering { return "正在检测 USB 设备" }
         if model.isReadingInventory { return "正在读取已安装清单" }
         if model.deviceDiscovery == nil { return "尚未检测设备" }
@@ -23,12 +25,12 @@ struct DeviceView: View {
                         NoticeBanner(notice: notice) { model.perform($0) } onDismiss: { model.notice = nil }
                     }
                     statusCard
-                    instructionsCard
                     if let inventory = model.inventory {
                         inventoryCard(inventory)
                     } else {
                         notReadCard
                     }
+                    instructionsCard
                 }
                 .padding(24)
                 .frame(maxWidth: 900, alignment: .leading)
@@ -36,11 +38,6 @@ struct DeviceView: View {
             }
         }
         .background(Theme.canvas)
-        .task {
-            if model.deviceDiscovery == nil {
-                await model.detectAndRead()
-            }
-        }
     }
 
     private var header: some View {
@@ -50,12 +47,12 @@ struct DeviceView: View {
             Button {
                 Task { await model.detectAndRead() }
             } label: {
-                Label("检测并读取", systemImage: "arrow.clockwise")
+                Label("重新检测", systemImage: "arrow.clockwise")
                     .font(.system(size: 11.5, weight: .medium))
             }
             .buttonStyle(.glass)
             .disabled(model.isDiscovering || model.isReadingInventory || model.isInstalling)
-            .help("只读检测 USB。若发现单一 057e:201d 且 OpenMTP 未运行，会继续读取清单。")
+            .help("应用会自动检测连接；也可以手动重新检测并读取清单。")
             .accessibilityLabel("检测并读取，只读")
         }
         .padding(.horizontal, 24)
@@ -89,7 +86,7 @@ struct DeviceView: View {
                                 .font(.system(size: 16, weight: .semibold))
                             if !model.isDiscovering, model.deviceDiscovery != nil {
                                 BadgePill(
-                                    text: model.inventoryIsCurrentSession ? (model.inventory?.isComplete == true ? "清单完整" : "清单待确认") : "尚未握手",
+                                    text: model.inventoryIsCurrentSession ? (state == .ready ? (model.inventory?.isComplete == true ? "清单完整" : "清单待确认") : "上次清单") : "尚未握手",
                                     systemImage: model.inventoryIsCurrentSession
                                         ? (model.inventory?.isComplete == true ? "checkmark.shield.fill" : "exclamationmark.shield")
                                         : "lock.slash",
@@ -103,6 +100,14 @@ struct DeviceView: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer(minLength: 8)
+                }
+
+                HStack(spacing: 10) {
+                    connectionStep("USB", complete: !(model.deviceDiscovery?.devices.isEmpty ?? true))
+                    Image(systemName: "chevron.right").font(.system(size: 9)).foregroundStyle(.tertiary)
+                    connectionStep("MTP 通信", complete: state == .ready && model.inventoryIsCurrentSession)
+                    Image(systemName: "chevron.right").font(.system(size: 9)).foregroundStyle(.tertiary)
+                    connectionStep("清单完整", complete: model.inventoryIsCurrentSession && model.inventory?.isComplete == true)
                 }
 
                 if let devices = model.deviceDiscovery?.devices, !devices.isEmpty {
@@ -137,13 +142,13 @@ struct DeviceView: View {
                     Button {
                         Task { await model.detectAndRead() }
                     } label: {
-                        Label("检测并读取", systemImage: "list.bullet.rectangle.portrait")
+                        Label(model.inventoryIsCurrentSession ? "重新读取清单" : "立即检测", systemImage: "arrow.clockwise")
                             .font(.system(size: 11.5, weight: .medium))
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
                     .disabled(model.isDiscovering || model.isReadingInventory || model.isInstalling)
-                    .help("只读检测 USB。若发现单一 057e:201d 且 OpenMTP 未运行，会继续读取清单，不下载 NSP，不写入设备。重新枚举会使旧清单失效；读取失败且 USB 候选未变时保留上次成功清单。")
+                    .help("立即重新检测并只读读取设备清单。")
                     .accessibilityLabel("检测并读取，只读")
 
                     if model.isDiscovering || model.isReadingInventory {
@@ -154,7 +159,7 @@ struct DeviceView: View {
                                 .foregroundStyle(.secondary)
                         }
                     } else {
-                        Text("先检测 USB。只有一台 057e:201d 且 OpenMTP 未运行时，会继续只读读取 Games 或 Installed games。")
+                        Text("自动检测已开启 · MTP 连接成功时会播放提示音")
                             .font(.system(size: 10))
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -166,10 +171,16 @@ struct DeviceView: View {
         .accessibilityElement(children: .contain)
     }
 
+    private func connectionStep(_ title: String, complete: Bool) -> some View {
+        Label(title, systemImage: complete ? "checkmark.circle.fill" : "circle")
+            .font(.system(size: 10.5, weight: .medium))
+            .foregroundStyle(complete ? Theme.installed : .secondary)
+    }
+
     private var deviceMessage: String {
         if model.isDiscovering { return "正在通过 IOKit 执行只读 USB 枚举。" }
         guard let discovery = model.deviceDiscovery else {
-            return "尚未执行设备检测。连接 Switch 并开启 sphaira 或 DBI 的 MTP 后，点击检测并读取。"
+            return "正在准备自动检测。连接 Switch 并开启 sphaira 或 DBI 的 MTP 即可。"
         }
         return discovery.message
     }
@@ -189,6 +200,7 @@ struct DeviceView: View {
                         .foregroundStyle(.tertiary)
                 }
 
+                DisclosureGroup("连接与排查步骤", isExpanded: $showInstructions) {
                 VStack(alignment: .leading, spacing: 10) {
                     instructionStep(
                         1,
@@ -207,9 +219,11 @@ struct DeviceView: View {
                     )
                     instructionStep(
                         4,
-                        title: "返回此处检测并读取",
-                        detail: "点击“检测并读取”，启动后也会自动走这一次。单一 057e:201d 且没有 OpenMTP 时会继续读取。重新枚举 USB 会使旧清单失效；同一次 USB 候选上读取失败时，保留上次成功清单。"
+                        title: "等待自动连接",
+                        detail: "应用会持续检测 USB，并在发现单一 MTP 候选设备后自动读取。成功建立 MTP 通信时会播放提示音；如未成功，可点击“立即检测”重试。"
                     )
+                }
+                .padding(.top, 10)
                 }
 
                 HStack(alignment: .top, spacing: 8) {
@@ -261,7 +275,7 @@ struct DeviceView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer()
-                Button("检测并读取") { Task { await model.detectAndRead() } }
+                Button("立即检测") { Task { await model.detectAndRead() } }
                     .buttonStyle(.bordered)
                     .controlSize(.small)
                     .disabled(model.isDiscovering || model.isReadingInventory || model.isInstalling)
@@ -276,9 +290,9 @@ struct DeviceView: View {
                     Text("设备已安装内容")
                         .font(.system(size: 13, weight: .semibold))
                     BadgePill(
-                        text: inventory.isComplete ? "清单完整" : "清单不完整",
+                        text: model.inventoryIsCurrentSession ? (inventory.isComplete ? "清单完整" : "清单不完整") : "上次缓存",
                         systemImage: inventory.isComplete ? "checkmark.circle.fill" : "exclamationmark.triangle.fill",
-                        tone: inventory.isComplete ? .success : .warning
+                        tone: model.inventoryIsCurrentSession && inventory.isComplete ? .success : .warning
                     )
                     if model.inventoryIsCurrentSession {
                         BadgePill(
@@ -291,6 +305,20 @@ struct DeviceView: View {
                     Text("\(inventory.records.count) 条记录 · \(relativeTime(inventory.observedAt))")
                         .font(.system(size: 9.5))
                         .foregroundStyle(.secondary)
+                }
+
+                if !model.inventoryIsCurrentSession {
+                    Label(model.inventoryCacheSaved
+                          ? "这是上次读取后保存在本机的清单，连接后会重新读取；不能代表设备当前的安装状态。"
+                          : "这是上次读取的清单，仅保存在当前应用内存中；不能代表设备当前的安装状态。", systemImage: "clock.arrow.circlepath")
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else if let comparison = model.inventoryComparison {
+                    Label(comparison, systemImage: "arrow.left.arrow.right")
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 if let environment = inventory.environmentContext, !environment.isEmpty {

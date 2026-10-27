@@ -89,6 +89,63 @@ struct DiscoveryTests {
         let input = [USBDescriptor(vendorID: 0x057e, productID: 0x201d)]
         #expect(DiscoveryClassifier.classify(input).devices[0].id != DiscoveryClassifier.classify(input).devices[0].id)
     }
+    @Test func registryIdentityTracksOnlyTheCurrentUSBEntry() {
+        let first = USBDescriptor(vendorID: 0x057e, productID: 0x201d, registryID: 123)
+        let replacement = USBDescriptor(vendorID: 0x057e, productID: 0x201d, registryID: 456)
+        let originalID = DiscoveryClassifier.classify([first]).devices[0].id
+        #expect(DiscoveryClassifier.classify([first]).devices[0].id == originalID)
+        #expect(DiscoveryClassifier.classify([replacement]).devices[0].id != originalID)
+    }
+}
+
+@Suite("Inventory snapshot comparison")
+struct InventoryComparisonTests {
+    @Test func comparesCompleteSnapshotsByObservedRecord() {
+        let a = InstalledRecord(id: "old-id", titleID: "0100000000001000", kind: .base, rawVersion: 0, name: "A", objectPath: "Games/A")
+        let same = InstalledRecord(id: "new-session-id", titleID: a.titleID, kind: .base, rawVersion: 0, name: "A", objectPath: "Games/A")
+        let b = InstalledRecord(id: "b", titleID: "0100000000002000", kind: .base, rawVersion: 0, name: "B", objectPath: "Games/B")
+        let old = InstalledInventory(deviceID: "old", isComplete: true, records: [a])
+        let unchanged = InstalledInventory(deviceID: "new", isComplete: true, records: [same])
+        let changed = InstalledInventory(deviceID: "new", isComplete: true, records: [b])
+        #expect(InventorySnapshotComparison.compare(old, unchanged) == .changes(added: 0, missing: 0))
+        #expect(InventorySnapshotComparison.compare(old, changed) == .changes(added: 1, missing: 1))
+    }
+
+    @Test func incompleteSnapshotsNeverAssertMissingRecords() {
+        let complete = InstalledInventory(deviceID: "old", isComplete: true)
+        let partial = InstalledInventory(deviceID: "new", isComplete: false)
+        #expect(InventorySnapshotComparison.compare(complete, partial) == .incomplete)
+        #expect(InventorySnapshotComparison.compare(partial, complete) == .incomplete)
+    }
+}
+
+@Suite("Historical inventory cache")
+struct InventoryCacheTests {
+    @Test func persistsRecordsWithoutPersistingSessionIdentity() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let record = InstalledRecord(id: "record", titleID: "0100000000001000", kind: .base, rawVersion: 0, name: "A", objectPath: "Games/A")
+        let value = InstalledInventory(deviceID: "mtp-session-secret", isComplete: true, records: [record])
+        let cache = InventoryCache(directory: directory)
+        #expect(await cache.load() == nil)
+        try await cache.save(value)
+        let restored = await InventoryCache(directory: directory).load()
+        #expect(restored?.deviceID == "cached-inventory")
+        #expect(restored?.records == [record])
+        #expect(restored?.isComplete == true)
+        #expect(abs((restored?.observedAt.timeIntervalSince(value.observedAt) ?? 100)) < 1)
+    }
+
+    @Test func invalidCacheIsNotRemoved() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let file = directory.appendingPathComponent("last-device-inventory.json")
+        let data = Data("invalid".utf8)
+        try data.write(to: file)
+        #expect(await InventoryCache(directory: directory).load() == nil)
+        #expect(try Data(contentsOf: file) == data)
+    }
 }
 
 @Suite("Conservative object identity parsing")

@@ -53,6 +53,8 @@ public actor DeviceService {
 struct USBDescriptor: Sendable, Equatable {
     let vendorID: UInt16
     let productID: UInt16
+    /// IOKit registry entry lifetime, never a persistent device identity.
+    var registryID: UInt64? = nil
 }
 
 enum DiscoveryClassifier {
@@ -67,7 +69,7 @@ enum DiscoveryClassifier {
             case 0x3000: name = "DBI Backend 候选设备"
             default: name = "Nintendo Switch USB 候选设备"
             }
-            return DeviceDescriptor(id: "usb-observation-\(UUID().uuidString)", name: name,
+            return DeviceDescriptor(id: candidate.registryID.map { "usb-registry-\($0)" } ?? "usb-observation-\(UUID().uuidString)", name: name,
                                     vendorID: candidate.vendorID, productID: candidate.productID)
         }
         if devices.isEmpty {
@@ -109,7 +111,11 @@ private enum USBDiscovery {
             }
             guard let vendor = number("idVendor"), vendor == 0x057e,
                   let product = number("idProduct") else { continue }
-            result.append(USBDescriptor(vendorID: vendor, productID: product))
+            var registryID: UInt64 = 0
+            guard IORegistryEntryGetRegistryEntryID(service, &registryID) == KERN_SUCCESS else {
+                throw DeviceServiceError(code: .transport, message: "无法确认 USB 枚举会话。")
+            }
+            result.append(USBDescriptor(vendorID: vendor, productID: product, registryID: registryID))
         }
         return result
     }

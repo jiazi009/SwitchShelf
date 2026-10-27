@@ -15,6 +15,8 @@ final class AppModel {
     private(set) var plan: [PlanItem] = []
     private(set) var firstSeen: [String: Date] = [:]
     private(set) var inventory: InstalledInventory?
+    private(set) var inventoryComparison: String?
+    private(set) var inventoryCacheSaved = false
     private(set) var inventorySessionSignature: String?
     private(set) var deviceDiscovery: DeviceDiscovery?
     private(set) var cacheLoaded = false
@@ -66,6 +68,7 @@ final class AppModel {
     @ObservationIgnored private var repository: (any LibraryPersisting)?
     @ObservationIgnored private let appDirectory: URL
     @ObservationIgnored private let planStore: LocalPlanStore
+    @ObservationIgnored private let inventoryCache: InventoryCache
     @ObservationIgnored private var scopedURLs: [String: URL] = [:]
     @ObservationIgnored private var selectionAnchor: String?
     @ObservationIgnored private var scanTask: Task<Void, Never>?
@@ -75,12 +78,20 @@ final class AppModel {
     @ObservationIgnored private var cacheWriteAllowed = false
     @ObservationIgnored private var inspectorAutoHidden = false
     @ObservationIgnored private var lastLayoutWidth: CGFloat = 0
+    @ObservationIgnored private var deviceMonitorTask: Task<Void, Never>?
+    @ObservationIgnored private var soundedSession: String?
+    @ObservationIgnored private var automaticAttempts = 0
+    @ObservationIgnored private var lastAutomaticAttempt: Date?
+    @ObservationIgnored private var automaticReadBlocked = false
+    @ObservationIgnored private var cachedInventory: InstalledInventory?
+    @ObservationIgnored private var wasOpenMTPRunning = false
 
     init() {
         let defaults = UserDefaults.standard
         let directory = Self.applicationSupportDirectory()
         self.appDirectory = directory
         self.planStore = LocalPlanStore(directory: directory)
+        self.inventoryCache = InventoryCache(directory: directory)
         self.layout = LibraryLayout(rawValue: defaults.string(forKey: "SwitchShelf.layout") ?? "") ?? .grid
         self.sortOrder = SortOrder(rawValue: defaults.string(forKey: "SwitchShelf.sortOrder") ?? "") ?? .recent
         let storedCover = defaults.double(forKey: "SwitchShelf.coverSize")
@@ -402,6 +413,10 @@ final class AppModel {
     func bootstrap() async {
         guard !bootstrapStarted else { return }
         bootstrapStarted = true
+        cachedInventory = await inventoryCache.load()
+        inventoryCacheSaved = cachedInventory != nil
+        inventory = cachedInventory
+        startDeviceMonitoring()
 
         do {
             try FileManager.default.createDirectory(at: appDirectory, withIntermediateDirectories: true)
@@ -474,7 +489,6 @@ final class AppModel {
         if snapshot.games.isEmpty || refreshOnLaunch {
             scanAll()
         }
-        await detectAndRead(announceWhenMissing: false)
     }
 
     func reloadCache() async {
@@ -861,7 +875,7 @@ final class AppModel {
             $0.vendorID == 0x057e && $0.productID == 0x201d
         }
         guard candidates.count == 1, discovery.devices.filter({ $0.vendorID == 0x057e && ($0.productID == 0x201d || $0.productID == 0x3000) }).count == 1 else { return nil }
-        return candidates.map { "\($0.vendorID):\($0.productID)" }.joined(separator: ",")
+        return candidates[0].id
     }
 
     var canReadInventory: Bool {
@@ -873,22 +887,82 @@ final class AppModel {
         return signature == mtpCandidateSignature
     }
 
+    /// Poll only USB descriptors. MTP is opened at most twice for a new candidate,
+    /// with a pause between attempts, and never while another app operation uses it.
+    private func startDeviceMonitoring() {
+        guard deviceMonitorTask == nil else { return }
+        deviceMonitorTask = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self else { return }
+                await self.monitorDevice()
+                try? await Task.sleep(for: .seconds(3))
+            }
+        }
+    }
+
+    private func monitorDevice() async {
+        guard !isDiscovering, !isReadingInventory, !isInstalling else { return }
+        isDiscovering = true
+        let previous = mtpCandidateSignature
+        let result = await deviceService.discover()
+        guard !isInstalling else { isDiscovering = false; return }
+        // Keep successful MTP status while the same registry entry remains present.
+        let newIDs = result.devices.map(\.id).sorted()
+        let oldIDs = deviceDiscovery?.devices.map(\.id).sorted()
+        if newIDs != oldIDs || result.state == .error || deviceDiscovery?.state == .error {
+            deviceDiscovery = result
+            inventory = cachedInventory
+            inventorySessionSignature = nil
+            inventoryComparison = nil
+            soundedSession = nil
+            automaticAttempts = 0
+            lastAutomaticAttempt = nil
+            if !automaticReadBlocked, notice?.action == .readInventory || notice?.action == .refreshDevices {
+                notice = nil
+            }
+        } else if deviceDiscovery == nil {
+            deviceDiscovery = result
+        }
+        isDiscovering = false
+        guard let signature = mtpCandidateSignature, !automaticReadBlocked,
+              !inventoryIsCurrentSession else { return }
+        if openMTPIsRunning {
+            wasOpenMTPRunning = true
+            deviceDiscovery?.message = "OpenMTP 正在运行；请完整退出，应用将自动尝试连接。"
+            return
+        }
+        if wasOpenMTPRunning {
+            wasOpenMTPRunning = false
+            automaticAttempts = 0
+            lastAutomaticAttempt = nil
+        }
+        if signature != previous {
+            automaticAttempts = 0
+            lastAutomaticAttempt = nil
+        }
+        guard automaticAttempts < 2,
+              lastAutomaticAttempt.map({ Date().timeIntervalSince($0) >= 15 }) ?? true else { return }
+        automaticAttempts += 1
+        lastAutomaticAttempt = Date()
+        _ = await readInventory()
+    }
+
     func refreshDevices() async {
         guard !isDiscovering, !isReadingInventory, !isInstalling else { return }
         isDiscovering = true
-        // Discovery exposes only VID/PID, not a stable session identity. A new USB
-        // enumeration cannot prove this is the same device that supplied the last
-        // inventory, even when the candidate signature looks identical.
-        inventory = nil
-        inventorySessionSignature = nil
+        let previous = mtpCandidateSignature
         let result = await deviceService.discover()
         deviceDiscovery = result
+        if previous != mtpCandidateSignature {
+            inventory = cachedInventory
+            inventorySessionSignature = nil
+            soundedSession = nil
+        }
         isDiscovering = false
     }
 
     /// Detect USB, then read when there is a single 057e:201d candidate and OpenMTP is not running.
-    /// A failed re-read keeps the last success only when that candidate signature is unchanged.
-    /// Rediscovery itself still drops the previous inventory before the read.
+    /// A failed read leaves the last cached snapshot available as historical data.
     func detectAndRead(announceWhenMissing: Bool = true) async {
         guard !isDiscovering, !isReadingInventory, !isInstalling else { return }
         if openMTPIsRunning {
@@ -898,19 +972,13 @@ final class AppModel {
             presentOpenMTPPreflight()
             return
         }
-        let preservedInventory = inventory
-        let preservedSignature = inventorySessionSignature
         await refreshDevices()
         guard !isInstalling else { return }
         if openMTPIsRunning {
-            if mtpCandidateSignature == preservedSignature {
-                inventory = preservedInventory
-                inventorySessionSignature = preservedSignature
-            }
             presentOpenMTPPreflight()
             return
         }
-        guard let signature = mtpCandidateSignature else {
+        guard mtpCandidateSignature != nil else {
             if announceWhenMissing {
                 notice = AppNotice(
                     level: .warning,
@@ -922,27 +990,10 @@ final class AppModel {
             }
             return
         }
-        let succeeded = await readInventory()
+        _ = await readInventory()
         if openMTPIsRunning {
-            if inventory == nil, signature == preservedSignature {
-                inventory = preservedInventory
-                inventorySessionSignature = preservedSignature
-            }
             presentOpenMTPPreflight()
-            return
         }
-        guard !succeeded, inventory == nil, signature == preservedSignature, let preservedInventory else { return }
-        inventory = preservedInventory
-        inventorySessionSignature = preservedSignature
-        deviceDiscovery?.state = .ready
-        deviceDiscovery?.message = retainedInventoryMessage(preservedInventory)
-        notice = AppNotice(
-            level: .warning,
-            title: "重新读取失败，已保留上次清单",
-            message: "USB 候选签名没有变化，未清除已读到的清单。这不是新的安装结果。",
-            action: .readInventory,
-            actionLabel: "重新读取"
-        )
     }
 
     @discardableResult
@@ -971,12 +1022,41 @@ final class AppModel {
         var succeeded = false
         do {
             let value = try await inventoryReader.readInventory()
+            // A disconnect/reconnect during the helper read must never attach its
+            // result to a different USB registry entry, even with the same VID/PID.
+            let latest = await deviceService.discover()
+            deviceDiscovery = latest
+            guard mtpCandidateSignature == signature else {
+                inventory = cachedInventory
+                inventorySessionSignature = nil
+                soundedSession = nil
+                automaticAttempts = 0
+                lastAutomaticAttempt = nil
+                isReadingInventory = false
+                return false
+            }
+            inventoryComparison = compareInventory(cachedInventory, with: value)
             inventory = value
             inventorySessionSignature = signature
             let sources = value.mtpEvidence?.inventoryStorageNames.joined(separator: "、") ?? ""
             deviceDiscovery?.state = .ready
             deviceDiscovery?.message = "MTP 已连接" + (sources.isEmpty ? "" : " · \(sources)")
                 + (value.isComplete ? " · 已读取完整内容清单。" : " · 安装清单尚未完整确认。")
+            if soundedSession != signature {
+                NSSound(named: "Glass")?.play()
+                soundedSession = signature
+            }
+            if value.isComplete || cachedInventory == nil {
+                cachedInventory = value
+                do {
+                    try await inventoryCache.save(value)
+                    inventoryCacheSaved = true
+                }
+                catch {
+                    inventoryCacheSaved = false
+                    notice = AppNotice(level: .warning, title: "设备清单未能保存到本机", message: "当前清单仍可查看；请检查应用数据目录后重新读取。", action: .openAppSupport, actionLabel: "打开目录")
+                }
+            }
             if !value.isComplete {
                 let missingSource = value.mtpEvidence?.inventoryStorageNames.isEmpty == true
                 notice = AppNotice(
@@ -991,10 +1071,25 @@ final class AppModel {
             }
             succeeded = true
         } catch {
+            soundedSession = nil
+            if let probeError = error as? ProbeError, case .previousProcessUnverified = probeError {
+                automaticReadBlocked = true
+            }
+            let latest = await deviceService.discover()
+            deviceDiscovery = latest
+            guard mtpCandidateSignature == signature else {
+                inventory = cachedInventory
+                inventorySessionSignature = nil
+                soundedSession = nil
+                automaticAttempts = 0
+                lastAutomaticAttempt = nil
+                isReadingInventory = false
+                return false
+            }
             if preservedSignature == signature, let preservedInventory {
-                inventory = preservedInventory
-                inventorySessionSignature = preservedSignature
-                deviceDiscovery?.state = .ready
+                inventory = cachedInventory ?? preservedInventory
+                inventorySessionSignature = nil
+                deviceDiscovery?.state = .waitingForMTP
                 deviceDiscovery?.message = retainedInventoryMessage(preservedInventory)
                 notice = AppNotice(
                     level: .error,
@@ -1004,7 +1099,7 @@ final class AppModel {
                     actionLabel: "重试"
                 )
             } else {
-                inventory = nil
+                inventory = cachedInventory
                 inventorySessionSignature = nil
                 deviceDiscovery?.state = .waitingForMTP
                 deviceDiscovery?.message = "已发现 USB 候选设备，本次 MTP 读取未成功；请检查 MTP 模式和其他客户端。"
@@ -1019,6 +1114,18 @@ final class AppModel {
         }
         isReadingInventory = false
         return succeeded
+    }
+
+    private func compareInventory(_ old: InstalledInventory?, with new: InstalledInventory) -> String? {
+        guard let old else { return nil }
+        switch InventorySnapshotComparison.compare(old, new) {
+        case .incomplete:
+            return old.isComplete && !new.isComplete
+                ? "本次清单不完整，无法可靠比较增减；已保留上次完整缓存。"
+                : "至少一份清单不完整，无法可靠比较增减。"
+        case let .changes(added, missing):
+            return "与上次缓存比较：新增 \(added) 条，未再出现 \(missing) 条。设备身份未核实，变化不一定发生在同一台主机。"
+        }
     }
 
     func inventoryDirectoryGroups(from records: [InstalledRecord]) -> [InventoryDirectoryGroup] {
@@ -1043,22 +1150,20 @@ final class AppModel {
     }
 
     private func presentOpenMTPPreflight() {
-        if inventorySessionSignature != mtpCandidateSignature {
-            inventory = nil
-            inventorySessionSignature = nil
-        }
+        inventory = cachedInventory ?? inventory
+        inventorySessionSignature = nil
         deviceDiscovery?.state = .waitingForMTP
         if inventory == nil {
             deviceDiscovery?.message = "OpenMTP 正在运行；请完整退出后读取，避免两个客户端同时访问设备。"
         } else {
-            deviceDiscovery?.message = "OpenMTP 正在运行，未重新读取。USB 候选未变化，已保留上次成功清单。"
+            deviceDiscovery?.message = "OpenMTP 正在运行，未重新读取。已保留上次清单，退出后可重新连接。"
         }
         notice = AppNotice(
             level: .warning,
             title: "请先退出 OpenMTP",
             message: inventory == nil
                 ? "OpenMTP 可能仍持有 MTP 会话。请使用菜单中的退出功能，再返回检测并读取。"
-                : "OpenMTP 可能仍持有 MTP 会话。已保留上次成功清单，退出后再重新读取。"
+                : "OpenMTP 可能仍持有 MTP 会话。已保留上次清单，退出后再重新读取。"
         )
     }
 
@@ -1178,7 +1283,7 @@ final class AppModel {
         isInstalling = true
         installProgress = nil
         installReport = nil
-        inventory = nil
+        inventory = cachedInventory
         inventorySessionSignature = nil
         notice = nil
         installTask = Task { [weak self] in

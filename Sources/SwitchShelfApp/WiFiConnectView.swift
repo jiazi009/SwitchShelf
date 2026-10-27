@@ -259,7 +259,7 @@ struct WiFiConnectView: View {
                 step(1, "在 Switch 上打开 FTP", "进入 DBI，选择 Run FTP server。本应用不能替你打开它，也不会扫描局域网。")
                 step(2, "填写主机", "端口留空时使用文档中的 5000，也就是 SD 文件访问端口。6000 是安装端口，这里会直接拒绝，不会连接。")
                 step(3, "只读探测", "连上之后只看问候、当前目录和一次 LIST 原文。看不到的内容保持未知，不会变成已安装游戏。")
-                step(4, "和 USB 分开", "「我的 Switch」仍是 sphaira / DBI 的 USB MTP。无线会话连接期间不会同时做 USB 检测或安装测试。")
+                step(4, "和 USB 分开", "「我的 Switch」仍是 sphaira / DBI 的 USB MTP。无线会话连接期间不会同时做 USB 检测或安装。")
                 HStack(alignment: .top, spacing: 8) {
                     Image(systemName: "lock.shield.fill")
                         .font(.system(size: 10))

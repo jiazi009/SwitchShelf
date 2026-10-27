@@ -1,8 +1,12 @@
 # SwitchShelf coordinated development plan
 
+## Installation UI update — 2026-10-27
+
+The user reports that installation testing has passed and requested production-facing queue wording. The app no longer labels the queue as awaiting hardware acceptance or calls installation a test. The specific test files, device configuration and outcomes were not supplied, so this report does not establish broader hardware coverage. Transfer completion remains distinct from device-confirmed installation.
+
 ## Integration checkpoint — 2026-10-27
 
-The local main branch combines automatic USB discovery and cached historical inventory, the device session overview, the separate DBI FTP page, and the reviewed serial installation queue. FTP connection blocks USB discovery and installation; cached inventory remains historical until a current-session read. The queue uses the existing isolated single-file helper for each item, stops on uncertain results, and never treats transfer as proof of installation. This integration has not been validated by a physical installation or a real FTP session; the historical single-file checkpoints below describe the earlier implementation.
+The local main branch combines automatic USB discovery and cached historical inventory, the device session overview, the separate DBI FTP page, and the reviewed serial installation queue. FTP connection blocks USB discovery and installation; cached inventory remains historical until a current-session read. The queue uses the existing isolated single-file helper for each item, stops on uncertain results, and never treats transfer as proof of installation. At this checkpoint the integration had not been validated by a physical installation or a real FTP session; the historical single-file checkpoints below describe the earlier implementation.
 
 ## Current objective
 Continue the user-selected **sphaira MTP inventory + installation** route. Preserve the accepted Games inventory and conservative identity matching; implement installation in gated stages. Backend is deferred and its existing uncommitted changes remain separate. Historical Orca waves below describe earlier work, not a newly dispatched run.

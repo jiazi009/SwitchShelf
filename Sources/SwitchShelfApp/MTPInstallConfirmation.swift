@@ -29,7 +29,7 @@ struct MTPInstallConfirmation: View {
     private var confirmationDetails: some View {
         VStack(alignment: .leading, spacing: 16) {
             Label("确认 sphaira 安装队列", systemImage: "exclamationmark.triangle").font(.title2.bold())
-            Text("将依次读取并发送以下游戏包。传输完成不等于安装成功，批量发送尚需实机验收。")
+            Text("将依次读取并发送以下游戏包。传输完成不等于安装成功，请在设备端确认安装结果。")
                 .foregroundStyle(.secondary)
             GroupBox("发送顺序 · \(review.items.count) 个文件") {
                 VStack(alignment: .leading, spacing: 10) {

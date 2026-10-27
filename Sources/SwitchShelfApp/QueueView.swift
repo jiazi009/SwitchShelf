@@ -137,14 +137,14 @@ struct QueueView: View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: "lock.shield.fill")
                 .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(Theme.warning)
+                .foregroundStyle(Theme.accent)
                 .frame(width: 36, height: 36)
-                .background(Theme.warning.opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .background(Theme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 7) {
                     Text("sphaira 原生 MTP · 安装队列")
                         .font(.system(size: 13, weight: .semibold))
-                    BadgePill(text: "批量发送待实机验收", systemImage: "exclamationmark.shield", tone: .warning)
+                    BadgePill(text: "按顺序发送", systemImage: "list.number", tone: .accent)
                 }
                 Text("检查计划后核对所有文件及设备端设置。Switch 必须进入 sphaira 的 MTP Install 页面；目标存储由设备端选择。文件发送完成不等于安装成功。")
                     .font(.system(size: 10.5))
@@ -208,10 +208,10 @@ struct QueueView: View {
             Spacer(minLength: 0)
         }
         .padding(16)
-        .background(Theme.warning.opacity(0.07), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(Theme.accent.opacity(0.05), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(Theme.warning.opacity(0.20), lineWidth: 0.8)
+                .strokeBorder(Theme.accent.opacity(0.16), lineWidth: 0.8)
         }
         .accessibilityElement(children: .contain)
     }

@@ -1694,7 +1694,7 @@ final class AppModel {
             notice = AppNotice(
                 level: .warning,
                 title: "USB 会话还在进行",
-                message: "请等 USB 检测、清单读取或安装测试结束后再连接无线 FTP。两条会话不能同时进行。",
+                message: "请等 USB 检测、清单读取或安装结束后再连接无线 FTP。两条会话不能同时进行。",
                 action: nil,
                 actionLabel: nil
             )
@@ -1735,7 +1735,7 @@ final class AppModel {
         AppNotice(
             level: .warning,
             title: "无线 FTP 仍占用这条连接",
-            message: "已跳过 USB 检测、清单读取和安装测试，避免与无线会话并发。请先在「无线连接」断开。",
+            message: "已跳过 USB 检测、清单读取和安装，避免与无线会话并发。请先在「无线连接」断开。",
             action: nil,
             actionLabel: nil
         )

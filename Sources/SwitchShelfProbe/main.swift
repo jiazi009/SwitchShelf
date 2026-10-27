@@ -18,13 +18,13 @@ struct ProbeResult: Codable {
     var error: ProbeFailure?
 }
 let usage = """
-Usage: switchshelf-probe [discover|inventory|storages] [--timeout 1...120] [--transport native|libmtp] [--json]
+Usage: switchshelf-probe [discover|inventory|storages] [--timeout 1...120] [--transport native|libmtp|libusb] [--json]
 
 Default: discover (IOKit only; never opens MTP). JSON is always emitted.
 inventory is explicitly opt-in, metadata-only, and must not overlap another device client.
 Supported inventory storages: sphaira Games and DBI Installed games. Other storages are never traversed.
 storages is explicitly opt-in and lists storage descriptions only; it never lists content objects.
-Default inventory transport: native (system ImageCaptureCore broker); libmtp is an explicit fallback.
+Default inventory transport: native (system ImageCaptureCore broker); libusb is an explicit read-only comparison route.
 Installation is not a public probe mode; the app uses a separate token-gated, explicitly confirmed direct worker.
 Exit: 0 successful, 2 incomplete inventory (also successful storage-only diagnostics), 1 error, 64 usage, 124 deadline exceeded.
 Inventory identities are session-scoped; runtime environment remains unknown.
@@ -139,7 +139,7 @@ while index < arguments.count {
     }
     let value = arguments[index + 1]
     if option == "--timeout", let seconds = Int(value), (1...120).contains(seconds) { timeout = seconds }
-    else if option == "--transport", ["native", "libmtp"].contains(value) { transport = value }
+    else if option == "--transport", ["native", "libmtp", "libusb"].contains(value) { transport = value }
     else { emit(failure(mode: mode, code: "usage", message: usage), exitCode: 64) }
     index += 2
 }

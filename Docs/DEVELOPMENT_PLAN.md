@@ -1,5 +1,9 @@
 # SwitchShelf coordinated development plan
 
+## libusb inventory comparison follow-up — 2026-10-27
+
+The user narrowed the independent connection experiment to libusb versus the existing ImageCaptureCore route, using OpenMTP as a reference; libmtp comparison is excluded. Branch `codex/mtp-transport-comparison` provides a metadata-only libusb transport, explicit probe selection and a session-only device-page selector. Installation, default startup route and source-game files are unchanged. Previously captured physical read-only probes on both routes agree on 9 storages, 8 Games directories and 22 records; the continuation verified those saved results rather than repeating hardware access. Remaining acceptance: GUI first-use authorization behavior and repeated physical reconnects, not installation tests. Independent app and manual instructions: `Docs/Reports/libusb-inventory-comparison-2026-10-27.md`. No merge into main is part of this work.
+
 ## Installation UI update — 2026-10-27
 
 The user reports that installation testing has passed and requested production-facing queue wording. The app no longer labels the queue as awaiting hardware acceptance or calls installation a test. The specific test files, device configuration and outcomes were not supplied, so this report does not establish broader hardware coverage. Transfer completion remains distinct from device-confirmed installation.

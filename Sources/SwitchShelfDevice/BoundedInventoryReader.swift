@@ -2,9 +2,13 @@ import Darwin
 import Foundation
 import SwitchShelfDomain
 
-/// Runs the metadata-only probe in a separate process. The app never holds a native
-/// ImageCaptureCore continuation or libmtp call across its own inventory request.
-/// A second request cannot start until the previous process is proven exited.
+/// Explicit read-only inventory routes. Installation uses its own separate worker.
+public enum InventoryConnection: String, Sendable, CaseIterable {
+    case native, libusb
+}
+
+/// Runs the metadata-only probe in a separate process; native USB calls never
+/// block the app. A second request requires the previous process to be proven exited.
 public actor BoundedInventoryReader {
     private let probeURL: URL
     private var busy = false
@@ -20,14 +24,14 @@ public actor BoundedInventoryReader {
         }
     }
 
-    public func readInventory(timeoutSeconds: Int = 60) async throws -> InstalledInventory {
+    public func readInventory(timeoutSeconds: Int = 60, transport: InventoryConnection = .native) async throws -> InstalledInventory {
         guard (1...120).contains(timeoutSeconds) else { throw ProbeError.invalidTimeout }
         guard !exitUnverified else { throw ProbeError.previousProcessUnverified }
         guard !busy else { throw DeviceServiceError(code: .busy, message: "已在读取设备清单；请等待当前只读探测结束。") }
         busy = true
         let url = probeURL
         let outcome = await Task.detached(priority: .utility) {
-            Self.run(url: url, seconds: timeoutSeconds)
+            Self.run(url: url, seconds: timeoutSeconds, transport: transport)
         }.value
         busy = false
         if !outcome.exited { exitUnverified = true; throw ProbeError.previousProcessUnverified }
@@ -44,12 +48,13 @@ public actor BoundedInventoryReader {
         let schemaVersion: Int
         let mode: String
         let status: String
+        let transport: String?
         let inventory: InstalledInventory?
         let error: Failure?
         struct Failure: Decodable { let code: String; let message: String }
     }
 
-    private nonisolated static func run(url: URL, seconds: Int) -> Outcome {
+    private nonisolated static func run(url: URL, seconds: Int, transport: InventoryConnection) -> Outcome {
         func fail(_ error: ProbeError, exited: Bool = true) -> Outcome {
             Outcome(exited: exited, result: .failure(error))
         }
@@ -69,7 +74,7 @@ public actor BoundedInventoryReader {
 
         let process = Process()
         process.executableURL = url
-        process.arguments = ["inventory", "--transport", "native", "--timeout", String(seconds), "--json"]
+        process.arguments = ["inventory", "--transport", transport.rawValue, "--timeout", String(seconds), "--json"]
         process.standardOutput = file
         process.standardError = FileHandle.nullDevice
         process.standardInput = FileHandle.nullDevice
@@ -100,10 +105,13 @@ public actor BoundedInventoryReader {
         decoder.dateDecodingStrategy = .iso8601
         guard let response = try? decoder.decode(Response.self, from: data),
               response.schemaVersion == 1, response.mode == "inventory" else { return fail(.invalidResponse) }
+        // An uncertain worker exit must fence retries even if its route claim is inconsistent.
+        if response.error?.code == "workerExitUnverified" {
+            return fail(.previousProcessUnverified, exited: false)
+        }
+        guard (transport == .native && response.transport == nil) || response.transport == transport.rawValue
+        else { return fail(.invalidResponse) }
         if response.status == "error" {
-            if response.error?.code == "workerExitUnverified" {
-                return fail(.previousProcessUnverified, exited: false)
-            }
             if response.error?.code == "busy" { return fail(.deviceBusy) }
             if response.error?.code == "accessDeniedOrBusy" { return fail(.sessionUnavailable) }
             return fail(response.error?.code == "timeout" ? .timeout : .readFailed)

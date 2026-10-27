@@ -30,6 +30,7 @@ final class AppModel {
     private(set) var scanPhase: String?
     private(set) var isDiscovering = false
     private(set) var isReadingInventory = false
+    private(set) var inventoryConnection: InventoryConnection = .native
     private(set) var isCheckingPlan = false
     private(set) var preparation: SphairaPreflightResult?
     private(set) var isInstalling = false
@@ -908,6 +909,20 @@ final class AppModel {
         return signature == mtpCandidateSignature
     }
 
+    func selectInventoryConnection(_ connection: InventoryConnection) {
+        guard !isDiscovering, !isReadingInventory, !isInstalling, !isReviewingInstall,
+              connection != inventoryConnection else { return }
+        inventoryConnection = connection
+        inventory = cachedInventory
+        inventorySessionSignature = nil
+        inventoryComparison = nil
+        soundedSession = nil
+        automaticAttempts = 0
+        lastAutomaticAttempt = nil
+        if deviceDiscovery?.state == .ready { deviceDiscovery?.state = .waitingForMTP }
+        deviceDiscovery?.message = "读取方式已更改；当前设备清单等待重新读取。"
+    }
+
     /// Poll only USB descriptors. MTP is opened at most twice for a new candidate,
     /// with a pause between attempts, and never while another app operation uses it.
     private func startDeviceMonitoring() {
@@ -1064,7 +1079,7 @@ final class AppModel {
         notice = nil
         var succeeded = false
         do {
-            let value = try await inventoryReader.readInventory()
+            let value = try await inventoryReader.readInventory(transport: inventoryConnection)
             // A disconnect/reconnect during the helper read must never attach its
             // result to a different USB registry entry, even with the same VID/PID.
             let latest = await deviceService.discover()

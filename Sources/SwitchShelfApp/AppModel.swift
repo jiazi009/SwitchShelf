@@ -188,7 +188,8 @@ final class AppModel {
         case .all:
             result = games
         case .recent:
-            result = games.filter { recentGameIDs.contains($0.id) }
+            let recent = recentGameIDs
+            result = games.filter { recent.contains($0.id) }
         case .unidentified:
             result = games.filter { $0.identification.isPending }
         case .source(let id):
@@ -358,9 +359,11 @@ final class AppModel {
         }
     }
 
-    func handleGridTap(_ game: Game) {
-        let flags = NSApp.currentEvent?.modifierFlags ?? []
-        let ordered = filteredGames.map(\.id)
+    func handleGridTap(_ game: Game, modifiers: NSEvent.ModifierFlags? = nil) {
+        let flags = modifiers ?? NSApp.currentEvent?.modifierFlags ?? []
+        // Plain selection must not re-filter and locale-sort the entire library
+        // on the same main-thread turn that starts the native inspector animation.
+        let ordered = flags.contains(.shift) ? filteredGames.map(\.id) : []
 
         if flags.contains(.shift), let anchor = selectionAnchor,
            let anchorIndex = ordered.firstIndex(of: anchor),
@@ -418,9 +421,9 @@ final class AppModel {
         )
     }
 
-    func assessment(for content: LocalContent) -> InstallationAssessment {
-        guard let game = games.first(where: { $0.contents.contains { $0.id == content.id } }) else {
-            return InstallationAssessment(state: .unknown, explanation: "这项内容不在当前游戏库中，不推断安装状态。")
+    func assessment(for content: LocalContent, in game: Game) -> InstallationAssessment {
+        guard game.contents.contains(where: { $0.id == content.id }) else {
+            return InstallationAssessment(state: .unknown, explanation: "这项内容不属于当前游戏，不推断安装状态。")
         }
         return InstallationAssessor.assess(
             content,

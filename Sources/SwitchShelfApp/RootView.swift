@@ -4,6 +4,7 @@ import SwitchShelfDomain
 struct RootView: View {
     @Bindable var model: AppModel
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
@@ -36,6 +37,12 @@ struct RootView: View {
         .frame(minWidth: 960, maxWidth: .infinity, minHeight: 640, maxHeight: .infinity)
         .background(WindowChrome())
         .tint(Theme.accent)
+        .transaction { transaction in
+            if reduceMotion {
+                transaction.animation = nil
+                transaction.disablesAnimations = true
+            }
+        }
         .alert(
             "移除来源？",
             isPresented: Binding(

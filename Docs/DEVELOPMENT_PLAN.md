@@ -1,5 +1,9 @@
 # SwitchShelf coordinated development plan
 
+## Native UI layout and inspector optimization — 2026-10-27
+
+Follow-up caught a display regression that process/window-size checks had missed: the native split pane retained a 1059-point ideal height and clipped its header in smaller windows. Library/sidebar panes now explicitly allow vertical compression. Real-window tests assert header/brand positions inside four viewport sizes, not just process survival. Selection no longer repeats whole-library sorting for plain clicks; inspector rows are lazy, and bounded artwork decoding/palette sampling runs off MainActor with validated decoded-image reuse. Native inspector behavior remains, with Reduce Motion respected. The 285-test offline suite, 51 cover checks, native selection/modifier/reopen regressions, 24 layouts and release signing pass. Reopened the actual 16-game window and verified card selection/detail display without queue writes. Synthetic CPU measurements are not animation FPS; full frame-time acceptance remains separate. Details: `Docs/Reports/ui-layout-and-inspector-performance-2026-10-27.md`.
+
 ## Empty-library startup crash fix — 2026-10-27
 
 Removing the last source exposed an AppKit/SwiftUI constraint-update loop, reproduced in an isolated real production WindowGroup. Empty libraries now omit the native inspector entirely (hiding it alone was insufficient); minimum dimensions are declared by the SwiftUI root instead of being written during NSView attachment. Empty startup, resize, populated-to-empty source removal and device-page round trips pass in light/dark native-window regressions. The full 285-test offline suite, release packaging and signing pass. The actual test app now opens the user's unchanged zero-source library without a new crash. Automatic device inventory still reports a separate read failure; no installation was attempted. See `Docs/Reports/empty-library-startup-crash-2026-10-27.md`.

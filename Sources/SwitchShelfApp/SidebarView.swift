@@ -25,6 +25,8 @@ struct SidebarView: View {
             scanFooter
             footer
         }
+        // Allow NSSplitView to fit the viewport, rather than its ideal height.
+        .frame(minHeight: 0, maxHeight: .infinity)
         .background(SidebarBackground())
         .overlay(alignment: .trailing) {
             Rectangle().fill(Theme.hairline).frame(width: 0.5)

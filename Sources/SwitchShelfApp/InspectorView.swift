@@ -9,14 +9,16 @@ struct InspectorView: View {
             header
             Divider().overlay(Theme.hairline)
             ScrollView {
-                if model.isMultiSelection {
-                    MultiSelectionInspector(model: model)
-                        .padding(18)
-                } else if let game = model.activeGame {
-                    GameInspector(model: model, game: game)
-                        .padding(18)
-                } else {
-                    emptyState
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    if model.isMultiSelection {
+                        MultiSelectionInspector(model: model)
+                            .padding(18)
+                    } else if let game = model.activeGame {
+                        GameInspector(model: model, game: game)
+                            .padding(18)
+                    } else {
+                        emptyState
+                    }
                 }
             }
             .scrollIndicators(.automatic)
@@ -81,15 +83,17 @@ private struct GameInspector: View {
     private var inPlan: Bool { model.isInPlan(game.id) }
 
     private var groupedContents: [(kind: ContentKind, contents: [LocalContent])] {
-        ContentKind.allCases.compactMap { kind in
-            let contents = game.contents.filter { $0.kind == kind }
-                .sorted { $0.fileURL.lastPathComponent.localizedStandardCompare($1.fileURL.lastPathComponent) == .orderedAscending }
-            return contents.isEmpty ? nil : (kind, contents)
+        let groups = Dictionary(grouping: game.contents, by: \.kind)
+        return ContentKind.allCases.compactMap { kind in
+            guard let contents = groups[kind] else { return nil }
+            return (kind, contents.sorted {
+                $0.fileURL.lastPathComponent.localizedStandardCompare($1.fileURL.lastPathComponent) == .orderedAscending
+            })
         }
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        LazyVStack(alignment: .leading, spacing: 16) {
             CoverArtwork(game: game, cornerRadius: 16)
                 .aspectRatio(1, contentMode: .fit)
                 .frame(maxWidth: 300)
@@ -137,7 +141,7 @@ private struct GameInspector: View {
             assessmentCard
 
             if !game.contents.isEmpty {
-                VStack(alignment: .leading, spacing: 9) {
+                LazyVStack(alignment: .leading, spacing: 9) {
                     HStack {
                         Text("本地内容")
                             .font(.system(size: 12, weight: .semibold))
@@ -283,7 +287,7 @@ private struct GameInspector: View {
     }
 
     private func contentRow(_ content: LocalContent) -> some View {
-        let state = model.assessment(for: content)
+        let state = model.assessment(for: content, in: game)
         return HStack(alignment: .top, spacing: 9) {
             ContentKindIcon(kind: content.kind)
             VStack(alignment: .leading, spacing: 2) {

@@ -44,6 +44,10 @@ extension AppModel {
     }
 }
 '''
+if '--selection-baseline' in sys.argv:
+    # Diagnostic-only A/B: reproduce the old unconditional sort in the fixture.
+    model = model.replace('let ordered = flags.contains(.shift) ? filteredGames.map(\\.id) : []',
+                          'let ordered = filteredGames.map(\\.id)')
 (temporary / 'AppModel.swift').write_text(model)
 # The window regression uses the real SwiftUI App/WindowGroup sizing path, not
 # the offscreen renderer (whose sizingOptions = [] masks constraint feedback).
@@ -55,6 +59,13 @@ if '--empty-library-window' in sys.argv:
     (temporary / 'SwitchShelfApp.swift').write_text(entry)
     (temporary / 'EmptyLibraryWindowRegression.swift').write_text(
         (root / 'scripts/verify-empty-library-window.swift').read_text())
+    for filename, anchor in [('SidebarView.swift', 'brand'), ('LibraryView.swift', 'header')]:
+        source = (temporary / filename).read_text()
+        source = source.replace('            ' + anchor + '\n', '            ' + anchor + '\n'
+            '                .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: {\n'
+            '                    WindowLayoutEvidence.frames["' + anchor + '"] = $0\n'
+            '                }\n', 1)
+        (temporary / filename).write_text(source)
 
 game = (root / 'Sources/SwitchShelfApp/GameViews.swift').read_text()
 game = game.replace(

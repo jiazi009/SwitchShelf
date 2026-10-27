@@ -1,18 +1,38 @@
 import AppKit
+import ImageIO
 import SwiftUI
 import SwitchShelfDomain
 import SwitchShelfLibrary
 
+/// Decoded, bounded pixels and palette can cross back to MainActor without
+/// forcing JPEG decoding or color sampling during the inspector animation.
+struct PreparedCover: Sendable {
+    let image: CGImage
+    let palette: CoverPalette
+
+    static func decode(_ thumbnail: CoverThumbnail) -> PreparedCover? {
+        guard !thumbnail.jpegData.isEmpty, thumbnail.jpegData.count <= 20 * 1024 * 1024,
+              let source = CGImageSourceCreateWithData(thumbnail.jpegData as CFData, nil),
+              let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                  kCGImageSourceCreateThumbnailFromImageAlways: true,
+                  kCGImageSourceThumbnailMaxPixelSize: CoverImageLoader.maxPixel,
+                  kCGImageSourceShouldCacheImmediately: true
+              ] as CFDictionary) else { return nil }
+        return PreparedCover(image: image, palette: CoverPalette.sample(image))
+    }
+}
+
 private final class CachedCover: NSObject {
     let image: NSImage
-    let isSquare: Bool
+    let thumbnail: CoverThumbnail
     let tint: Color
+    var isSquare: Bool { thumbnail.isSquare }
 
-    init(image: NSImage, isSquare: Bool) {
-        self.image = image
-        self.isSquare = isSquare
-        let palette = image.cgImage(forProposedRect: nil, context: nil, hints: nil)
-            .map(CoverPalette.sample) ?? .fallback
+    init(prepared: PreparedCover, thumbnail: CoverThumbnail) {
+        image = NSImage(cgImage: prepared.image,
+                        size: NSSize(width: prepared.image.width, height: prepared.image.height))
+        self.thumbnail = thumbnail
+        let palette = prepared.palette
         tint = Color(.sRGB, red: palette.red, green: palette.green, blue: palette.blue, opacity: 1)
     }
 }
@@ -35,7 +55,7 @@ private enum CoverImageCache {
     }
 
     static func insert(_ cover: CachedCover, for url: URL) {
-        let cost = Int(cover.image.size.width * cover.image.size.height * 4)
+        let cost = Int(cover.image.size.width * cover.image.size.height * 4) + cover.thumbnail.jpegData.count
         images.setObject(cover, forKey: url as NSURL, cost: cost)
     }
 }
@@ -145,7 +165,7 @@ struct CoverArtwork: View {
             store.save(created, for: url, byteCount: byteCount, modifiedAt: modifiedAt)
             return created
         }.value
-        apply(thumbnail, cacheKey: url)
+        await apply(thumbnail, cacheKey: url)
     }
 
     private func loadRemoteCover(titleID: String, cacheKey: URL) async {
@@ -163,18 +183,27 @@ struct CoverArtwork: View {
             store.save(created, for: cacheKey, byteCount: 0, modifiedAt: nil)
             return created
         }.value
-        apply(thumbnail, cacheKey: cacheKey)
+        await apply(thumbnail, cacheKey: cacheKey)
     }
 
-    private func apply(_ thumbnail: CoverThumbnail?, cacheKey: URL) {
+    private func apply(_ thumbnail: CoverThumbnail?, cacheKey: URL) async {
         guard !Task.isCancelled else { return }
-        if let thumbnail, let loaded = NSImage(data: thumbnail.jpegData) {
-            let loadedCover = CachedCover(image: loaded, isSquare: thumbnail.isSquare)
-            CoverImageCache.insert(loadedCover, for: cacheKey)
-            cover = loadedCover
-        } else {
-            cover = nil
+        guard let thumbnail else { cover = nil; return }
+        // Local source metadata was revalidated above. Reuse decoded pixels only
+        // when the validated thumbnail bytes still match, including offline hits.
+        if let cached = CoverImageCache.image(for: cacheKey), cached.thumbnail == thumbnail {
+            cover = cached
+            return
         }
+        let prepared = await Task.detached(priority: .utility) {
+            PreparedCover.decode(thumbnail)
+        }.value
+        guard !Task.isCancelled else { return }
+        if let prepared {
+            let loaded = CachedCover(prepared: prepared, thumbnail: thumbnail)
+            CoverImageCache.insert(loaded, for: cacheKey)
+            cover = loaded
+        } else { cover = nil }
     }
 }
 
@@ -293,10 +322,11 @@ struct GameCard: View {
                     }
                     .padding(7)
                 }
-                .overlay { selectionEdge }
+                .overlay {
+                    selectionEdge.animation(.smooth(duration: 0.18), value: isSelected)
+                }
                 .shadow(color: .black.opacity(isHovering ? 0.16 : 0.08), radius: isHovering ? 12 : 6, y: isHovering ? 6 : 3)
                 .scaleEffect(isHovering ? 1.012 : 1)
-                .animation(.smooth(duration: 0.22), value: isSelected)
                 .animation(.smooth(duration: 0.16), value: isHovering)
                 .animation(.smooth(duration: 0.16), value: isFocused)
 
@@ -316,9 +346,7 @@ struct GameCard: View {
         }
         .contentShape(Rectangle())
         .onTapGesture { model.handleGridTap(game) }
-        .onHover { hovering in
-            withAnimation(.smooth(duration: 0.16)) { isHovering = hovering }
-        }
+        .onHover { isHovering = $0 }
         .focusable()
         .focused($isFocused)
         .focusEffectDisabled()

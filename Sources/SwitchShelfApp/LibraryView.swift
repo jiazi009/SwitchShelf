@@ -15,6 +15,9 @@ struct LibraryView: View {
             content
             footer
         }
+        // Native split panes must be compressible; otherwise their ideal empty
+        // height can exceed the actual window and center the toolbar offscreen.
+        .frame(minHeight: 0, maxHeight: .infinity)
         .background(Theme.canvas)
         .task(id: model.searchFocusToken) {
             guard model.searchFocusToken > 0 else { return }

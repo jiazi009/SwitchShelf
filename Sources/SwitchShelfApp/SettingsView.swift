@@ -47,8 +47,8 @@ struct SettingsView: View {
             Section("关于") {
                 LabeledContent("SwitchShelf", value: version)
                 LabeledContent("游戏库", value: "本地文件 · 只读扫描")
-                LabeledContent("设备", value: "USB 清单 · 单文件安装测试")
-                Text("安装队列提供试验性的 sphaira 单文件发送，需逐项核对并确认。发送完成不等于安装成功，设备端安装结果仍需自行确认。")
+                LabeledContent("设备", value: "USB 清单 · 安装队列")
+                Text("安装队列通过 sphaira 依次发送文件，需在发送前核对全部内容并确认；批量发送尚需实机验收。发送完成不等于安装成功，设备端安装结果仍需自行确认。")
                     .font(.system(size: 10.5))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

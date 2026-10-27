@@ -45,7 +45,7 @@ struct QueueView: View {
         }
         .background(Theme.canvas)
         .sheet(item: $model.installationReview) { request in
-            MTPInstallConfirmation(request: request) {
+            MTPInstallConfirmation(review: request) {
                 model.confirmMTPInstallation(request)
             } onCancel: {
                 model.installationReview = nil
@@ -108,7 +108,7 @@ struct QueueView: View {
 
     @ViewBuilder
     private var executionButtons: some View {
-        Button(model.isReviewingInstall ? "准备确认…" : "核对并安装一个文件…") {
+        Button(model.isReviewingInstall ? "准备确认…" : "核对并发送安装队列…") {
             Task { await model.prepareMTPInstallationReview() }
         }
         .buttonStyle(.borderedProminent)
@@ -116,8 +116,8 @@ struct QueueView: View {
         .fixedSize(horizontal: true, vertical: false)
         .disabled(!model.canReviewMTPInstallation)
         .help(model.wifiBlocksUSB
-              ? "无线 FTP 仍连接或正在连接，已暂停这次 USB 安装测试。"
-              : "需要检查通过且只勾选一个文件；此按钮先显示确认页，不会立即写设备")
+              ? "无线 FTP 仍连接或正在连接，已暂停 USB 安装。"
+              : "需要检查通过、统一目标且每个游戏最多选择一个更新；此按钮先显示确认页，不会立即写设备。")
 
         Button("检查计划") { Task { await model.checkPlan() } }
             .buttonStyle(.bordered)
@@ -142,11 +142,11 @@ struct QueueView: View {
                 .background(Theme.warning.opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 7) {
-                    Text("sphaira 原生 MTP · 单文件测试")
+                    Text("sphaira 原生 MTP · 安装队列")
                         .font(.system(size: 13, weight: .semibold))
-                    BadgePill(text: "试验功能", systemImage: "exclamationmark.shield", tone: .warning)
+                    BadgePill(text: "批量发送待实机验收", systemImage: "exclamationmark.shield", tone: .warning)
                 }
-                Text("先仅勾选一个文件并检查计划，再核对文件、权限与设备端设置后确认发送。Switch 必须进入 sphaira 的 MTP Install 页面；SD／机身存储由设备端选择。原生通道尚未经实机安装验收；文件发送完成不等于安装成功。")
+                Text("检查计划后核对所有文件及设备端设置。Switch 必须进入 sphaira 的 MTP Install 页面；目标存储由设备端选择。文件发送完成不等于安装成功。")
                     .font(.system(size: 10.5))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -155,17 +155,29 @@ struct QueueView: View {
                     VStack(alignment: .leading, spacing: 8) { executionButtons }
                 }
                 .padding(.top, 2)
-                if model.isInstalling {
-                    ProgressView(value: Double(model.installProgress?.bytesSubmitted ?? 0),
-                                 total: Double(model.installProgress?.totalBytes ?? 1))
-                    Text("已提交 \(formatByteCount(Int64(model.installProgress?.bytesSubmitted ?? 0)))；等待设备响应不等于安装完成。取消后会等待辅助进程退出。")
+                ForEach(Array(model.queueValidationIssues.enumerated()), id: \.offset) { _, issue in
+                    Text(issue).font(.system(size: 10.5)).foregroundStyle(Theme.warning)
+                }
+                if !model.installStatuses.isEmpty {
+                    let completedBytes = model.installStatuses.reduce(UInt64(0)) { total, status in
+                        let (sum, overflow) = total.addingReportingOverflow(status.bytesSubmitted)
+                        return overflow ? .max : sum
+                    }
+                    let totalBytes = SphairaBatchReview(items: model.installStatuses.map(\.item)).totalBytes
+                    ProgressView(value: Double(completedBytes), total: Double(max(totalBytes, 1)))
+                    Text("已提交 \(formatByteCount(Int64(clamping: completedBytes))) / \(formatByteCount(Int64(clamping: totalBytes)))；发送完成仍需设备确认。")
                         .font(.system(size: 10.5)).foregroundStyle(.secondary)
+                    ForEach(model.installStatuses) { status in
+                        HStack(alignment: .top) {
+                            Text("\(status.item.gameTitle) · \(status.item.request.name)").lineLimit(1)
+                            Spacer()
+                            Text(statusText(status)).foregroundStyle(.secondary)
+                        }.font(.system(size: 10.5))
+                    }
+                }
+                if model.isInstalling {
                     Button("取消传输", role: .destructive) { model.cancelMTPInstallation() }
                         .buttonStyle(.bordered)
-                }
-                if let report = model.installReport {
-                    Text(report.message + (report.processExitVerified ? " 辅助进程已退出。" : " 辅助进程退出未确认，禁止重试。"))
-                        .font(.system(size: 10.5)).foregroundStyle(Theme.warning)
                 }
                 Button("查看本地传输记录") { model.openMTPInstallationRecords() }
                     .font(.system(size: 10.5))
@@ -203,6 +215,15 @@ struct QueueView: View {
         }
         .accessibilityElement(children: .contain)
     }
+    private func statusText(_ status: SphairaBatchStatus) -> String {
+        switch status.state {
+        case .waiting: "等待发送"
+        case .sending: "发送中"
+        case .transferred: "已发送，等待设备确认"
+        case .stopped(let message): "已停止：\(message)"
+        }
+    }
+
 }
 
 private struct PlanItemCard: View {
@@ -367,6 +388,15 @@ private struct PlanItemCard: View {
                                 .font(.system(size: 9.5))
                                 .foregroundStyle(.secondary)
                                 .monospacedDigit()
+                            if item.contents.filter({ $0.kind == .update }).count > 1 &&
+                                item.contents.filter({ $0.kind == .update && $0.included }).isEmpty {
+                                Text("请核对并选择更新补丁（最多一个）")
+                                    .font(.system(size: 9)).foregroundStyle(Theme.warning)
+                            }
+                            if item.contents.filter({ $0.kind == .update && $0.included }).count > 1 {
+                                Text("已选多个更新，请只保留一个")
+                                    .font(.system(size: 9)).foregroundStyle(Theme.warning)
+                            }
                             if includedCount == 0 {
                                 Text("至少选择一项")
                                     .font(.system(size: 9))

@@ -34,9 +34,8 @@ final class AppModel {
     private(set) var preparation: SphairaPreflightResult?
     private(set) var isInstalling = false
     private(set) var isReviewingInstall = false
-    var installationReview: SphairaInstallRequest?
-    private(set) var installProgress: SphairaInstallProgress?
-    private(set) var installReport: SphairaInstallReport?
+    var installationReview: SphairaBatchReview?
+    private(set) var installStatuses: [SphairaBatchStatus] = []
 
     // MARK: UI state
     private(set) var selection: SidebarItem? = .all
@@ -143,7 +142,7 @@ final class AppModel {
             guard let source = snapshot.sources.first(where: { $0.id == id }) else { return "" }
             return "\(sourceGameCount(id)) 款游戏 · 来源\(source.availability.label)"
         case .queue:
-            return "\(plan.count) 项计划 · \(formatByteCount(planTotalBytes)) · " + (isInstalling ? "正在发送单文件" : "需确认后发送")
+            return "\(plan.count) 项计划 · \(formatByteCount(planTotalBytes)) · " + (isInstalling ? "正在发送队列" : "需确认后发送")
         case .device:
             return deviceSubtitle
         case .wifi:
@@ -1253,7 +1252,9 @@ final class AppModel {
     private var preflightInput: SphairaPreflightInput {
         let matches = Dictionary(grouping: snapshot.games.flatMap(\.contents), by: \.id)
         return SphairaPreflightInput(items: plan.map { item in
-            SphairaPreflightItem(id: item.id, intendedTarget: item.target.rawValue, entries: item.contents.map { content in
+            SphairaPreflightItem(id: item.id, intendedTarget: item.target.rawValue, entries: item.contents.enumerated().sorted { a, b in
+                a.element.kind.order == b.element.kind.order ? a.offset < b.offset : a.element.kind.order < b.element.kind.order
+            }.map { _, content in
                 // An ID is opaque: only a unique current LocalContent mapping supplies a URL.
                 let source = matches[content.id]?.count == 1 ? matches[content.id]?.first : nil
                 let sourceOnline = source.map { local in
@@ -1283,73 +1284,105 @@ final class AppModel {
         isCheckingPlan = false
     }
 
-    // MARK: - Explicit single-file sphaira installation test
+    // MARK: - Reviewed sphaira installation queue
+
+    var queueValidationIssues: [String] {
+        var issues: [String] = []
+        let selectedItems = plan.filter { !$0.includedContents.isEmpty }
+        if !InstallQueueRules.targetsAreConsistent(selectedItems.map { $0.target.rawValue }) {
+            issues.append("所选文件的计划目标不一致；请统一为 SD 卡或机身存储。")
+        }
+        for item in selectedItems where UpdateSelection.hasConflict(
+            updateIDs: Set(item.contents.filter { $0.kind == .update }.map(\.id)),
+            selectedIDs: Set(item.includedContents.map(\.id))) {
+            issues.append("「\(item.title)」选择了多个更新补丁；请只保留一个。")
+        }
+        return issues
+    }
 
     var canReviewMTPInstallation: Bool {
         !isInstalling && !isReviewingInstall && !isReadingInventory && !isDiscovering && !isScanning &&
-        !isCheckingPlan && !wifiBlocksUSB && preparationIsCurrent && preparation?.isPrepared == true && preparation?.offers.count == 1
+        !isCheckingPlan && !wifiBlocksUSB && preparationIsCurrent && preparation?.isPrepared == true && queueValidationIssues.isEmpty
     }
 
     func prepareMTPInstallationReview() async {
         guard canReviewMTPInstallation else { return }
         let input = preflightInput
-        let selected = input.items.flatMap { item in item.entries.filter(\.included).map { (item.intendedTarget, $0) } }
-        guard selected.count == 1, let (target, entry) = selected.first, let url = entry.sourceURL,
-              let root = snapshot.sources.filter({ $0.availability == .online && isUnder(url, source: $0) })
-                .max(by: { $0.url.path.count < $1.url.path.count })?.url, entry.expectedBytes > 0 else { return }
+        var candidates: [(String, String, URL, URL, UInt64)] = []
+        for item in input.items {
+            let title = plan.first(where: { $0.id == item.id })?.title ?? item.id
+            for entry in item.entries where entry.included {
+                guard let url = entry.sourceURL, entry.expectedBytes > 0,
+                      let root = snapshot.sources.filter({ $0.availability == .online && isUnder(url, source: $0) })
+                        .max(by: { $0.url.path.count < $1.url.path.count })?.url else { return }
+                candidates.append((title, item.intendedTarget, url, root, UInt64(entry.expectedBytes)))
+            }
+        }
+        guard !candidates.isEmpty else { return }
         isReviewingInstall = true
         defer { isReviewingInstall = false }
         do {
-            let request = try await Task.detached(priority: .utility) {
-                try SphairaInstallRequest.review(sourceURL: url, allowedRoot: root,
-                    expectedBytes: UInt64(entry.expectedBytes), intendedTarget: target)
+            let sources = candidates
+            let items = try await Task.detached(priority: .utility) {
+                try sources.map { title, target, url, root, size in
+                    SphairaBatchItem(gameTitle: title, request: try SphairaInstallRequest.review(
+                        sourceURL: url, allowedRoot: root, expectedBytes: size, intendedTarget: target))
+                }
             }.value
-            guard input == preflightInput, !isInstalling, !isReadingInventory, !isDiscovering else { return }
+            guard input == preflightInput, !isInstalling, !isReadingInventory, !isDiscovering,
+                  !isScanning, !wifiBlocksUSB, preparationIsCurrent, queueValidationIssues.isEmpty else { return }
             reviewedPlan = input
-            installationReview = request
+            installationReview = SphairaBatchReview(items: items)
         } catch {
             notice = AppNotice(level: .warning, title: "无法准备安装确认", message: "源文件元数据或路径已变化，请重新扫描并检查计划。未连接设备。")
         }
     }
 
-    func confirmMTPInstallation(_ request: SphairaInstallRequest) {
+    func confirmMTPInstallation(_ review: SphairaBatchReview) {
         if wifiBlocksUSB {
             notice = wifiBlocksUSBNotice
             return
         }
         guard !isInstalling, !isReadingInventory, !isDiscovering, !isScanning, !wifiBlocksUSB,
-              installationReview?.id == request.id, reviewedPlan == preflightInput, preparationIsCurrent else {
+              installationReview?.id == review.id, reviewedPlan == preflightInput,
+              preparationIsCurrent, queueValidationIssues.isEmpty else {
             installationReview = nil
             return
         }
         installationReview = nil
         reviewedPlan = nil
         if NSWorkspace.shared.runningApplications.contains(where: { $0.bundleIdentifier == "io.ganeshrvel.openmtp" }) {
-            notice = AppNotice(level: .warning, title: "请先完整退出 OpenMTP", message: "未启动安装测试。请退出其他 MTP 客户端后重新核对确认。")
+            notice = AppNotice(level: .warning, title: "请先完整退出 OpenMTP", message: "未启动传输。请退出其他 MTP 客户端后重新核对确认。")
             return
         }
         isInstalling = true
-        installProgress = nil
-        installReport = nil
+        installStatuses = []
         inventory = cachedInventory
         inventorySessionSignature = nil
         notice = nil
+        let installer = mtpInstaller
         installTask = Task { [weak self] in
             guard let self else { return }
             defer { self.isInstalling = false; self.installTask = nil }
-            do {
-                let report = try await self.mtpInstaller.install(request.confirmed()) { [weak self] value in
-                    await MainActor.run {
-                        if self?.isInstalling == true { self?.installProgress = value }
+            await SphairaBatchInstaller.run(review.items, send: { request, progress in
+                try await installer.install(request, progress: progress)
+            }, observe: { [weak self] event in
+                await MainActor.run {
+                    guard let self, self.isInstalling else { return }
+                    switch event {
+                    case .statuses(let statuses): self.installStatuses = statuses
+                    case .progress(let id, let bytes):
+                        guard let index = self.installStatuses.firstIndex(where: { $0.item.id == id }),
+                              case .sending = self.installStatuses[index].state else { return }
+                        self.installStatuses[index].bytesSubmitted = bytes
                     }
                 }
-                self.installReport = report
-                self.notice = AppNotice(level: .warning,
-                    title: report.transfer.outcome == .transferredAwaitingConfirmation ? "传输完成，等待设备确认" : "安装测试未确认完成",
-                    message: report.message)
-            } catch {
-                self.notice = AppNotice(level: .error, title: "安装测试未启动／中止", message: error.localizedDescription)
-            }
+            })
+            let stopped = self.installStatuses.contains { if case .stopped = $0.state { true } else { false } }
+            let incomplete = self.installStatuses.contains { if case .waiting = $0.state { true } else { false } }
+            self.notice = AppNotice(level: .warning,
+                title: stopped || incomplete ? "队列已停止" : "传输完成，等待设备确认",
+                message: stopped || incomplete ? "后续文件未发送；请检查各项结果及设备状态，不会自动重试。" : "文件已发送；请在设备端确认安装结果并刷新设备清单。")
         }
     }
 
@@ -1411,7 +1444,13 @@ final class AppModel {
         guard !isInstalling else { return }
         guard let itemIndex = plan.firstIndex(where: { $0.id == itemID }),
               let contentIndex = plan[itemIndex].contents.firstIndex(where: { $0.id == contentID }) else { return }
-        plan[itemIndex].contents[contentIndex].included = included
+        let contents = plan[itemIndex].contents
+        let selected = UpdateSelection.applying(id: contents[contentIndex].id, included: included,
+            updateIDs: Set(contents.filter { $0.kind == .update }.map(\.id)),
+            selectedIDs: Set(contents.filter(\.included).map(\.id)))
+        for index in plan[itemIndex].contents.indices {
+            plan[itemIndex].contents[index].included = selected.contains(plan[itemIndex].contents[index].id)
+        }
         schedulePlanSave()
     }
 

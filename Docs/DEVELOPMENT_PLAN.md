@@ -1,5 +1,9 @@
 # SwitchShelf coordinated development plan
 
+## Integration checkpoint — 2026-10-27
+
+The local main branch combines automatic USB discovery and cached historical inventory, the device session overview, the separate DBI FTP page, and the reviewed serial installation queue. FTP connection blocks USB discovery and installation; cached inventory remains historical until a current-session read. The queue uses the existing isolated single-file helper for each item, stops on uncertain results, and never treats transfer as proof of installation. This integration has not been validated by a physical installation or a real FTP session; the historical single-file checkpoints below describe the earlier implementation.
+
 ## Current objective
 Continue the user-selected **sphaira MTP inventory + installation** route. Preserve the accepted Games inventory and conservative identity matching; implement installation in gated stages. Backend is deferred and its existing uncommitted changes remain separate. Historical Orca waves below describe earlier work, not a newly dispatched run.
 

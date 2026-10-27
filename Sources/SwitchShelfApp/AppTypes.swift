@@ -9,6 +9,7 @@ enum SidebarItem: Hashable {
     case unidentified
     case queue
     case device
+    case wifi
     case maintenance
     case source(String)
 

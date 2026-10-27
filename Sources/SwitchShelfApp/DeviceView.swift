@@ -38,6 +38,7 @@ struct DeviceView: View {
     private var header: some View {
         HStack(spacing: 10) {
             PageHeading(title: "我的 Switch", subtitle: model.deviceSubtitle)
+            BadgePill(text: "USB", systemImage: "cable.connector", tone: .accent)
             Spacer()
             Button {
                 Task { await model.detectAndRead() }
@@ -46,7 +47,7 @@ struct DeviceView: View {
                     .font(.system(size: 11.5, weight: .medium))
             }
             .buttonStyle(.glass)
-            .disabled(model.isDiscovering || model.isReadingInventory || model.isInstalling)
+            .disabled(model.isDiscovering || model.isReadingInventory || model.isInstalling || model.wifiBlocksUSB)
             .help("只读检测 USB。若发现单一 057e:201d 且 OpenMTP 未运行，会继续读取清单。")
             .accessibilityLabel("检测并读取，只读")
         }
@@ -118,7 +119,7 @@ struct DeviceView: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
-                    .disabled(model.isDiscovering || model.isReadingInventory || model.isInstalling)
+                    .disabled(model.isDiscovering || model.isReadingInventory || model.isInstalling || model.wifiBlocksUSB)
                     .help("只读检测 USB。若发现单一 057e:201d 且 OpenMTP 未运行，会继续读取清单，不下载 NSP，不写入设备。重新枚举会使旧清单失效；读取失败且 USB 候选未变时保留上次成功清单。")
                     .accessibilityLabel("检测并读取，只读")
 
@@ -297,7 +298,7 @@ struct DeviceView: View {
                     Image(systemName: "lock.shield.fill")
                         .font(.system(size: 10))
                         .foregroundStyle(Theme.installed)
-                    Text("这里只读取 Games / Installed games 元数据；Mounts、Contents、存档、安装与测速入口不参与扫描。队列中的单文件安装测试需单独确认，在 sphaira 进入 MTP Install 并选择目标存储。安装时暂停清单读取；发送完成不等于安装成功。")
+                    Text("这里只读取 Games / Installed games 元数据；Mounts、Contents、存档、安装与测速入口不参与扫描。队列中的单文件安装测试需单独确认，在 sphaira 进入 MTP Install 并选择目标存储。安装时暂停清单读取；发送完成不等于安装成功。侧边栏「无线连接」是另一条 DBI FTP，不会从本页打开。")
                         .font(.system(size: 10))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -471,7 +472,7 @@ struct DeviceView: View {
                     Button("检测并读取") { Task { await model.detectAndRead() } }
                         .buttonStyle(.bordered)
                         .controlSize(.small)
-                        .disabled(model.isDiscovering || model.isReadingInventory || model.isInstalling)
+                        .disabled(model.isDiscovering || model.isReadingInventory || model.isInstalling || model.wifiBlocksUSB)
                 }
 
                 HStack {

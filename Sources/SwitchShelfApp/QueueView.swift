@@ -115,7 +115,9 @@ struct QueueView: View {
         .controlSize(.large)
         .fixedSize(horizontal: true, vertical: false)
         .disabled(!model.canReviewMTPInstallation)
-        .help("需要检查通过且只勾选一个文件；此按钮先显示确认页，不会立即写设备")
+        .help(model.wifiBlocksUSB
+              ? "无线 FTP 仍连接或正在连接，已暂停这次 USB 安装测试。"
+              : "需要检查通过且只勾选一个文件；此按钮先显示确认页，不会立即写设备")
 
         Button("检查计划") { Task { await model.checkPlan() } }
             .buttonStyle(.bordered)

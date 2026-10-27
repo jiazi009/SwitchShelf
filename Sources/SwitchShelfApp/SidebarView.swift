@@ -89,6 +89,13 @@ struct SidebarView: View {
                 statusColor: deviceDot
             ) { model.select(.device) }
             SidebarRow(
+                title: "无线连接",
+                systemImage: "wifi",
+                count: nil,
+                isSelected: model.selection == .wifi,
+                statusColor: wifiDot
+            ) { model.select(.wifi) }
+            SidebarRow(
                 title: "维护",
                 systemImage: "wrench.and.screwdriver.fill",
                 count: nil,
@@ -100,6 +107,16 @@ struct SidebarView: View {
     private var deviceDot: Color? {
         guard let state = model.deviceDiscovery?.state else { return nil }
         return state.tone.color
+    }
+
+    private var wifiDot: Color? {
+        switch model.wifi.phase {
+        case .disconnected: nil
+        case .connecting: Theme.accent
+        case .connected: Theme.installed
+        case .failed: Theme.danger
+        case .unknown: Theme.warning
+        }
     }
 
     private var sourcesSection: some View {

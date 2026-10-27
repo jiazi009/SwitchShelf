@@ -3,6 +3,10 @@
 ## Current objective
 Continue the user-selected **sphaira MTP inventory + installation** route. Preserve the accepted Games inventory and conservative identity matching; implement installation in gated stages. Backend is deferred and its existing uncommitted changes remain separate. Historical Orca waves below describe earlier work, not a newly dispatched run.
 
+## Separate Wi-Fi slice — 2026-10-26
+
+This branch adds a DBI FTP page beside the existing USB MTP path. It does not replace sphaira/DBI inventory or the single-file install test. The pinned README (`22090af`) describes Run FTP server as SD file access on port 5000 and installation on port 6000; the client uses 5000 only. HTTP metadata for build 647 stays unverified. Tests are fixtures and a loopback server, not a session to a Switch. Details: `Docs/Reports/wifi-ftp-connection-2026-10-26.md`.
+
 ## Native sphaira MTP test package — 2026-10-25
 
 - User requested native MTP integration, repackaging and an app run for their manual test. Added a real bounded libusb transport with same-session PTP inspection, packet-aligned stream/final ZLP handling and no driver detach/reset. Inventory remains ImageCaptureCore.

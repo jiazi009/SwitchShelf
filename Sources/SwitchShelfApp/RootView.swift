@@ -55,6 +55,8 @@ struct RootView: View {
             QueueView(model: model)
         case .device:
             DeviceView(model: model)
+        case .wifi:
+            WiFiConnectView(model: model)
         case .maintenance:
             MaintenanceView(model: model)
         case .all, .recent, .unidentified, .source:

@@ -139,9 +139,10 @@ struct PlanItem: Codable, Identifiable, Equatable, Sendable {
         self.gameID = game.id
         self.title = game.title
         self.titleID = game.contents.compactMap(\.titleID).first
+        let selectedUpdateID = UpdateSelection.defaultID(in: game.contents)
         self.contents = game.contents
             .sorted { $0.kind.order == $1.kind.order ? $0.fileURL.lastPathComponent < $1.fileURL.lastPathComponent : $0.kind.order < $1.kind.order }
-            .map { PlanContent(content: $0) }
+            .map { PlanContent(content: $0, included: $0.kind == .base || $0.kind == .dlc || ($0.kind == .update && $0.id == selectedUpdateID)) }
         self.target = target
         self.note = note
         self.addedAt = addedAt
@@ -240,12 +241,7 @@ func stableHue(_ text: String) -> Double {
 
 extension ContentKind {
     var order: Int {
-        switch self {
-        case .base: 0
-        case .update: 1
-        case .dlc: 2
-        case .unknown: 3
-        }
+        InstallQueueRules.order(self)
     }
 
     var label: String {

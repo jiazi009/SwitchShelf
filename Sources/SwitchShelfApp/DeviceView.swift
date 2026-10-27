@@ -216,7 +216,7 @@ struct DeviceView: View {
                     Image(systemName: "lock.shield.fill")
                         .font(.system(size: 10))
                         .foregroundStyle(Theme.installed)
-                    Text("这里只读取 Games / Installed games 元数据；Mounts、Contents、存档、安装与测速入口不参与扫描。队列中的单文件安装测试需单独确认，在 sphaira 进入 MTP Install 并选择目标存储。安装时暂停清单读取；发送完成不等于安装成功。")
+                    Text("这里只读取 Games / Installed games 元数据；Mounts、Contents、存档、安装与测速入口不参与扫描。安装队列需核对文件并确认，在 sphaira 进入 MTP Install 并选择目标存储。发送期间暂停清单读取；发送完成不等于安装成功。")
                         .font(.system(size: 10))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)

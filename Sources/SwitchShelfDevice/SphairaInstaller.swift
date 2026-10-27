@@ -5,9 +5,9 @@ public enum SphairaInstallError: Error, LocalizedError {
     case busy, exitUnverified, unconfirmed, missingHelper, preparation
     public var errorDescription: String? {
         switch self {
-        case .busy: "已有 MTP 安装测试正在进行。"
+        case .busy: "已有 MTP 传输正在进行。"
         case .exitUnverified: "无法确认上次安装进程已退出；已阻止后续发送。不要重试，请检查记录和设备。"
-        case .unconfirmed: "必须先核对并明确确认这一个文件和设备端目标位置。"
+        case .unconfirmed: "必须先核对并明确确认文件和设备端目标位置。"
         case .missingHelper: "应用缺少独立 MTP 安装辅助程序，请重新打包。"
         case .preparation: "无法创建独立且私有的安装记录；未启动传输。"
         }

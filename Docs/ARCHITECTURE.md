@@ -72,5 +72,9 @@ The user authorized supervised Orca agents to implement USB Backend software and
 
 Backend file exchange does not prove installation. Transfer outcomes are per file (`notRequested`, `partiallyTransferred`, `transferredAwaitingConfirmation`), and never promote a game to installed. SD/NAND selections remain local intent: the pinned host protocol does not encode a destination-setting command. Backend and MTP must not hold device sessions concurrently. No new source file reads, physical USB opens/writes, dependency installs or global settings changes are allowed in worker validation.
 
+## Wireless FTP slice — 2026-10-26
+
+`SwitchShelfDevice` owns a separate FTP client. It is not a USB transport and does not take `DeviceLease`. The pinned DBI README says Run FTP server accesses SD files on port 5000 and installs files on port 6000. `dbi.config` at that commit sets `[FTP] Port=5000` and `[HTTP] Port=1234`. This client opens only the file-access port, sends `USER anonymous`, `PASS anonymous`, `PWD`, `PASV` and `LIST`, then `QUIT` on disconnect. It never sends `STOR`, `RETR` or any other write. `LIST` text is not installed-game evidence and does not verify package identity. The first host whose session phase becomes connected is stored under `SwitchShelf.wifi.firstConnectedHost` and is never replaced. An absent value is not filled with a guessed address. sphaira's network menu remains the documented way to enable MTP, not this Wi-Fi path. No physical Switch FTP session has been run.
+
 
 The user requested pi as the preferred development agent due to quota on 2026-10-23. The three initial Codex dispatches were explicitly stopped with their worktrees preserved. pi structured-session creation was refused by the current Orca runtime; use the documented existing-terminal supervision route if required. Agent identity and underlying model/provider are separate; do not claim a different quota pool without evidence.

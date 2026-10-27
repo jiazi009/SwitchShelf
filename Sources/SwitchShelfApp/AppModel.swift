@@ -19,6 +19,11 @@ final class AppModel {
     private(set) var inventoryCacheSaved = false
     private(set) var inventorySessionSignature: String?
     private(set) var deviceDiscovery: DeviceDiscovery?
+    private(set) var wifi = WiFiFTPSnapshot.notConnected
+    var wifiHost = ""
+    var wifiPort = ""
+    private(set) var rememberedWiFiHost: String?
+    private(set) var isWiFiBusy = false
     private(set) var cacheLoaded = false
     private(set) var isBootstrapped = false
     private(set) var isScanning = false
@@ -60,6 +65,7 @@ final class AppModel {
     // MARK: Services
     @ObservationIgnored private let scanner: any LibraryScanning = LibraryScanner()
     @ObservationIgnored private let deviceService = DeviceService()
+    @ObservationIgnored private let wifiClient = WiFiFTPClient()
     @ObservationIgnored private let inventoryReader = BoundedInventoryReader()
     @ObservationIgnored private let preflightService = SphairaPreflightService()
     @ObservationIgnored private let mtpInstaller = SphairaInstaller()
@@ -96,6 +102,8 @@ final class AppModel {
         self.sortOrder = SortOrder(rawValue: defaults.string(forKey: "SwitchShelf.sortOrder") ?? "") ?? .recent
         let storedCover = defaults.double(forKey: "SwitchShelf.coverSize")
         self.coverSize = storedCover >= 120 ? storedCover : 172
+        self.rememberedWiFiHost = WiFiFTPRememberedHost.storedHost(in: defaults)
+        self.wifiHost = WiFiFTPRememberedHost.hostFieldForLaunch(currentField: "", defaults: defaults)
     }
 
     // MARK: - Derived library views
@@ -117,6 +125,7 @@ final class AppModel {
         case .unidentified: "待识别"
         case .queue: "安装队列"
         case .device: "我的 Switch"
+        case .wifi: "无线连接"
         case .maintenance: "维护"
         case .source(let id): snapshot.sources.first { $0.id == id }?.name ?? "游戏来源"
         }
@@ -137,6 +146,8 @@ final class AppModel {
             return "\(plan.count) 项计划 · \(formatByteCount(planTotalBytes)) · " + (isInstalling ? "正在发送单文件" : "需确认后发送")
         case .device:
             return deviceSubtitle
+        case .wifi:
+            return wifiSubtitle
         case .maintenance:
             return "本地缓存、扫描与来源诊断"
         }
@@ -186,7 +197,7 @@ final class AppModel {
                 break
             }
             result = games.filter { gameBelongs($0, to: source) }
-        case .queue, .device, .maintenance:
+        case .queue, .device, .wifi, .maintenance:
             result = []
         }
 
@@ -242,6 +253,16 @@ final class AppModel {
         return deviceDiscovery.message
     }
 
+    var wifiSubtitle: String {
+        if wifi.host.isEmpty { return "DBI FTP · 与 USB 分开" }
+        let port = wifi.port.map(String.init) ?? "端口未定"
+        return "\(wifi.phase.label) · \(wifi.host):\(port)"
+    }
+
+    var wifiBlocksUSB: Bool {
+        isWiFiBusy || wifi.phase == .connecting || wifi.phase == .connected
+    }
+
     var installedGameCount: Int {
         guard inventory != nil else { return 0 }
         return games.filter { assessment(for: $0).state == .installed }.count
@@ -269,7 +290,7 @@ final class AppModel {
         case .recent: recentGameIDs.count
         case .unidentified: unidentifiedCount
         case .queue: plan.count
-        case .device, .maintenance: nil
+        case .device, .wifi, .maintenance: nil
         case .source(let id): sourceGameCount(id)
         }
     }
@@ -300,6 +321,7 @@ final class AppModel {
     func showAllGames() { select(.all) }
     func showQueue() { select(.queue) }
     func showDevice() { select(.device) }
+    func showWiFi() { select(.wifi) }
     func showMaintenance() { select(.maintenance) }
 
     func focusSearch() {
@@ -879,7 +901,7 @@ final class AppModel {
     }
 
     var canReadInventory: Bool {
-        mtpCandidateSignature != nil && !isReadingInventory && !isDiscovering && !isInstalling
+        mtpCandidateSignature != nil && !isReadingInventory && !isDiscovering && !isInstalling && !wifiBlocksUSB
     }
 
     var inventoryIsCurrentSession: Bool {
@@ -901,11 +923,11 @@ final class AppModel {
     }
 
     private func monitorDevice() async {
-        guard !isDiscovering, !isReadingInventory, !isInstalling else { return }
+        guard !isDiscovering, !isReadingInventory, !isInstalling, !wifiBlocksUSB else { return }
         isDiscovering = true
         let previous = mtpCandidateSignature
         let result = await deviceService.discover()
-        guard !isInstalling else { isDiscovering = false; return }
+        guard !isInstalling, !wifiBlocksUSB else { isDiscovering = false; return }
         // Keep successful MTP status while the same registry entry remains present.
         let newIDs = result.devices.map(\.id).sorted()
         let oldIDs = deviceDiscovery?.devices.map(\.id).sorted()
@@ -947,8 +969,22 @@ final class AppModel {
         _ = await readInventory()
     }
 
+    var deviceSessionOverview: DeviceSessionOverview {
+        DeviceSessionOverview.make(
+            discovery: deviceDiscovery,
+            inventory: inventory,
+            inventoryBelongsToCurrentSession: inventoryIsCurrentSession,
+            isDiscovering: isDiscovering,
+            isReadingInventory: isReadingInventory
+        )
+    }
+
     func refreshDevices() async {
         guard !isDiscovering, !isReadingInventory, !isInstalling else { return }
+        if wifiBlocksUSB {
+            notice = wifiBlocksUSBNotice
+            return
+        }
         isDiscovering = true
         let previous = mtpCandidateSignature
         let result = await deviceService.discover()
@@ -965,6 +1001,10 @@ final class AppModel {
     /// A failed read leaves the last cached snapshot available as historical data.
     func detectAndRead(announceWhenMissing: Bool = true) async {
         guard !isDiscovering, !isReadingInventory, !isInstalling else { return }
+        if wifiBlocksUSB {
+            if announceWhenMissing { notice = wifiBlocksUSBNotice }
+            return
+        }
         if openMTPIsRunning {
             if deviceDiscovery == nil {
                 await refreshDevices()
@@ -999,6 +1039,10 @@ final class AppModel {
     @discardableResult
     func readInventory() async -> Bool {
         guard !isReadingInventory, !isInstalling else { return false }
+        if wifiBlocksUSB {
+            notice = wifiBlocksUSBNotice
+            return false
+        }
         guard canReadInventory, let signature = mtpCandidateSignature else {
             notice = AppNotice(
                 level: .warning,
@@ -1243,7 +1287,7 @@ final class AppModel {
 
     var canReviewMTPInstallation: Bool {
         !isInstalling && !isReviewingInstall && !isReadingInventory && !isDiscovering && !isScanning &&
-        !isCheckingPlan && preparationIsCurrent && preparation?.isPrepared == true && preparation?.offers.count == 1
+        !isCheckingPlan && !wifiBlocksUSB && preparationIsCurrent && preparation?.isPrepared == true && preparation?.offers.count == 1
     }
 
     func prepareMTPInstallationReview() async {
@@ -1269,7 +1313,11 @@ final class AppModel {
     }
 
     func confirmMTPInstallation(_ request: SphairaInstallRequest) {
-        guard !isInstalling, !isReadingInventory, !isDiscovering, !isScanning,
+        if wifiBlocksUSB {
+            notice = wifiBlocksUSBNotice
+            return
+        }
+        guard !isInstalling, !isReadingInventory, !isDiscovering, !isScanning, !wifiBlocksUSB,
               installationReview?.id == request.id, reviewedPlan == preflightInput, preparationIsCurrent else {
             installationReview = nil
             return
@@ -1546,13 +1594,14 @@ final class AppModel {
         } else {
             device = "尚未检测"
         }
-        let inventoryLine: String
-        if let inventory {
-            let match = inventoryIsCurrentSession ? " · 本地匹配 \(locallyMatchedGameCount) 款" : " · 非当前会话，不统计本地匹配"
-            inventoryLine = "记录 \(inventory.records.count) 条 · \(inventory.isComplete ? "完整" : "不完整")\(match) · 读取于 \(absoluteTime(inventory.observedAt))"
-                + (inventory.mtpEvidence.map { " · 来源 \($0.inventoryStorageNames.joined(separator: "、")) · 游戏目录 \($0.gameDirectoryCount) · MTP 存储 \($0.reportedStorageCount) 项" } ?? "")
+        let observation = inventory.map { absoluteTime($0.observedAt) } ?? "未知"
+        let match: String
+        if inventory == nil {
+            match = "本地匹配：未知"
+        } else if inventoryIsCurrentSession {
+            match = "本地匹配：\(locallyMatchedGameCount) 款"
         } else {
-            inventoryLine = "未读取"
+            match = "本地匹配：非当前会话，不统计"
         }
         let lines = [
             "SwitchShelf 诊断摘要",
@@ -1561,7 +1610,8 @@ final class AppModel {
             "最后扫描：\(absoluteTime(snapshot.scannedAt))",
             "安装计划：\(plan.count) 项，\(formatByteCount(planTotalBytes))",
             "设备：\(device)",
-            "已安装清单：\(inventoryLine)",
+            deviceSessionOverview.summaryLines(observationTime: observation).joined(separator: "\n"),
+            match,
             "扫描问题：\(scanIssues.count) 条",
             "缓存：\(cacheLoaded ? "已载入" : "未载入") \(cacheURL.path)",
             "应用数据：\(appDirectory.path)"
@@ -1595,6 +1645,61 @@ final class AppModel {
         case .openAppSupport:
             openAppSupport()
         }
+    }
+
+    // MARK: - DBI FTP, separate from USB
+
+    func connectWiFi() async {
+        guard !isWiFiBusy else { return }
+        if isDiscovering || isReadingInventory || isInstalling {
+            notice = AppNotice(
+                level: .warning,
+                title: "USB 会话还在进行",
+                message: "请等 USB 检测、清单读取或安装测试结束后再连接无线 FTP。两条会话不能同时进行。",
+                action: nil,
+                actionLabel: nil
+            )
+            return
+        }
+        switch WiFiFTPEndpointParser.parse(host: wifiHost, portText: wifiPort) {
+        case .rejected(let rejected):
+            wifi = rejected
+            noteRememberedHost(from: rejected)
+        case .ready(let host, let port):
+            isWiFiBusy = true
+            wifi = .connecting(host: host, port: port)
+            wifi = await wifiClient.connect(host: host, port: port)
+            noteRememberedHost(from: wifi)
+            isWiFiBusy = false
+        }
+    }
+
+    private func noteRememberedHost(from snapshot: WiFiFTPSnapshot) {
+        rememberedWiFiHost = WiFiFTPRememberedHost.recordFirstConnection(
+            host: snapshot.host,
+            phase: snapshot.phase,
+            defaults: UserDefaults.standard
+        )
+    }
+
+    func disconnectWiFi() async {
+        guard isWiFiBusy || wifi.phase == .connected || wifi.phase == .connecting else {
+            wifi = await wifiClient.disconnect()
+            return
+        }
+        isWiFiBusy = true
+        wifi = await wifiClient.disconnect()
+        isWiFiBusy = false
+    }
+
+    private var wifiBlocksUSBNotice: AppNotice {
+        AppNotice(
+            level: .warning,
+            title: "无线 FTP 仍占用这条连接",
+            message: "已跳过 USB 检测、清单读取和安装测试，避免与无线会话并发。请先在「无线连接」断开。",
+            action: nil,
+            actionLabel: nil
+        )
     }
 
     // MARK: - Helpers

@@ -92,6 +92,11 @@ struct AppCommands: Commands {
             }
             .keyboardShortcut("3", modifiers: .command)
 
+            Button("无线连接") {
+                model.showWiFi()
+            }
+            .keyboardShortcut("5", modifiers: .command)
+
             Button("维护") {
                 model.showMaintenance()
             }

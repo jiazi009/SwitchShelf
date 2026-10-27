@@ -112,6 +112,46 @@ struct WiFiFTPParsingTests {
     }
 }
 
+@Suite("Remembered FTP host — isolated defaults, no socket")
+struct WiFiFTPRememberedHostTests {
+    private func isolatedDefaults() -> UserDefaults {
+        let name = "switchshelf.wifi.remembered-host.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: name)!
+        defaults.removePersistentDomain(forName: name)
+        return defaults
+    }
+
+    @Test func blankDoesNotSave() {
+        let defaults = isolatedDefaults()
+        #expect(WiFiFTPRememberedHost.recordFirstConnection(host: "   ", phase: .connected, defaults: defaults) == nil)
+        #expect(WiFiFTPRememberedHost.recordFirstConnection(host: "", phase: .failed, defaults: defaults) == nil)
+        #expect(WiFiFTPRememberedHost.recordFirstConnection(host: "10.1.2.3", phase: .failed, defaults: defaults) == nil)
+        #expect(WiFiFTPRememberedHost.recordFirstConnection(host: "10.1.2.3", phase: .unknown, defaults: defaults) == nil)
+        #expect(WiFiFTPRememberedHost.recordFirstConnection(host: "10.1.2.3", phase: .connecting, defaults: defaults) == nil)
+        #expect(WiFiFTPRememberedHost.storedHost(in: defaults) == nil)
+        #expect(WiFiFTPRememberedHost.hostFieldForLaunch(currentField: "", defaults: defaults) == "")
+    }
+
+    @Test func firstSuccessWritesTheConnectedHost() {
+        let defaults = isolatedDefaults()
+        let saved = WiFiFTPRememberedHost.recordFirstConnection(host: " 10.1.2.3 ", phase: .connected, defaults: defaults)
+        #expect(saved == "10.1.2.3")
+        #expect(defaults.string(forKey: WiFiFTPRememberedHost.defaultsKey) == "10.1.2.3")
+        #expect(WiFiFTPRememberedHost.hostFieldForLaunch(currentField: "", defaults: defaults) == "10.1.2.3")
+        #expect(WiFiFTPRememberedHost.hostFieldForLaunch(currentField: "10.4.4.4", defaults: defaults) == "10.4.4.4")
+    }
+
+    @Test func laterHostDoesNotReplaceTheFirst() {
+        let defaults = isolatedDefaults()
+        _ = WiFiFTPRememberedHost.recordFirstConnection(host: "10.1.2.3", phase: .connected, defaults: defaults)
+        #expect(WiFiFTPRememberedHost.recordFirstConnection(host: "10.9.9.9", phase: .connected, defaults: defaults) == "10.1.2.3")
+        #expect(WiFiFTPRememberedHost.recordFirstConnection(host: "10.8.8.8", phase: .failed, defaults: defaults) == "10.1.2.3")
+        #expect(WiFiFTPRememberedHost.recordFirstConnection(host: "10.7.7.7", phase: .unknown, defaults: defaults) == "10.1.2.3")
+        #expect(WiFiFTPRememberedHost.recordFirstConnection(host: " ", phase: .connected, defaults: defaults) == "10.1.2.3")
+        #expect(WiFiFTPRememberedHost.storedHost(in: defaults) == "10.1.2.3")
+    }
+}
+
 @Suite("DBI FTP session — scripted channels, no network")
 struct WiFiFTPScriptedSessionTests {
     @Test func successKeepsListingRawAndLeavesIdentityUnknown() async {

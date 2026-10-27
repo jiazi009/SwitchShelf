@@ -126,8 +126,9 @@ struct WiFiConnectView: View {
                         .font(.system(size: 9.5, design: .monospaced))
                         .foregroundStyle(.tertiary)
                 }
+                rememberedHostNote
                 HStack(spacing: 10) {
-                    TextField("主机，例如 192.168.1.20", text: $model.wifiHost)
+                    TextField("主机名或 IPv4", text: $model.wifiHost)
                         .textFieldStyle(.roundedBorder)
                         .disabled(fieldsLocked)
                         .accessibilityLabel("FTP 主机")
@@ -155,6 +156,26 @@ struct WiFiConnectView: View {
                 }
             }
         }
+    }
+
+    private var rememberedHostNote: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                Image(systemName: "bookmark")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(Theme.violet)
+                Text(model.rememberedWiFiHost.map { "已记住的主机 \($0)" } ?? "尚未记住主机")
+                    .font(.system(size: 11.5, weight: .semibold))
+                    .textSelection(.enabled)
+            }
+            Text(model.rememberedWiFiHost == nil
+                 ? "只有 FTP 会话第一次变为已连接时，才保存当时实际连上的主机。失败、超时和未知不会写入。目前没有这台 Switch 的成功连接记录，不会填入猜测的地址。"
+                 : "下次启动时，如果主机栏是空的，会填入这个地址。失败、超时、未知，以及后来连上的其他主机，都不会改掉它。")
+                .font(.system(size: 10.5))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .accessibilityElement(children: .combine)
     }
 
     private var probeCard: some View {

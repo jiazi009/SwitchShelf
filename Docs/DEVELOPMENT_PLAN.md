@@ -5,7 +5,7 @@ Continue the user-selected **sphaira MTP inventory + installation** route. Prese
 
 ## Separate Wi-Fi slice — 2026-10-26
 
-This branch adds a DBI FTP page beside the existing USB MTP path. It does not replace sphaira/DBI inventory or the single-file install test. The pinned README (`22090af`) describes Run FTP server as SD file access on port 5000 and installation on port 6000; the client uses 5000 only. HTTP metadata for build 647 stays unverified. Tests are fixtures and a loopback server, not a session to a Switch. Details: `Docs/Reports/wifi-ftp-connection-2026-10-26.md`.
+This branch adds a DBI FTP page beside the existing USB MTP path. It does not replace sphaira/DBI inventory or the single-file install test. The pinned README (`22090af`) describes Run FTP server as SD file access on port 5000 and installation on port 6000; the client uses 5000 only. HTTP metadata for build 647 stays unverified. The first host that reaches the connected phase is kept in UserDefaults and is not replaced by later results. No Switch address is stored until that happens. Tests are fixtures and a loopback server, not a session to a Switch. Details: `Docs/Reports/wifi-ftp-connection-2026-10-26.md`.
 
 ## Native sphaira MTP test package — 2026-10-25
 

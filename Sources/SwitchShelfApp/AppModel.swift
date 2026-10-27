@@ -20,6 +20,7 @@ final class AppModel {
     private(set) var wifi = WiFiFTPSnapshot.notConnected
     var wifiHost = ""
     var wifiPort = ""
+    private(set) var rememberedWiFiHost: String?
     private(set) var isWiFiBusy = false
     private(set) var cacheLoaded = false
     private(set) var isBootstrapped = false
@@ -90,6 +91,8 @@ final class AppModel {
         self.sortOrder = SortOrder(rawValue: defaults.string(forKey: "SwitchShelf.sortOrder") ?? "") ?? .recent
         let storedCover = defaults.double(forKey: "SwitchShelf.coverSize")
         self.coverSize = storedCover >= 120 ? storedCover : 172
+        self.rememberedWiFiHost = WiFiFTPRememberedHost.storedHost(in: defaults)
+        self.wifiHost = WiFiFTPRememberedHost.hostFieldForLaunch(currentField: "", defaults: defaults)
     }
 
     // MARK: - Derived library views
@@ -1544,12 +1547,22 @@ final class AppModel {
         switch WiFiFTPEndpointParser.parse(host: wifiHost, portText: wifiPort) {
         case .rejected(let rejected):
             wifi = rejected
+            noteRememberedHost(from: rejected)
         case .ready(let host, let port):
             isWiFiBusy = true
             wifi = .connecting(host: host, port: port)
             wifi = await wifiClient.connect(host: host, port: port)
+            noteRememberedHost(from: wifi)
             isWiFiBusy = false
         }
+    }
+
+    private func noteRememberedHost(from snapshot: WiFiFTPSnapshot) {
+        rememberedWiFiHost = WiFiFTPRememberedHost.recordFirstConnection(
+            host: snapshot.host,
+            phase: snapshot.phase,
+            defaults: UserDefaults.standard
+        )
     }
 
     func disconnectWiFi() async {

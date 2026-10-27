@@ -45,6 +45,12 @@ swift test --skip RealNASScanTests
 
 覆盖的是本机行为：成功对话、匿名登录被拒绝、TCP 拒绝、超时、无法识别的横幅、HTTP 响应、被动地址不一致、空 `LIST`、安装端口不建连。回环服务器跑在 127.0.0.1，不是 Switch。
 
+## 记住第一次连上的主机
+
+只有 FTP 会话阶段变为已连接时，才把这次实际使用的主机写入 `UserDefaults` 键 `SwitchShelf.wifi.firstConnectedHost`。空白主机不写。已经有值之后，后来的成功、失败、超时和未知都不覆盖。下次启动时，主机栏如果是空的，才填入这个地址。目前没有这台 Switch 的成功连接，所以不会预置 IP。
+
+夹具测试在独立的 `UserDefaults` suite 里覆盖空白不保存、第一次成功写入、以及之后的另一个主机不替换。没有连接 Switch，也没有打开 USB。`swift test --filter WiFiFTP --skip RealNASScanTests` 这次为 5 个套件、27 项通过，其中记住主机 3 项。
+
 ## 尚未在真机上验证
 
 - 没有连过用户的 Switch，不能说 Wi-Fi 已接通，也不能说读到了 SD 或已安装清单

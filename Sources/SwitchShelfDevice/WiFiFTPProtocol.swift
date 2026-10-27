@@ -98,6 +98,38 @@ public struct WiFiFTPSnapshot: Sendable, Equatable {
     }
 }
 
+/// The first host that reached `.connected`. Later results never replace it.
+/// No address is stored until that happens, so an absent value is not a guessed Switch IP.
+public enum WiFiFTPRememberedHost {
+    public static let defaultsKey = "SwitchShelf.wifi.firstConnectedHost"
+
+    public static func storedHost(in defaults: UserDefaults) -> String? {
+        let value = defaults.string(forKey: defaultsKey)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return value.isEmpty ? nil : value
+    }
+
+    /// Returns the stored host. Writes only when nothing is stored, the phase is `.connected`, and the host is non-empty.
+    @discardableResult
+    public static func recordFirstConnection(host: String, phase: WiFiLinkPhase, defaults: UserDefaults) -> String? {
+        if let existing = storedHost(in: defaults) {
+            return existing
+        }
+        guard phase == .connected else { return nil }
+        let trimmed = host.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        defaults.set(trimmed, forKey: defaultsKey)
+        return trimmed
+    }
+
+    /// On launch, an empty host field receives the remembered host. A field the user already filled stays as typed.
+    public static func hostFieldForLaunch(currentField: String, defaults: UserDefaults) -> String {
+        if !currentField.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return currentField
+        }
+        return storedHost(in: defaults) ?? ""
+    }
+}
+
 public enum WiFiFTPRequest: Sendable, Equatable {
     case ready(host: String, port: UInt16)
     case rejected(WiFiFTPSnapshot)

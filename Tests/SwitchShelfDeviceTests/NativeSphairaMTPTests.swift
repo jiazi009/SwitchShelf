@@ -49,27 +49,38 @@ private actor USBFixture: SphairaUSBLink {
 }
 private actor NativeSourceFixture: SphairaUploadSource {
     let byteCount: UInt64
+    let failsReading: Bool
     var reads = 0
-    init(_ size: Int) { byteCount = UInt64(size) }
+    init(_ size: Int, failsReading: Bool = false) { byteCount = UInt64(size); self.failsReading = failsReading }
     func validate() {}
-    func read(offset: UInt64, count: Int) -> Data { reads += 1; return Data(repeating: 42, count: count) }
+    func read(offset: UInt64, count: Int) throws -> Data {
+        reads += 1
+        if failsReading { throw SphairaUploadError.shortRead }
+        return Data(repeating: 42, count: count)
+    }
 }
 
 @Suite("Native sphaira MTP framing — fake USB only")
 struct NativeSphairaMTPTests {
     @Test(arguments: [1, 51, 52, 53, 116, 500, 501, 1000, 1012, 1013], [64, 512, 1024])
     func packetBoundariesAndFinalZLP(_ size: Int, _ packet: Int) async throws {
-        let link = USBFixture(inputs: sessionFrames() + [ack(4, parameters: [8, 0, 50]), ack(5)], packetSize: packet)
+        let link = USBFixture(inputs: sessionFrames() + [ack(4, parameters: [8, 0, 50]), ack(5), ack(6)], packetSize: packet)
         let source = NativeSourceFixture(size)
         let transport = NativeSphairaMTP(link: link)
         let result = await SphairaMTPUpload(chunkSize: 7).upload(name: "a.nsp", from: source, through: transport)
         #expect(result.outcome == .transferredAwaitingConfirmation)
         #expect(result.bytesSubmitted == size)
+        #expect(result.releaseVerified)
         let writes = await link.writes
         let commandIndex = try #require(writes.firstIndex(where: {
             $0.count == 12 && NativeSphairaMTP.u16($0, 4) == 1 && NativeSphairaMTP.u16($0, 6) == 0x100d
         }))
-        let fileWrites = Array(writes.dropFirst(commandIndex + 1))
+        let closeIndex = try #require(writes.firstIndex(where: {
+            $0.count == 12 && NativeSphairaMTP.u16($0, 4) == 1 && NativeSphairaMTP.u16($0, 6) == 0x1003
+        }))
+        #expect(closeIndex == writes.count - 1)
+        #expect(NativeSphairaMTP.u32(writes[closeIndex], 8) == 6)
+        let fileWrites = Array(writes[(commandIndex + 1)..<closeIndex])
         #expect(!fileWrites.isEmpty)
         #expect(fileWrites.dropLast().allSatisfy { !$0.isEmpty && $0.count.isMultiple(of: packet) })
         #expect(fileWrites.last?.count == (size + 12) % packet)
@@ -79,7 +90,7 @@ struct NativeSphairaMTPTests {
     }
 
     @Test func fragmentedAndCoalescedMetadataContainers() async throws {
-        let data = sessionFrames().reduce(Data(), +)
+        let data = (sessionFrames() + [ack(4)]).reduce(Data(), +)
         let chunks = stride(from: 0, to: data.count, by: 3).map { Data(data[$0..<min($0 + 3, data.count)]) }
         let link = USBFixture(inputs: chunks)
         let transport = NativeSphairaMTP(link: link)
@@ -87,14 +98,17 @@ struct NativeSphairaMTPTests {
         #expect(session.lastTransaction == 3)
         #expect(try session.installStorage() == 8)
         try await transport.close()
+        try await transport.close()
+        #expect(await link.writes.last == frame(type: 1, code: 0x1003, tx: 4))
     }
 
     @Test func rejectUnknownProviderBeforeAnyPackageReadOrCreate() async {
-        let link = USBFixture(inputs: sessionFrames(version: "DBI/647"))
+        let link = USBFixture(inputs: sessionFrames(version: "DBI/647") + [ack(4)])
         let source = NativeSourceFixture(10)
         let result = await SphairaMTPUpload().upload(name: "a.nsp", from: source, through: NativeSphairaMTP(link: link))
         #expect(result.outcome == .notStarted)
         #expect(result.failure == .unsupportedSession)
+        #expect(result.releaseVerified)
         #expect(await source.reads == 0)
         #expect(await link.writes.allSatisfy { NativeSphairaMTP.u16($0, 6) != 0x9808 })
         #expect(await link.closed)
@@ -113,13 +127,47 @@ struct NativeSphairaMTPTests {
     }
 
     @Test func rejectionOfCreateDoesNotSendObjectOrRetry() async {
-        let link = USBFixture(inputs: sessionFrames() + [ack(4, code: 0x2019)])
+        let link = USBFixture(inputs: sessionFrames() + [ack(4, code: 0x2019), ack(5)])
         let source = NativeSourceFixture(10)
         let result = await SphairaMTPUpload().upload(name: "a.nsp", from: source, through: NativeSphairaMTP(link: link))
-        #expect(result.outcome == .deviceStateUnknown)
+        #expect(result.outcome == .notStarted)
+        #expect(result.failure == .deviceBusy)
+        #expect(result.releaseVerified)
         #expect(result.detail?.contains("2019") == true)
         #expect(await source.reads == 0)
+        #expect(await link.writes.last == frame(type: 1, code: 0x1003, tx: 5))
         #expect(await link.closed)
+    }
+
+    @Test func unfinishedSendReleasesHostWithoutInjectingCloseSession() async {
+        let link = USBFixture(inputs: sessionFrames() + [ack(4, parameters: [8, 0, 50])])
+        let result = await SphairaMTPUpload().upload(name: "a.nsp", from: NativeSourceFixture(10, failsReading: true),
+            through: NativeSphairaMTP(link: link))
+        #expect(result.outcome == .deviceStateUnknown)
+        #expect(result.failure == .source)
+        #expect(await link.writes.allSatisfy { $0.count < 12 || NativeSphairaMTP.u16($0, 6) != 0x1003 })
+        #expect(await link.closed)
+    }
+
+    @Test func malformedMetadataAfterOpenNeverSendsCloseSession() async {
+        let first = Array(sessionFrames().prefix(2))
+        let link = USBFixture(inputs: first + [frame(code: 0x1004, tx: 99, body: numbers([(0, 4)]))])
+        let result = await SphairaMTPUpload().upload(name: "a.nsp", from: NativeSourceFixture(10),
+            through: NativeSphairaMTP(link: link))
+        #expect(result.outcome == .notStarted)
+        #expect(await link.writes.count == 3)
+        #expect(await link.closed)
+    }
+
+    @Test(arguments: [ack(6, code: 0x2019), ack(99)])
+    func failedSessionCloseStillReleasesHostAndFailsReleaseVerification(_ closeResponse: Data) async {
+        let link = USBFixture(inputs: sessionFrames() + [ack(4, parameters: [8, 0, 50]), ack(5), closeResponse])
+        let result = await SphairaMTPUpload().upload(name: "a.nsp", from: NativeSourceFixture(10),
+            through: NativeSphairaMTP(link: link))
+        #expect(result.outcome == .transferredAwaitingConfirmation)
+        #expect(!result.releaseVerified)
+        #expect(await link.closed)
+        #expect(await link.writes.last == frame(type: 1, code: 0x1003, tx: 6))
     }
 
     @Test func deviceDatasetBoundsAndUTF16() throws {

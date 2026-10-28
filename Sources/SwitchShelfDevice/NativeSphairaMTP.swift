@@ -84,13 +84,19 @@ actor NativeSphairaMTP: SphairaUploadTransport {
     private var created = false
     private var fileComplete = false
     private var inspected = false
+    private var sessionOpened = false
+    /// True only after a complete, transaction-checked response. A lost response
+    /// or unfinished data phase must never receive a new protocol command.
+    private var protocolIdle = true
+    private var closed = false
     init(link: any SphairaUSBLink) { self.link = link }
 
     func inspectSession() async throws -> SphairaUploadSession {
-        guard !inspected, [64, 512, 1024].contains(link.packetSize) else { throw SphairaUploadError.unsupportedSession }
+        guard !closed, !inspected, [64, 512, 1024].contains(link.packetSize) else { throw SphairaUploadError.unsupportedSession }
         inspected = true
         let info = try SphairaDeviceInfo.decode(await exchange(0x1001, [], transaction: 0, data: true))
         _ = try await exchange(0x1002, [1], transaction: 0, data: false)
+        sessionOpened = true
         transaction = 1
         let identifiers = try PTPCodec.identifiers(await exchange(0x1004, [], transaction: transaction, data: true))
         guard identifiers.count <= 64 else { throw SphairaUploadError.unsupportedSession }
@@ -106,7 +112,7 @@ actor NativeSphairaMTP: SphairaUploadTransport {
     }
 
     func sendCommand(_ container: Data) async throws {
-        guard storage != nil, !fileComplete, operation == nil, container.count >= 12,
+        guard !closed, storage != nil, !fileComplete, operation == nil, container.count >= 12,
               Self.u32(container, 0) == container.count, Self.u16(container, 4) == 1,
               let next = SphairaUploadCodec.Operation(rawValue: Self.u16(container, 6)),
               Self.u32(container, 8) == transaction + 1 else { throw SphairaUploadError.invalidDataset }
@@ -122,6 +128,7 @@ actor NativeSphairaMTP: SphairaUploadTransport {
         }
         operation = next; transaction += 1; commandTransaction = transaction
         dataEnded = false
+        protocolIdle = false
         try await link.write(container)
     }
 
@@ -170,21 +177,44 @@ actor NativeSphairaMTP: SphairaUploadTransport {
     func receiveResponse() async throws -> Data {
         guard let operation, dataEnded, !dataActive else { throw SphairaUploadError.invalidResponse }
         let response = try await readContainer(limit: 32)
-        _ = try SphairaUploadCodec.response(response, transaction: commandTransaction,
-                                           parameters: operation == .sendObjectPropList ? 3 : 0)
+        do {
+            _ = try SphairaUploadCodec.response(response, transaction: commandTransaction,
+                                               parameters: operation == .sendObjectPropList ? 3 : 0)
+        } catch SphairaUploadError.responseCode(let code) {
+            // An explicit refusal completed the transaction. A denied create
+            // has no pending object and can close its session before a retry.
+            protocolIdle = true
+            self.operation = nil
+            throw SphairaUploadError.responseCode(code)
+        }
         if operation == .sendObjectPropList { created = true }
         else { fileComplete = true }
+        protocolIdle = true
         self.operation = nil
         return response
     }
 
     func close() async throws {
-        // Never inject CloseSession into a possibly unfinished SendObject phase.
-        // Physical close/process exit releases host ownership, not device install state.
-        try await link.close()
+        guard !closed else { return }
+        closed = true
+        var sessionError: (any Error)?
+        // Releasing a libusb handle alone does not end the device's PTP session.
+        // Close a healthy completed session before the inventory reader opens
+        // its next one on the same cable. Never interrupt a pending object/data phase.
+        if sessionOpened, protocolIdle, !created || fileComplete,
+           transaction < UInt32.max, !Task.isCancelled {
+            transaction += 1
+            do { _ = try await exchange(0x1003, [], transaction: transaction, data: false) }
+            catch { sessionError = error }
+        }
+        // Always release host ownership, including when CloseSession was refused.
+        do { try await link.close() }
+        catch { throw error }
+        if let sessionError { throw sessionError }
     }
 
     private func exchange(_ code: UInt16, _ parameters: [UInt32], transaction: UInt32, data: Bool) async throws -> Data {
+        protocolIdle = false
         var command = Data()
         PTPCodec.append(UInt32(12 + parameters.count * 4), to: &command)
         PTPCodec.append(UInt16(1), to: &command); PTPCodec.append(code, to: &command)
@@ -193,13 +223,19 @@ actor NativeSphairaMTP: SphairaUploadTransport {
         try await link.write(command)
         let first = try await readContainer(limit: 65536)
         if Self.u16(first, 4) == 3 {
-            _ = try SphairaUploadCodec.response(first, transaction: transaction, parameters: 0)
+            do { _ = try SphairaUploadCodec.response(first, transaction: transaction, parameters: 0) }
+            catch SphairaUploadError.responseCode(let code) {
+                protocolIdle = true
+                throw SphairaUploadError.responseCode(code)
+            }
             guard !data else { throw SphairaUploadError.invalidResponse }
+            protocolIdle = true
             return Data()
         }
         guard data, Self.u16(first, 4) == 2, Self.u16(first, 6) == code,
               Self.u32(first, 8) == transaction else { throw SphairaUploadError.invalidResponse }
         _ = try SphairaUploadCodec.response(await readContainer(limit: 32), transaction: transaction, parameters: 0)
+        protocolIdle = true
         return Data(first.dropFirst(12))
     }
 

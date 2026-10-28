@@ -127,6 +127,11 @@ extension AppModel {
                       "Start must automatically preflight and prepare a review from the library page")
             try check(!isInstalling && installationPlanLocked, "Preparing a review must not send files")
             try await Task.sleep(for: .milliseconds(350))
+            guard let sheet = window.attachedSheet, sheet.isVisible else {
+                throw NSError(domain: "InstallStartEvent", code: 2, userInfo: [NSLocalizedDescriptionKey: "Review object exists but native confirmation sheet is not visible"])
+            }
+            try WindowLayoutEvidence.record(window: sheet, name: "install-review", state: "unconfirmed-review",
+                                            stagedCount: plan.count, libraryCount: games.count)
             cancelInstallationReview()
         } else {
             print("External MTP client/busy condition respected; review integration not forced.")
@@ -154,7 +159,7 @@ extension AppModel {
         }
         try await Task.sleep(for: .milliseconds(500))
         guard let window = NSApp.windows.first(where: { $0.isVisible && !$0.isSheet }),
-              let info = WindowLayoutEvidence.frames["details-\(first.id)"] else {
+              let info = WindowLayoutEvidence.frames["details-\(layout.rawValue)-\(first.id)"] else {
             throw NSError(domain: "NativeCardEvents", code: 3)
         }
         let sidebar = WindowLayoutEvidence.frames["staging"]
@@ -166,6 +171,8 @@ extension AppModel {
               let close = WindowLayoutEvidence.frames["details-close"] else {
             throw NSError(domain: "NativeCardEvents", code: 4, userInfo: [NSLocalizedDescriptionKey: "Missing independent popover/close button"])
         }
+        try WindowLayoutEvidence.record(window: popup, name: "details-\(layout.rawValue)", checkedFrames: ["closeButton": close],
+                                        state: "independent-detail-popover", stagedCount: plan.count, libraryCount: games.count)
         try press(close, in: popup)
         try await Task.sleep(for: .milliseconds(400))
         try require(detailGame == nil && plan.isEmpty, "Actual close-button click failed or changed staging")

@@ -314,6 +314,7 @@ struct GameCard: View {
             CoverArtwork(game: game, showsTitle: true, installationAssessment: assessment)
                 .aspectRatio(3 / 4, contentMode: .fit)
                 .modifier(InstallationMotion(id: game.id, namespace: installationMotion, enabled: !isSelected))
+                .accessibilityIdentifier("library-cover-grid-\(game.id)")
                 .overlay(alignment: .topLeading) {
                     ViewThatFits(in: .horizontal) {
                         HStack(alignment: .top, spacing: 6) {
@@ -464,58 +465,58 @@ struct GameListRow: View {
             Button {
                 withAnimation(.snappy(duration: 0.36)) { model.handleGridTap(game) }
             } label: {
-        HStack(spacing: 12) {
-            CoverArtwork(game: game, cornerRadius: 6)
-                .frame(width: 44, height: 44)
-                .modifier(InstallationMotion(id: game.id, namespace: installationMotion, enabled: !isSelected))
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 8) {
-                    Text(game.title)
-                        .font(.system(size: 13, weight: .semibold))
-                        .lineLimit(1)
-                    if assessment.state == .installed || assessment.state == .partial {
-                        InstallationMark(state: assessment.state)
-                            .help(assessment.explanation)
+                HStack(spacing: 12) {
+                    CoverArtwork(game: game, cornerRadius: 6)
+                        .frame(width: 44, height: 44)
+                        .modifier(InstallationMotion(id: game.id, namespace: installationMotion, enabled: !isSelected))
+                        .accessibilityIdentifier("library-cover-list-\(game.id)")
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 8) {
+                            Text(game.title)
+                                .font(.system(size: 13, weight: .semibold))
+                                .lineLimit(1)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            if assessment.state == .installed || assessment.state == .partial {
+                                InstallationMark(state: assessment.state).help(assessment.explanation)
+                            }
+                        }
+                        HStack(spacing: 4) {
+                            Text(game.contentSummary).lineLimit(1).layoutPriority(1)
+                            Spacer(minLength: 4)
+                            Text(formatByteCount(game.byteCount))
+                                .monospacedDigit().fixedSize()
+                                .frame(width: 74, alignment: .trailing)
+                                .accessibilityIdentifier("library-bytes-\(game.id)")
+                        }
+                        .font(.system(size: 10)).foregroundStyle(.secondary)
+                        HStack(spacing: 5) {
+                            if isOffline {
+                                BadgePill(text: "离线", systemImage: "wifi.slash", tone: .neutral)
+                                    .fixedSize(horizontal: true, vertical: false)
+                            }
+                            if game.identification.isPending {
+                                BadgePill(text: game.identification.label, systemImage: "questionmark", tone: .warning)
+                                    .fixedSize(horizontal: true, vertical: false)
+                            }
+                            Text("\(game.contents.count) 个文件").font(.system(size: 9)).foregroundStyle(.secondary).fixedSize()
+                            if let source = model.sources(for: game).first {
+                                Text(source.name).font(.system(size: 9)).foregroundStyle(.tertiary).lineLimit(1)
+                            }
+                        }
                     }
+                    .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
                 }
-                HStack(spacing: 6) {
-                    Text(game.contentSummary)
-                    Text("·")
-                    Text(game.contents.count == 1 ? "1 个文件" : "\(game.contents.count) 个文件")
-                    if let source = model.sources(for: game).first {
-                        Text("·")
-                        Text(source.name).lineLimit(1)
-                    }
+                .padding(.trailing, 34)
+                .padding(.vertical, 6)
+                .padding(.horizontal, 6)
+                .background {
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .fill(isSelected ? Theme.accent.opacity(0.14) : Color.clear)
                 }
-                .font(.system(size: 10))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-            }
-            Spacer(minLength: 12)
-            if isOffline {
-                BadgePill(text: "离线", systemImage: "wifi.slash", tone: .neutral)
-            }
-            if game.identification.isPending {
-                BadgePill(text: game.identification.label, systemImage: "questionmark", tone: .warning)
-            }
-            Text(formatByteCount(game.byteCount))
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
-                .monospacedDigit()
-                .fixedSize()
-                .frame(width: 74, alignment: .trailing)
-        }
-        .padding(.trailing, 34)
-        .padding(.vertical, 5)
-        .padding(.horizontal, 6)
-        .background {
-            RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .fill(isSelected ? Theme.accent.opacity(0.14) : Color.clear)
-        }
-        .contentShape(Rectangle())
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            GameDetailsButton(model: model, game: game).padding(.trailing, 5)
+            GameDetailsButton(model: model, game: game, placement: .list).padding(.trailing, 5)
         }
         .accessibilityIdentifier("game-row-\(game.id)")
         .focusable()

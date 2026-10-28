@@ -39,6 +39,7 @@ struct InstallationSidebar: View {
                     }
                     .padding(14)
                 }
+                .accessibilityIdentifier("staging-viewport")
                 .onChange(of: model.plan.count) { old, count in
                     if count > old, let last = model.plan.last { proxy.scrollTo(last.id, anchor: .bottom) }
                 }
@@ -171,6 +172,7 @@ private struct StagedGameCard: View {
                 .accessibilityIdentifier("staging-cover-\(item.gameID)")
                 VStack(alignment: .leading, spacing: 5) {
                     Text(item.title).font(.system(size: 12, weight: .semibold)).lineLimit(2)
+                        .accessibilityIdentifier("staged-title-\(item.gameID)")
                     Text("\(item.includedContents.count) 个文件 · \(formatByteCount(item.byteCount))")
                         .font(.system(size: 10)).foregroundStyle(.secondary)
                     HStack(spacing: 10) {
@@ -183,6 +185,7 @@ private struct StagedGameCard: View {
                             Image(systemName: "xmark.circle.fill")
                         }
                         .accessibilityLabel("移除待选游戏\(item.title)")
+                        .accessibilityIdentifier("remove-staged-\(item.gameID)")
                     }
                     .buttonStyle(.borderless).font(.system(size: 10))
                 }

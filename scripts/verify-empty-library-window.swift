@@ -9,7 +9,9 @@ import SwitchShelfLibrary
 /// App/WindowGroup is retained, but bootstrap, defaults and storage are isolated.
 extension AppModel {
     static func emptyLibraryWindowFixture() -> AppModel {
-        DispatchQueue.global().asyncAfter(deadline: .now() + (CommandLine.arguments.contains("--live-staging") ? 150 : 35)) {
+        // Test-process appearance only; do not change the user's system setting.
+        NSApplication.shared.appearance = NSAppearance(named: CommandLine.arguments.contains("--dark") ? .darkAqua : .aqua)
+        DispatchQueue.global().asyncAfter(deadline: .now() + (CommandLine.arguments.contains("--live-staging") ? 150 : 75)) {
             FileHandle.standardError.write(Data("Window regression timed out\n".utf8))
             exit(2)
         }
@@ -41,30 +43,11 @@ extension AppModel {
         }
         defer { UserDefaults(suiteName: "local.switchshelf.ui-review.fixture")?.removePersistentDomain(forName: "local.switchshelf.ui-review.fixture") }
         do {
-            // A real display-cycle must run: offscreen layout alone did not reveal
-            // the empty-library NSHostingView/NSWindow constraint feedback loop.
-            for (width, height) in [(1516.0, 809.0), (1276, 1410), (960, 640), (1280, 820)] {
-                guard let window = NSApp.windows.first(where: { $0.isVisible }) else {
-                    throw WindowRegressionFailure.missingWindow
-                }
-                window.setContentSize(NSSize(width: width, height: height))
-                try await Task.sleep(for: .seconds(1))
-                let actual = window.contentLayoutRect.size
-                print("LAYOUT \(width)x\(height): \(WindowLayoutEvidence.frames)")
-                for name in ["brand", "header", "installButton", "staging"] {
-                    guard let frame = WindowLayoutEvidence.frames[name],
-                          frame.minY >= 0, frame.maxY <= (window.contentView?.bounds.height ?? actual.height) else {
-                        throw WindowRegressionFailure.clippedContent
-                    }
-                }
-                if CommandLine.arguments.contains("--dump-layout"), let root = window.contentView {
-                    WindowLayoutEvidence.dump(root, in: window)
-                }
-                guard actual.width.isFinite, actual.height.isFinite,
-                      actual.width <= width + 2, actual.height <= height + 2 else {
-                    FileHandle.standardError.write(Data("Requested \(width)x\(height), got \(actual.width)x\(actual.height)\n".utf8))
-                    throw WindowRegressionFailure.unstableSize
-                }
+            try await verifyStagingWindowMatrix()
+            if let window = NSApp.windows.first(where: { $0.isVisible }) {
+                window.setContentSize(NSSize(width: 1280, height: 820))
+                window.center()
+                try await Task.sleep(for: .milliseconds(250))
             }
             let source = LibrarySource(id: "window-fixture", url: URL(fileURLWithPath: NSTemporaryDirectory()),
                                        name: "Window fixture only", availability: .offline)

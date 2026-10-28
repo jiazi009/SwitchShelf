@@ -34,6 +34,7 @@ struct InstallationMotion: ViewModifier {
 struct GameDetailsButton: View {
     @Bindable var model: AppModel
     let game: Game
+    var placement: LibraryLayout = .grid
 
     var body: some View {
         Button { model.openGameDetails(game) } label: {
@@ -47,6 +48,6 @@ struct GameDetailsButton: View {
         .buttonStyle(.plain)
         .help("查看详情，不改变待选游戏")
         .accessibilityLabel("查看\(game.title)的详情")
-        .accessibilityIdentifier("game-details-\(game.id)")
+        .accessibilityIdentifier("game-details-\(placement.rawValue)-\(game.id)")
     }
 }

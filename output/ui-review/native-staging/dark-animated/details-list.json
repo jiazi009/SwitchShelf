@@ -1,0 +1,35 @@
+{
+  "backgroundComposite" : "captured alpha over NSColor.windowBackgroundColor for the native effective appearance",
+  "captureMethod" : "active production WindowGroup contentView NSView.cacheDisplay (in-process)",
+  "checkedFrames" : {
+    "closeButton" : {
+      "height" : 24,
+      "width" : 24,
+      "x" : 343,
+      "y" : 23
+    }
+  },
+  "fixtureOnly" : true,
+  "image" : "details-list.png",
+  "imageSHA256" : "daed55f8315c51baabae128d1fc84b21e1d2e46869f76dfdeae2c3eda23ff1a7",
+  "libraryGames" : 2,
+  "name" : "details-list",
+  "nativeSizingNotOverridden" : true,
+  "noBootstrapUSBOrInstallation" : true,
+  "pixelHeight" : 1172,
+  "pixelWidth" : 792,
+  "stagedGames" : 0,
+  "state" : "independent-detail-popover",
+  "viewport" : {
+    "height" : 586,
+    "width" : 396,
+    "x" : 0,
+    "y" : 0
+  },
+  "windowFrame" : {
+    "height" : 586,
+    "width" : 396,
+    "x" : 1920,
+    "y" : 533
+  }
+}

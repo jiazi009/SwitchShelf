@@ -78,12 +78,6 @@ struct SidebarView: View {
         VStack(alignment: .leading, spacing: 3) {
             SectionLabel(text: "管理")
             SidebarRow(
-                title: "安装队列",
-                systemImage: "arrow.up.arrow.down.circle.fill",
-                count: model.count(for: .queue),
-                isSelected: model.selection == .queue
-            ) { model.select(.queue) }
-            SidebarRow(
                 title: "我的 Switch",
                 systemImage: "cable.connector",
                 count: nil,

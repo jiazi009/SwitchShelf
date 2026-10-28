@@ -27,25 +27,6 @@ struct RootView: View {
                 transaction.disablesAnimations = true
             }
         }
-        .popover(isPresented: Binding(
-            get: { model.detailGame != nil },
-            set: { if !$0 { model.closeGameDetails() } }
-        ), arrowEdge: .trailing) {
-            if let game = model.detailGame {
-                InspectorView(model: model, game: game)
-                    .frame(width: 370, height: 560)
-            }
-        }
-        .sheet(item: Binding(
-            get: { model.installationReview },
-            set: { if $0 == nil { model.cancelInstallationReview() } }
-        )) { review in
-            MTPInstallConfirmation(review: review) {
-                model.confirmMTPInstallation(review)
-            } onCancel: {
-                model.cancelInstallationReview()
-            }
-        }
         .onChange(of: model.isLibraryPage) { _, isLibrary in
             if !isLibrary { model.closeGameDetails() }
         }

@@ -376,6 +376,7 @@ struct GameCard: View {
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .accessibilityAction(named: "加入待选区") { model.handleGridTap(game) }
         .accessibilityAction(named: "查看详情") { model.openGameDetails(game) }
+        .modifier(GameDetailsPopover(model: model, game: game))
     }
 
     /// Selected light stays in a thin rim on the cover. Clipped so it cannot paint the caption below.
@@ -436,9 +437,6 @@ struct GameCard: View {
     private var contextActions: some View {
         Button("在访达中显示") { model.revealGame(game) }
         Button("加入待选区") { model.addToQueue(game) }
-        if model.isInPlan(game.id) {
-            Button("查看安装队列") { model.showQueue() }
-        }
         Divider()
         if let titleID = game.contents.compactMap(\.titleID).first {
             Button("复制 Title ID") { model.copyTitleID(titleID) }
@@ -527,7 +525,6 @@ struct GameListRow: View {
         .contextMenu {
             Button("在访达中显示") { model.revealGame(game) }
             Button("加入待选区") { model.addToQueue(game) }
-            if model.isInPlan(game.id) { Button("查看安装队列") { model.showQueue() } }
             Divider()
             if let titleID = game.contents.compactMap(\.titleID).first {
                 Button("复制 Title ID") { model.copyTitleID(titleID) }
@@ -536,6 +533,7 @@ struct GameListRow: View {
         .accessibilityElement(children: .contain)
         .accessibilityLabel("\(game.title)，\(game.contentSummary)，\(formatByteCount(game.byteCount))")
         .accessibilityValue(assessment.state.label)
+        .modifier(GameDetailsPopover(model: model, game: game))
     }
 }
 

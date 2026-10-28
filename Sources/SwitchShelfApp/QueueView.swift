@@ -139,7 +139,7 @@ struct QueueView: View {
                         .font(.system(size: 13, weight: .semibold))
                     BadgePill(text: "按顺序发送", systemImage: "list.number", tone: .accent)
                 }
-                Text("检查计划后核对所有文件及设备端设置。Switch 必须进入 sphaira 的 MTP Install 页面；目标存储由设备端选择。文件发送完成不等于安装成功。")
+                Text("点击开始安装会检查文件并立即发送。Switch 必须进入 sphaira 的 MTP Install 页面；目标存储由设备端选择。文件发送完成不等于安装成功。")
                     .font(.system(size: 10.5))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

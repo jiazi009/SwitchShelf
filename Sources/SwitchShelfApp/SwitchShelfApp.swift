@@ -86,11 +86,6 @@ struct AppCommands: Commands {
             }
             .keyboardShortcut("0", modifiers: .command)
 
-            Button("安装队列") {
-                model.showQueue()
-            }
-            .keyboardShortcut("u", modifiers: [.command, .shift])
-
             Button("我的 Switch") {
                 model.showDevice()
             }

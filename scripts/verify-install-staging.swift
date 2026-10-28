@@ -106,36 +106,14 @@ extension AppModel {
                   "Disconnected start must show guidance without launching an installer")
         showConnectionGuide = false
 
-        // Metadata-only integration: fake descriptor evidence is scoped to this
-        // harness, never an actual device result. Only a review sheet is allowed.
+        // The start button now sends immediately. This harness must not press it:
+        // a synthetic descriptor is not permission to open USB or send files.
         seedUIReview(snapshot, plan: [], page: .all, layout: .grid, inspector: false)
         addToQueue(a)
         seedUIReviewDevice(DeviceDiscovery(state: .waitingForMTP,
             devices: [DeviceDescriptor(id: "fixture-usb", name: "Synthetic USB candidate", vendorID: 0x057e, productID: 0x201d)],
             message: "Synthetic descriptor only; no USB opened"))
-        if installationConnectionBlocker == nil {
-            try await Task.sleep(for: .milliseconds(350))
-            guard let button = WindowLayoutEvidence.frames["installButton"],
-                  let window = NSApp.windows.first(where: { $0.isVisible && !$0.isSheet }) else {
-                throw NSError(domain: "InstallStartEvent", code: 1)
-            }
-            try WindowLayoutEvidence.press(button, in: window)
-            try WindowLayoutEvidence.press(button, in: window)
-            try await Task.sleep(for: .milliseconds(600))
-            print("Review fixture: prepared=\(preparation?.isPrepared == true), offers=\(preparation?.offers.count ?? 0), review=\(installationReview?.items.count ?? 0), issues=\(preparation?.issues.map { $0.message } ?? []), notice=\(notice?.message ?? "none")")
-            try check(preparationIsCurrent && preparation?.isPrepared == true && installationReview?.items.count == 3,
-                      "Start must automatically preflight and prepare a review from the library page")
-            try check(!isInstalling && installationPlanLocked, "Preparing a review must not send files")
-            try await Task.sleep(for: .milliseconds(350))
-            guard let sheet = window.attachedSheet, sheet.isVisible else {
-                throw NSError(domain: "InstallStartEvent", code: 2, userInfo: [NSLocalizedDescriptionKey: "Review object exists but native confirmation sheet is not visible"])
-            }
-            try WindowLayoutEvidence.record(window: sheet, name: "install-review", state: "unconfirmed-review",
-                                            stagedCount: plan.count, libraryCount: games.count)
-            cancelInstallationReview()
-        } else {
-            print("External MTP client/busy condition respected; review integration not forced.")
-        }
+        try check(installationReview == nil && !isInstalling, "Staging setup must not open a confirmation or start a send")
         try check(!isInstalling, "Regression must never launch a physical installation")
         clearPlan()
         var rich = snapshot
@@ -146,7 +124,7 @@ extension AppModel {
         try await Task.sleep(for: .seconds(1))
         clearPlan()
         seedUIReviewDevice(DeviceDiscovery(state: .disconnected, message: "Fixture complete; no real USB access"))
-        print("PASS: staging accumulation/dedup/order/removal, defaults/ambiguity, independent details, locked edits, disconnected guidance and metadata-only start/review.")
+        print("PASS: staging accumulation/dedup/order/removal, defaults/ambiguity, independent details, locked edits and disconnected guidance. Install click is not exercised because it now sends immediately.")
     }
 
     private func verifyNativeCardEvents(first: Game, second: Game) async throws {
@@ -167,10 +145,17 @@ extension AppModel {
         try await Task.sleep(for: .milliseconds(500))
         try require(detailGame?.id == first.id && plan.isEmpty, "Actual info-button click also staged the game or did not open details")
         try require(WindowLayoutEvidence.frames["staging"] == sidebar, "Detail popover moved the staging sidebar")
+        let anchorKey = (layout == .grid ? "card-" : "row-") + first.id
         guard let popup = NSApp.windows.first(where: { $0.isVisible && String(describing: type(of: $0)).contains("Popover") }),
-              let close = WindowLayoutEvidence.frames["details-close"] else {
+              let close = WindowLayoutEvidence.frames["details-close"],
+              let anchor = WindowLayoutEvidence.frames[anchorKey],
+              let content = window.contentView else {
             throw NSError(domain: "NativeCardEvents", code: 4, userInfo: [NSLocalizedDescriptionKey: "Missing independent popover/close button"])
         }
+        let contentOnScreen = window.convertToScreen(content.convert(content.bounds, to: nil))
+        let gap = popup.frame.minX - contentOnScreen.minX - anchor.maxX
+        print("DETAIL_POPOVER_GAP \(layout.rawValue) gap=\(gap) anchorMaxX=\(anchor.maxX) popup=\(popup.frame)")
+        try require(gap > -28 && gap < 48, "Detail popover is not on the trailing side of the game card (gap \(gap))")
         try WindowLayoutEvidence.record(window: popup, name: "details-\(layout.rawValue)", checkedFrames: ["closeButton": close],
                                         state: "independent-detail-popover", stagedCount: plan.count, libraryCount: games.count)
         try press(close, in: popup)

@@ -31,7 +31,7 @@ private struct InstallFixture {
 }
 private actor FactoryObservation {
     var opens = 0
-    func opened() { opens += 1 }
+    func opened() -> Int { opens += 1; return opens }
 }
 private actor CallbackLatch {
     var entered = false
@@ -42,6 +42,25 @@ private actor CallbackLatch {
         if !released { await withCheckedContinuation { continuation = $0 } }
     }
     func release() { released = true; continuation?.resume(); continuation = nil }
+}
+private actor BusyTransport: SphairaUploadTransport {
+    func inspectSession() -> SphairaUploadSession {
+        .init(deviceVersion: "Sphaira/fixture", supportedOperations: [0x9808, 0x100d],
+              storages: [.init(id: 9, name: "Games"), .init(id: 8, name: "Install")], lastTransaction: 20)
+    }
+    func sendCommand(_ container: Data) {}
+    func beginData(_ header: Data) {}
+    func writeData(_ bytes: Data) {}
+    func endData() {}
+    func receiveResponse() -> Data {
+        var data = Data()
+        PTPCodec.append(UInt32(12), to: &data)
+        PTPCodec.append(UInt16(3), to: &data)
+        PTPCodec.append(UInt16(0x2019), to: &data)
+        PTPCodec.append(UInt32(21), to: &data)
+        return data
+    }
+    func close() {}
 }
 private actor WorkerTransport: SphairaUploadTransport {
     var responses = 0
@@ -81,7 +100,7 @@ struct SphairaInstallerTests {
             let observer = FactoryObservation()
             let result = await SphairaInstallWorker.execute(request: request, directory: fixture.attempts,
                 leaseURL: fixture.directory.appendingPathComponent("lease")) {
-                    await observer.opened(); return WorkerTransport()
+                    _ = await observer.opened(); return WorkerTransport()
                 }
             #expect(result.transfer.outcome == .notStarted)
             #expect(await observer.opens == 0)
@@ -98,11 +117,46 @@ struct SphairaInstallerTests {
             let observer = FactoryObservation()
             let directory = busy ? fixture.attempts : fixture.directory.appendingPathComponent("missing/no-directory")
             let result = await SphairaInstallWorker.execute(request: request, directory: directory, leaseURL: leaseURL) {
-                await observer.opened(); return WorkerTransport()
+                _ = await observer.opened(); return WorkerTransport()
             }
             #expect(result.transfer.outcome == .notStarted)
             #expect(await observer.opens == 0)
         }
+    }
+
+    @Test func deviceBusyBeforeAnyBytesWaitsThenSendsTheSameFile() async throws {
+        let fixture = try InstallFixture(); defer { fixture.remove() }
+        let request = try fixture.request().confirmed()
+        let observer = FactoryObservation()
+        let result = await SphairaInstallWorker.execute(request: request, directory: fixture.attempts,
+            leaseURL: fixture.directory.appendingPathComponent("lease"),
+            busyInterval: .milliseconds(1), busyAttempts: 3) {
+                let opens = await observer.opened()
+                return opens == 1 ? BusyTransport() : WorkerTransport()
+            }
+        #expect(result.transfer.outcome == .transferredAwaitingConfirmation)
+        #expect(result.transfer.bytesSubmitted == 13)
+        #expect(await observer.opens == 2)
+        let state = try SphairaAttemptFile.load(SphairaInstallProgress.self, at: fixture.attempts.appendingPathComponent("state.json"))
+        #expect(state.phase == "transferring" && state.bytesSubmitted == 13)
+        #expect(try Data(contentsOf: fixture.source) == Data(0..<13))
+    }
+
+    @Test func persistentDeviceBusySendsNothingAndStops() async throws {
+        let fixture = try InstallFixture(); defer { fixture.remove() }
+        let request = try fixture.request().confirmed()
+        let observer = FactoryObservation()
+        let result = await SphairaInstallWorker.execute(request: request, directory: fixture.attempts,
+            leaseURL: fixture.directory.appendingPathComponent("lease"),
+            busyInterval: .milliseconds(1), busyAttempts: 2) {
+                _ = await observer.opened()
+                return BusyTransport()
+            }
+        #expect(result.transfer.failure == .deviceBusy)
+        #expect(result.transfer.bytesSubmitted == 0)
+        #expect(result.transfer.outcome == .notStarted)
+        #expect(await observer.opens == 2)
+        #expect(try Data(contentsOf: fixture.source) == Data(0..<13))
     }
 
     @Test func durableWorkerStateAndReplayPreservesOriginalResult() async throws {

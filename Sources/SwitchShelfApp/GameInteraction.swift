@@ -51,3 +51,29 @@ struct GameDetailsButton: View {
         .accessibilityIdentifier("game-details-\(placement.rawValue)-\(game.id)")
     }
 }
+
+/// Anchors the detail popover to a card or row. On macOS the requested edge is
+/// the side of the anchor where the panel opens, so `.trailing` places it to the
+/// right of that game.
+struct GameDetailsPopover: ViewModifier {
+    @Bindable var model: AppModel
+    let game: Game
+
+    func body(content: Content) -> some View {
+        content.popover(
+            isPresented: Binding(
+                get: { model.detailGame?.id == game.id },
+                set: { isPresented in
+                    if !isPresented, model.detailGame?.id == game.id {
+                        model.closeGameDetails()
+                    }
+                }
+            ),
+            attachmentAnchor: .point(.trailing),
+            arrowEdge: .trailing
+        ) {
+            InspectorView(model: model, game: game)
+                .frame(width: 370, height: 560)
+        }
+    }
+}

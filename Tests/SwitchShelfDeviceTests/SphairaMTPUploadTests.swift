@@ -196,8 +196,10 @@ struct SphairaMTPUploadTests {
         let transport = UploadTransportFixture(createResponse: responseBytes(transaction: 21, code: 0x2019))
         let source = UploadSourceFixture()
         let result = await SphairaMTPUpload().upload(name: "fixture.nsp", from: source, through: transport)
-        #expect(result.failure == .protocolViolation)
-        #expect(result.outcome == .deviceStateUnknown)
+        #expect(result.failure == .deviceBusy)
+        #expect(result.outcome == .notStarted)
+        #expect(result.responseCode == 0x2019)
+        #expect(result.bytesSubmitted == 0)
         #expect(await source.reads.isEmpty)
         #expect(await transport.commands.count == 1)
     }

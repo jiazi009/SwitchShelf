@@ -29,6 +29,13 @@ public struct SphairaBatchStatus: Sendable, Identifiable {
     public let item: SphairaBatchItem
     public var state: State
     public var bytesSubmitted: UInt64
+    public var phase: String
+    public init(item: SphairaBatchItem, state: State, bytesSubmitted: UInt64, phase: String = "") {
+        self.item = item
+        self.state = state
+        self.bytesSubmitted = bytesSubmitted
+        self.phase = phase
+    }
 }
 
 /// Serial orchestration; every request remains protected by the existing isolated worker.
@@ -36,7 +43,7 @@ public enum SphairaBatchInstaller {
     public typealias Sender = @Sendable (SphairaInstallRequest, @escaping @Sendable (SphairaInstallProgress) async -> Void) async throws -> SphairaInstallReport
     public enum Event: Sendable {
         case statuses([SphairaBatchStatus])
-        case progress(requestID: String, bytesSubmitted: UInt64)
+        case progress(requestID: String, bytesSubmitted: UInt64, phase: String)
     }
     public typealias Observer = @Sendable (Event) async -> Void
 
@@ -50,7 +57,7 @@ public enum SphairaBatchInstaller {
             await observe(.statuses(statuses))
             do {
                 let report = try await send(items[index].request.confirmed()) { progress in
-                    await observe(.progress(requestID: progress.requestID, bytesSubmitted: progress.bytesSubmitted))
+                    await observe(.progress(requestID: progress.requestID, bytesSubmitted: progress.bytesSubmitted, phase: progress.phase))
                 }
                 statuses[index].bytesSubmitted = report.transfer.bytesSubmitted
                 if report.transfer.outcome == .transferredAwaitingConfirmation && report.transfer.failure == nil &&

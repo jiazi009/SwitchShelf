@@ -158,9 +158,10 @@ struct PlanItem: Codable, Identifiable, Equatable, Sendable {
         self.title = game.title
         self.titleID = game.contents.compactMap(\.titleID).first
         let selectedUpdateID = InstallContentDefaults.latestUpdateID(in: game.contents)
+        let defaults = BaseSelection.defaultIncludedIDs(in: game.contents, updateID: selectedUpdateID)
         self.contents = game.contents
             .sorted { $0.kind.order == $1.kind.order ? $0.fileURL.lastPathComponent < $1.fileURL.lastPathComponent : $0.kind.order < $1.kind.order }
-            .map { PlanContent(content: $0, included: $0.kind == .base || $0.kind == .dlc || ($0.kind == .update && $0.id == selectedUpdateID)) }
+            .map { PlanContent(content: $0, included: defaults?.contains($0.id) == true) }
         self.target = target
         self.note = note
         self.addedAt = addedAt

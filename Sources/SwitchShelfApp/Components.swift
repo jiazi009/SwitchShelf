@@ -186,49 +186,108 @@ struct NoticeBanner: View {
 struct DeviceStatusPill: View {
     var discovery: DeviceDiscovery?
     var isDiscovering: Bool
+    var isReadingInventory = false
     var action: () -> Void
 
+    /// Every phase uses this frame. Text length must not resize the control.
+    private static let width: CGFloat = 114
+    private static let mark: CGFloat = 14
+
+    private enum Phase: Equatable {
+        case waiting, connecting, connected, failed, busy
+
+        var title: String {
+            switch self {
+            case .waiting: "待连接"
+            case .connecting: "连接中"
+            case .connected: "已连接"
+            case .failed: "连接失败"
+            case .busy: "设备忙碌"
+            }
+        }
+
+        var tone: StatusTone {
+            switch self {
+            case .waiting: .neutral
+            case .connecting: .accent
+            case .connected: .success
+            case .failed: .danger
+            case .busy: .warning
+            }
+        }
+
+        var symbol: String {
+            switch self {
+            case .waiting: "circle"
+            case .connecting: "circle.dotted"
+            case .connected: "checkmark.circle.fill"
+            case .failed: "exclamationmark.circle.fill"
+            case .busy: "hourglass"
+            }
+        }
+
+        var showsProgress: Bool { self == .connecting }
+    }
+
     private var state: DeviceConnectionState { discovery?.state ?? .disconnected }
-    private var label: String {
-        if isDiscovering { return "正在检测设备" }
-        guard discovery != nil else { return "设备未检测" }
+
+    private var phase: Phase {
+        if isDiscovering || isReadingInventory { return .connecting }
         switch state {
-        case .disconnected: return "未连接 Switch"
-        case .detected, .waitingForMTP: return "Switch · 等待 MTP"
-        case .ready: return "Switch · 已就绪"
-        case .reading: return "Switch · 读取中"
-        case .busy: return "Switch · 忙碌"
-        case .error: return "Switch · 连接错误"
+        case .ready: return .connected
+        case .error: return .failed
+        case .busy: return .busy
+        case .reading: return .connecting
+        case .disconnected, .detected, .waitingForMTP: return .waiting
         }
     }
-    private var tone: StatusTone { isDiscovering ? .accent : (discovery == nil ? .neutral : state.tone) }
+
+    private var detail: String {
+        discovery?.message ?? "尚未检测 USB 设备"
+    }
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 7) {
-                if isDiscovering || state == .reading {
-                    ProgressView().controlSize(.mini).scaleEffect(0.7)
-                } else {
-                    Circle().fill(tone.color).frame(width: 6, height: 6)
-                }
-                Text(label)
-                    .font(.system(size: 11, weight: .medium))
+            HStack(spacing: 6) {
+                mark
+                Text(phase.title)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(phase.tone == .neutral ? Color.primary : phase.tone.color)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+                    .frame(width: 56, alignment: .leading)
                 Image(systemName: "chevron.right")
                     .font(.system(size: 8, weight: .bold))
                     .foregroundStyle(Theme.sidebarText.opacity(0.5))
+                    .frame(width: 8, height: 8)
             }
-            .padding(.horizontal, 11)
-            .frame(height: Theme.controlHeight)
+            .frame(width: Self.width, height: Theme.controlHeight)
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
+        .background(phase.tone.soft, in: Capsule())
         .glassEffect(.regular, in: Capsule())
         .overlay {
-            Capsule().strokeBorder(Theme.hairline, lineWidth: 0.7)
+            Capsule().strokeBorder(phase.tone == .neutral ? Theme.hairline : phase.tone.color.opacity(0.45), lineWidth: 0.7)
         }
-        .help("打开“我的 Switch”查看设备与 MTP 说明")
-        .accessibilityLabel("设备状态：\(label)")
+        .frame(width: Self.width, height: Theme.controlHeight)
+        .help("\(phase.title)。\(detail)")
+        .accessibilityLabel("设备状态：\(phase.title)。\(detail)")
+    }
+
+    private var mark: some View {
+        ZStack {
+            if phase.showsProgress {
+                ProgressView()
+                    .controlSize(.mini)
+            } else {
+                Image(systemName: phase.symbol)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(phase.tone.color)
+            }
+        }
+        .frame(width: Self.mark, height: Self.mark)
+        .clipped()
     }
 }
 

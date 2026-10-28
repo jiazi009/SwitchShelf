@@ -79,7 +79,8 @@ struct LibraryView: View {
             addFolderButton
             DeviceStatusPill(
                 discovery: model.deviceDiscovery,
-                isDiscovering: model.isDiscovering
+                isDiscovering: model.isDiscovering,
+                isReadingInventory: model.isReadingInventory
             ) { model.select(.device) }
         }
         .fixedSize(horizontal: true, vertical: false)

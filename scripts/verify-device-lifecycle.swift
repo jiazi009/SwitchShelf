@@ -202,6 +202,29 @@ extension AppModel {
                     "Cancellation after reliable success cannot leave an installed row staged for resend")
         print("PASS: unconfirmed retention and cancellation after confirmation")
 
+        let manual = try lifecycleFixture(root: root, label: "manual-after-refresh")
+        manual.model.isVerifyingInstall = false
+        manual.model.inventory = nil
+        manual.model.inventorySessionSignature = nil
+        let automaticResult = await manual.model.readInventory(automatically: true, timeoutSeconds: 1)
+        try require(automaticResult && manual.model.inventoryIsCurrentSession,
+                    "Automatic discovery must still publish its fresh inventory")
+        try require(manual.model.plan.count == 2 && !manual.model.installListConfirmed
+                    && manual.model.completedInstallGameIDs.isEmpty,
+                    "Automatic reads must not retire a previously transferred batch")
+        let manualResult = await manual.model.readInventory(timeoutSeconds: 1)
+        try require(manualResult && manual.model.installListConfirmed,
+                    "An intentional fresh manual read may confirm the previously unconfirmed batch")
+        try require(manual.model.plan.map(\.gameID) == ["fixture-unselected"]
+                    && manual.model.completedInstallGameIDs == [manual.game.id],
+                    "Manual confirmation must retire only the selected installed game")
+        let manualSaved = await manual.model.planStore.loadPlan()
+        try require(manualSaved.items.map(\.gameID) == ["fixture-unselected"] && manualSaved.error == nil,
+                    "Manual-confirmed retirement must persist before the read completes")
+        try require(LifecycleChecks.probeCount(manual.probeMarker) == 2,
+                    "Automatic publication and manual confirmation each require their own fresh read")
+        print("PASS: automatic inventory publication and intentional manual confirmation remain distinct")
+
         let fenced = try lifecycleFixture(root: root, label: "worker-fence", errorCode: "workerExitUnverified")
         fenced.model.isVerifyingInstall = false
         try require(fenced.model.canBeginStagedInstallation, "Fixture installation must be eligible before the worker fence")

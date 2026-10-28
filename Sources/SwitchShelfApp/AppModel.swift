@@ -440,6 +440,8 @@ final class AppModel {
         cachedInventory = await inventoryCache.load()
         inventoryCacheSaved = cachedInventory != nil
         inventory = cachedInventory
+        // USB discovery must not wait for a slow or offline SMB source.
+        startDeviceMonitoring()
 
         do {
             try FileManager.default.createDirectory(at: appDirectory, withIntermediateDirectories: true)
@@ -507,7 +509,6 @@ final class AppModel {
         await refreshSourceAvailability()
         await persistSnapshot()
         isBootstrapped = true
-        startDeviceMonitoring()
 
         let refreshOnLaunch = UserDefaults.standard.bool(forKey: AppSettings.refreshOnLaunch)
         if snapshot.games.isEmpty || refreshOnLaunch {
@@ -970,7 +971,7 @@ final class AppModel {
               lastAutomaticAttempt.map({ Date().timeIntervalSince($0) >= 15 }) ?? true else { return }
         automaticAttempts += 1
         lastAutomaticAttempt = Date()
-        _ = await readInventory()
+        _ = await readInventory(automatically: true)
     }
 
     var deviceSessionOverview: DeviceSessionOverview {
@@ -1050,7 +1051,7 @@ final class AppModel {
     }
 
     @discardableResult
-    func readInventory(forVerification: Bool = false, timeoutSeconds: Int = 60) async -> Bool {
+    func readInventory(forVerification: Bool = false, automatically: Bool = false, timeoutSeconds: Int = 60) async -> Bool {
         guard !Task.isCancelled, !automaticReadBlocked, !isReadingInventory, !isInstalling else { return false }
         if wifiBlocksUSB {
             notice = wifiBlocksUSBNotice
@@ -1132,6 +1133,12 @@ final class AppModel {
                 verificationDetail = value.isComplete ? "已取得完整 Games 清单，正在核对所选内容与版本。" : "Games 清单尚未完整，暂不确认安装成功。"
             }
             succeeded = true
+            // An intentional manual read can finish a previously unconfirmed
+            // batch after the user refreshes the device-side Games projection.
+            if !forVerification, !automatically, !isVerifyingInstall, transferredQueueShowsInstalled() {
+                isVerifyingInstall = true
+                await finishInstallVerification(confirmed: true)
+            }
         } catch {
             if isVerifyingInstall { verificationDetail = error.localizedDescription }
             soundedSession = nil
@@ -1539,8 +1546,10 @@ final class AppModel {
     /// Only the USB registry entry used for the send may confirm this batch.
     /// Each helper fully exits before another session opens; no transport fallback.
     private func confirmTransferredInstall(expectedSignature: String) async -> Bool {
-        let deadline = ContinuousClock.now.advanced(by: .seconds(360))
-        while !Task.isCancelled, !automaticReadBlocked, ContinuousClock.now < deadline {
+        let deadline = ContinuousClock.now.advanced(by: .seconds(120))
+        var attempts = 0
+        var retryDelay: Duration = .seconds(2)
+        while !Task.isCancelled, !automaticReadBlocked, attempts < 4, ContinuousClock.now < deadline {
             showVerifyingNotice()
             await waitForDevicePoll()
             guard !Task.isCancelled else { break }
@@ -1553,14 +1562,21 @@ final class AppModel {
             }
             let remaining = ContinuousClock.now.duration(to: deadline)
             let seconds = min(30, max(1, Int(remaining.components.seconds)))
-            if await readInventory(forVerification: true, timeoutSeconds: seconds), transferredQueueShowsInstalled() {
-                return true
+            attempts += 1
+            let readSucceeded = await readInventory(forVerification: true, timeoutSeconds: seconds)
+            if readSucceeded, transferredQueueShowsInstalled() { return true }
+            if attempts == 4 {
+                if readSucceeded, inventory?.isComplete == true {
+                    verificationDetail = "所选内容尚未出现在 Games 清单。sphaira 可能缓存清单；若设备已完成安装，请退出并重新打开 sphaira，再点击重新检测核对。待选项已保留，不会自动重传。"
+                }
+                break
             }
             if Task.isCancelled || automaticReadBlocked { break }
             let pause = ContinuousClock.now.duration(to: deadline)
             if pause <= .zero { break }
-            do { try await Task.sleep(for: min(.seconds(8), pause)) }
+            do { try await Task.sleep(for: min(retryDelay, pause)) }
             catch { break }
+            retryDelay *= 2
         }
         if Task.isCancelled { verificationDetail = "已停止核对；已发送的文件不会自动重传。" }
         return false
@@ -1600,7 +1616,8 @@ final class AppModel {
             }
         } else {
             notice = AppNotice(level: .warning, title: "传输完成，安装尚未确认",
-                               message: verificationDetail ?? "Games 清单中的所选内容或版本尚未全部确认；待选项已保留，不会自动重传。")
+                               message: verificationDetail ?? "Games 清单中的所选内容或版本尚未全部确认；待选项已保留，不会自动重传。",
+                               action: .refreshDevices, actionLabel: "重新检测并核对")
         }
         isVerifyingInstall = false
     }

@@ -1,0 +1,59 @@
+{
+  "backgroundComposite" : "captured alpha over NSColor.windowBackgroundColor for the native effective appearance",
+  "captureMethod" : "active production WindowGroup contentView NSView.cacheDisplay (in-process)",
+  "checkedFrames" : {
+    "brand" : {
+      "height" : 34,
+      "width" : 208,
+      "x" : 14,
+      "y" : 96
+    },
+    "header" : {
+      "height" : 204,
+      "width" : 403,
+      "x" : 236,
+      "y" : 52
+    },
+    "installButton" : {
+      "height" : 39.56787109375,
+      "width" : 288,
+      "x" : 656,
+      "y" : 636.43212890625
+    },
+    "staging" : {
+      "height" : 640,
+      "width" : 320,
+      "x" : 640,
+      "y" : 52
+    },
+    "stagingViewport" : {
+      "height" : 378.43212890625,
+      "width" : 320,
+      "x" : 640,
+      "y" : 170
+    }
+  },
+  "fixtureOnly" : true,
+  "image" : "empty-960x640.png",
+  "imageSHA256" : "2ebd9cc33f80ace32ec6c91f4f832ac37e001ab53a1cd7c9dabdb7a7ce6843c4",
+  "libraryGames" : 0,
+  "name" : "empty-960x640",
+  "nativeSizingNotOverridden" : true,
+  "noBootstrapUSBOrInstallation" : true,
+  "pixelHeight" : 1384,
+  "pixelWidth" : 1920,
+  "stagedGames" : 0,
+  "state" : "empty",
+  "viewport" : {
+    "height" : 692,
+    "width" : 960,
+    "x" : 0,
+    "y" : 0
+  },
+  "windowFrame" : {
+    "height" : 692,
+    "width" : 960,
+    "x" : 640,
+    "y" : 570
+  }
+}

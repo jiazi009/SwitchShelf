@@ -3,6 +3,7 @@ import SwitchShelfDomain
 
 struct LibraryView: View {
     @Bindable var model: AppModel
+    let installationMotion: Namespace.ID
     @FocusState private var searchFocused: Bool
     @State private var showIssues = false
     @State private var showCoverSlider = false
@@ -15,6 +16,9 @@ struct LibraryView: View {
             content
             footer
         }
+        // Native split panes must be compressible; otherwise their ideal empty
+        // height can exceed the actual window and center the toolbar offscreen.
+        .frame(minHeight: 0, maxHeight: .infinity)
         .background(Theme.canvas)
         .task(id: model.searchFocusToken) {
             guard model.searchFocusToken > 0 else { return }
@@ -75,9 +79,9 @@ struct LibraryView: View {
             addFolderButton
             DeviceStatusPill(
                 discovery: model.deviceDiscovery,
-                isDiscovering: model.isDiscovering
+                isDiscovering: model.isDiscovering,
+                isReadingInventory: model.isReadingInventory
             ) { model.select(.device) }
-            InspectorToggleButton(isPresented: model.inspectorPresented) { model.toggleInspector() }
         }
         .fixedSize(horizontal: true, vertical: false)
     }
@@ -445,7 +449,8 @@ struct LibraryView: View {
                     GameCard(
                         model: model,
                         game: game,
-                        isSelected: model.selectedGameIDs.contains(game.id)
+                        isSelected: model.isInPlan(game.id),
+                        installationMotion: installationMotion
                     )
                 }
             }
@@ -457,22 +462,14 @@ struct LibraryView: View {
     }
 
     private var listContent: some View {
-        List(selection: $model.selectedGameIDs) {
-            ForEach(model.filteredGames) { game in
-                GameListRow(
-                    model: model,
-                    game: game,
-                    isSelected: model.selectedGameIDs.contains(game.id)
-                )
-                    .tag(game.id)
-                    .listRowBackground(Color.clear)
-                    .listRowSeparatorTint(Theme.hairline)
+        ScrollView {
+            LazyVStack(spacing: 4) {
+                ForEach(model.filteredGames) { game in
+                    GameListRow(model: model, game: game, isSelected: model.isInPlan(game.id),
+                                installationMotion: installationMotion)
+                }
             }
-        }
-        .listStyle(.inset)
-        .scrollContentBackground(.hidden)
-        .onChange(of: model.selectedGameIDs) { _, _ in
-            model.syncActiveFromSelection()
+            .padding(16)
         }
         .accessibilityLabel("游戏列表")
     }
@@ -527,15 +524,10 @@ struct LibraryView: View {
                     .font(.system(size: 10.5))
                     .foregroundStyle(.tertiary)
             }
-            if !model.selectedGameIDs.isEmpty {
-                Text("· 已选择 \(model.selectedGameIDs.count) 项")
+            if !model.plan.isEmpty {
+                Text("· 待安装 \(model.plan.count) 款")
                     .font(.system(size: 10.5))
                     .foregroundStyle(Theme.accent)
-                Button("取消选择") { model.clearSelection() }
-                    .buttonStyle(.plain)
-                    .font(.system(size: 10.5))
-                    .foregroundStyle(Theme.accent)
-                    .accessibilityLabel("取消选择")
             }
             Spacer()
             if model.isScanning {

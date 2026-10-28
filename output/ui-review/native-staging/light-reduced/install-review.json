@@ -1,0 +1,30 @@
+{
+  "backgroundComposite" : "captured alpha over NSColor.windowBackgroundColor for the native effective appearance",
+  "captureMethod" : "active production WindowGroup contentView NSView.cacheDisplay (in-process)",
+  "checkedFrames" : {
+
+  },
+  "fixtureOnly" : true,
+  "image" : "install-review.png",
+  "imageSHA256" : "0b6a85f777b7573da686f8b4651d62c3c4c6f2b61a2cbf3d6eded9299e683a52",
+  "libraryGames" : 2,
+  "name" : "install-review",
+  "nativeSizingNotOverridden" : true,
+  "noBootstrapUSBOrInstallation" : true,
+  "pixelHeight" : 1200,
+  "pixelWidth" : 1280,
+  "stagedGames" : 1,
+  "state" : "unconfirmed-review",
+  "viewport" : {
+    "height" : 600,
+    "width" : 640,
+    "x" : 0,
+    "y" : 0
+  },
+  "windowFrame" : {
+    "height" : 600,
+    "width" : 640,
+    "x" : 960,
+    "y" : 552
+  }
+}

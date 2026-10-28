@@ -66,7 +66,8 @@ actor LibUSBSphairaLink: SphairaUSBLink {
 }
 
 /// Raw USB adapter: one data phase, bounded packet-aligned writes, final short packet/ZLP.
-/// Installed only in the direct child helper. Inventory remains on ImageCaptureCore.
+/// Installed only in the direct installation child helper. Read-only libusb inventory
+/// shares the link adapter, never this upload state machine.
 actor NativeSphairaMTP: SphairaUploadTransport {
     private let link: any SphairaUSBLink
     private var input = Data()

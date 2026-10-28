@@ -1,0 +1,125 @@
+{
+  "backgroundComposite" : "captured alpha over NSColor.windowBackgroundColor for the native effective appearance",
+  "captureMethod" : "active production WindowGroup contentView NSView.cacheDisplay (in-process)",
+  "checkedFrames" : {
+    "brand" : {
+      "height" : 34,
+      "width" : 208,
+      "x" : 14,
+      "y" : 96
+    },
+    "card-matrix-1" : {
+      "height" : 295.66666666666674,
+      "width" : 206,
+      "x" : 260,
+      "y" : 232
+    },
+    "details-grid-matrix-1" : {
+      "height" : 27,
+      "width" : 27,
+      "x" : 432,
+      "y" : 239
+    },
+    "gridViewport" : {
+      "height" : 572,
+      "width" : 723,
+      "x" : 236,
+      "y" : 212
+    },
+    "header" : {
+      "height" : 120,
+      "width" : 723,
+      "x" : 236,
+      "y" : 52
+    },
+    "installButton" : {
+      "height" : 39.56787109375,
+      "width" : 288,
+      "x" : 976,
+      "y" : 764.43212890625
+    },
+    "remove-staged-matrix-1" : {
+      "height" : 12,
+      "width" : 12,
+      "x" : 1243,
+      "y" : 248
+    },
+    "remove-staged-matrix-2" : {
+      "height" : 12,
+      "width" : 12,
+      "x" : 1243,
+      "y" : 377
+    },
+    "staged-card-matrix-1" : {
+      "height" : 117,
+      "width" : 292,
+      "x" : 974,
+      "y" : 184
+    },
+    "staged-card-matrix-2" : {
+      "height" : 117,
+      "width" : 292,
+      "x" : 974,
+      "y" : 313
+    },
+    "staged-title-matrix-1" : {
+      "height" : 30,
+      "width" : 212,
+      "x" : 1041,
+      "y" : 195
+    },
+    "staged-title-matrix-2" : {
+      "height" : 30,
+      "width" : 214,
+      "x" : 1041,
+      "y" : 324
+    },
+    "staging" : {
+      "height" : 768,
+      "width" : 320,
+      "x" : 960,
+      "y" : 52
+    },
+    "staging-cover-matrix-1" : {
+      "height" : 60,
+      "width" : 46,
+      "x" : 985,
+      "y" : 195
+    },
+    "staging-cover-matrix-2" : {
+      "height" : 60,
+      "width" : 46,
+      "x" : 985,
+      "y" : 324
+    },
+    "stagingViewport" : {
+      "height" : 506.43212890625,
+      "width" : 320,
+      "x" : 960,
+      "y" : 170
+    }
+  },
+  "fixtureOnly" : true,
+  "image" : "populated-grid-1280x820.png",
+  "imageSHA256" : "13bbcacbb087206493c6119fe791cb061f77c9001bedddbdd93bf31cd09d45c8",
+  "libraryGames" : 5,
+  "name" : "populated-grid-1280x820",
+  "nativeSizingNotOverridden" : true,
+  "noBootstrapUSBOrInstallation" : true,
+  "pixelHeight" : 1640,
+  "pixelWidth" : 2560,
+  "stagedGames" : 2,
+  "state" : "populated-grid",
+  "viewport" : {
+    "height" : 820,
+    "width" : 1280,
+    "x" : 0,
+    "y" : 0
+  },
+  "windowFrame" : {
+    "height" : 820,
+    "width" : 1280,
+    "x" : 640,
+    "y" : 442
+  }
+}

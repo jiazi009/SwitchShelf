@@ -3,20 +3,16 @@ import SwitchShelfDomain
 
 struct InspectorView: View {
     @Bindable var model: AppModel
+    let game: Game
 
     var body: some View {
         VStack(spacing: 0) {
             header
             Divider().overlay(Theme.hairline)
             ScrollView {
-                if model.isMultiSelection {
-                    MultiSelectionInspector(model: model)
-                        .padding(18)
-                } else if let game = model.activeGame {
+                LazyVStack(alignment: .leading, spacing: 0) {
                     GameInspector(model: model, game: game)
                         .padding(18)
-                } else {
-                    emptyState
                 }
             }
             .scrollIndicators(.automatic)
@@ -35,7 +31,7 @@ struct InspectorView: View {
                 .textCase(.uppercase)
             Spacer()
             Button {
-                model.toggleInspector()
+                model.closeGameDetails()
             } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: 10, weight: .bold))
@@ -44,8 +40,10 @@ struct InspectorView: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .help("隐藏检查器（⌘⌥I）")
-            .accessibilityLabel("隐藏检查器")
+            .help("关闭详情")
+            .accessibilityLabel("关闭详情")
+            .accessibilityIdentifier("close-game-details")
+            .keyboardShortcut(.cancelAction)
         }
         .padding(.horizontal, 16)
         .frame(height: 44)
@@ -78,18 +76,19 @@ private struct GameInspector: View {
 
     private var assessment: InstallationAssessment { model.assessment(for: game) }
     private var gameSources: [LibrarySource] { model.sources(for: game) }
-    private var inPlan: Bool { model.isInPlan(game.id) }
 
     private var groupedContents: [(kind: ContentKind, contents: [LocalContent])] {
-        ContentKind.allCases.compactMap { kind in
-            let contents = game.contents.filter { $0.kind == kind }
-                .sorted { $0.fileURL.lastPathComponent.localizedStandardCompare($1.fileURL.lastPathComponent) == .orderedAscending }
-            return contents.isEmpty ? nil : (kind, contents)
+        let groups = Dictionary(grouping: game.contents, by: \.kind)
+        return ContentKind.allCases.compactMap { kind in
+            guard let contents = groups[kind] else { return nil }
+            return (kind, contents.sorted {
+                $0.fileURL.lastPathComponent.localizedStandardCompare($1.fileURL.lastPathComponent) == .orderedAscending
+            })
         }
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        LazyVStack(alignment: .leading, spacing: 16) {
             CoverArtwork(game: game, cornerRadius: 16)
                 .aspectRatio(1, contentMode: .fit)
                 .frame(maxWidth: 300)
@@ -137,7 +136,7 @@ private struct GameInspector: View {
             assessmentCard
 
             if !game.contents.isEmpty {
-                VStack(alignment: .leading, spacing: 9) {
+                LazyVStack(alignment: .leading, spacing: 9) {
                     HStack {
                         Text("本地内容")
                             .font(.system(size: 12, weight: .semibold))
@@ -194,29 +193,6 @@ private struct GameInspector: View {
             }
 
             VStack(spacing: 8) {
-                if inPlan {
-                    Button {
-                        model.showQueue()
-                    } label: {
-                        Label("已加入安装队列 · 查看", systemImage: "checkmark.circle.fill")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-                    .accessibilityLabel("已在安装队列中，打开队列")
-                } else {
-                    Button {
-                        model.addToQueue(game)
-                    } label: {
-                        Label("加入安装队列", systemImage: "plus.circle.fill")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-                    .disabled(game.contents.isEmpty)
-                    .help(game.contents.isEmpty ? "该条目没有本地内容文件" : "把本地内容加入安装计划")
-                    .accessibilityLabel("加入安装队列")
-                }
                 Button {
                     model.revealGame(game)
                 } label: {
@@ -283,7 +259,7 @@ private struct GameInspector: View {
     }
 
     private func contentRow(_ content: LocalContent) -> some View {
-        let state = model.assessment(for: content)
+        let state = model.assessment(for: content, in: game)
         return HStack(alignment: .top, spacing: 9) {
             ContentKindIcon(kind: content.kind)
             VStack(alignment: .leading, spacing: 2) {
@@ -440,16 +416,6 @@ private struct MultiSelectionInspector: View {
             }
 
             VStack(spacing: 8) {
-                Button {
-                    model.addSelectedToQueue()
-                } label: {
-                    Label("全部加入安装队列", systemImage: "plus.circle.fill")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .accessibilityLabel("把 \(selected.count) 款游戏加入安装队列")
-
                 Button("清除选择") { model.clearSelection() }
                     .buttonStyle(.bordered)
                     .controlSize(.large)

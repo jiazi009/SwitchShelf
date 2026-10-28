@@ -25,6 +25,8 @@ struct SidebarView: View {
             scanFooter
             footer
         }
+        // Allow NSSplitView to fit the viewport, rather than its ideal height.
+        .frame(minHeight: 0, maxHeight: .infinity)
         .background(SidebarBackground())
         .overlay(alignment: .trailing) {
             Rectangle().fill(Theme.hairline).frame(width: 0.5)
@@ -75,12 +77,6 @@ struct SidebarView: View {
     private var manageSection: some View {
         VStack(alignment: .leading, spacing: 3) {
             SectionLabel(text: "管理")
-            SidebarRow(
-                title: "安装队列",
-                systemImage: "arrow.up.arrow.down.circle.fill",
-                count: model.count(for: .queue),
-                isSelected: model.selection == .queue
-            ) { model.select(.queue) }
             SidebarRow(
                 title: "我的 Switch",
                 systemImage: "cable.connector",

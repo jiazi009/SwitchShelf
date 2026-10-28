@@ -1,0 +1,156 @@
+{
+  "captureMethod" : "active production WindowGroup contentView NSView.cacheDisplay (in-process)",
+  "checkedFrames" : {
+    "brand" : {
+      "height" : 34,
+      "width" : 208,
+      "x" : 14,
+      "y" : 96
+    },
+    "details-list-matrix-1" : {
+      "height" : 27,
+      "width" : 27,
+      "x" : 1147,
+      "y" : 248.5
+    },
+    "details-list-matrix-2" : {
+      "height" : 27,
+      "width" : 27,
+      "x" : 1147,
+      "y" : 320.5
+    },
+    "header" : {
+      "height" : 120,
+      "width" : 959,
+      "x" : 236,
+      "y" : 52
+    },
+    "installButton" : {
+      "height" : 39.56787109375,
+      "width" : 288,
+      "x" : 1212,
+      "y" : 753.43212890625
+    },
+    "library-bytes-matrix-1" : {
+      "height" : 13,
+      "width" : 74,
+      "x" : 1065,
+      "y" : 254
+    },
+    "library-bytes-matrix-2" : {
+      "height" : 13,
+      "width" : 74,
+      "x" : 1065,
+      "y" : 326
+    },
+    "library-cover-list-matrix-1" : {
+      "height" : 44,
+      "width" : 44,
+      "x" : 258,
+      "y" : 240
+    },
+    "library-cover-list-matrix-2" : {
+      "height" : 44,
+      "width" : 44,
+      "x" : 258,
+      "y" : 312
+    },
+    "listViewport" : {
+      "height" : 561,
+      "width" : 959,
+      "x" : 236,
+      "y" : 212
+    },
+    "remove-staged-matrix-1" : {
+      "height" : 12,
+      "width" : 12,
+      "x" : 1479,
+      "y" : 248
+    },
+    "remove-staged-matrix-2" : {
+      "height" : 12,
+      "width" : 12,
+      "x" : 1479,
+      "y" : 377
+    },
+    "row-matrix-1" : {
+      "height" : 68,
+      "width" : 927,
+      "x" : 252,
+      "y" : 228
+    },
+    "row-matrix-2" : {
+      "height" : 68,
+      "width" : 927,
+      "x" : 252,
+      "y" : 300
+    },
+    "staged-card-matrix-1" : {
+      "height" : 117,
+      "width" : 292,
+      "x" : 1210,
+      "y" : 184
+    },
+    "staged-card-matrix-2" : {
+      "height" : 117,
+      "width" : 292,
+      "x" : 1210,
+      "y" : 313
+    },
+    "staged-title-matrix-1" : {
+      "height" : 30,
+      "width" : 212,
+      "x" : 1277,
+      "y" : 195
+    },
+    "staged-title-matrix-2" : {
+      "height" : 30,
+      "width" : 214,
+      "x" : 1277,
+      "y" : 324
+    },
+    "staging" : {
+      "height" : 757,
+      "width" : 320,
+      "x" : 1196,
+      "y" : 52
+    },
+    "staging-cover-matrix-1" : {
+      "height" : 60,
+      "width" : 46,
+      "x" : 1221,
+      "y" : 195
+    },
+    "staging-cover-matrix-2" : {
+      "height" : 60,
+      "width" : 46,
+      "x" : 1221,
+      "y" : 324
+    },
+    "stagingViewport" : {
+      "height" : 495.43212890625,
+      "width" : 320,
+      "x" : 1196,
+      "y" : 170
+    }
+  },
+  "fixtureOnly" : true,
+  "libraryGames" : 5,
+  "name" : "populated-list-1516x809",
+  "nativeSizingNotOverridden" : true,
+  "noBootstrapUSBOrInstallation" : true,
+  "stagedGames" : 2,
+  "state" : "populated-list",
+  "viewport" : {
+    "height" : 809,
+    "width" : 1516,
+    "x" : 0,
+    "y" : 0
+  },
+  "windowFrame" : {
+    "height" : 809,
+    "width" : 1516,
+    "x" : 640,
+    "y" : 453
+  }
+}

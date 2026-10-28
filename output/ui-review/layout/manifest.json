@@ -1,205 +1,251 @@
 {
-  "captureMethod" : "NSHostingView.cacheDisplay (offscreen)",
-  "captures" : [
+  "captureMethod": "NSHostingView.cacheDisplay (offscreen)",
+  "captures": [
     {
-      "height" : 640,
-      "name" : "grid-960x640-light",
-      "pixelHeight" : 1280,
-      "pixelWidth" : 1920,
-      "pngBytes" : 1269226,
-      "width" : 960
+      "height": 640,
+      "name": "grid-960x640-light",
+      "pixelHeight": 1280,
+      "pixelWidth": 1920,
+      "pngBytes": 1032052,
+      "width": 960,
+      "imageSHA256": "5beb208476873d7282def4d13d0f40cf146474a3ce0eff7e20be1cccc754869f"
     },
     {
-      "height" : 640,
-      "name" : "list-960x640-light",
-      "pixelHeight" : 1280,
-      "pixelWidth" : 1920,
-      "pngBytes" : 881874,
-      "width" : 960
+      "height": 640,
+      "name": "list-960x640-light",
+      "pixelHeight": 1280,
+      "pixelWidth": 1920,
+      "pngBytes": 1004014,
+      "width": 960,
+      "imageSHA256": "517fe697dbfa68cc3d0ca5a5472434054e961a0bf0fd34a09504676f9c9845de"
     },
     {
-      "height" : 640,
-      "name" : "queue-960x640-light",
-      "pixelHeight" : 1280,
-      "pixelWidth" : 1920,
-      "pngBytes" : 890495,
-      "width" : 960
+      "height": 640,
+      "name": "queue-960x640-light",
+      "pixelHeight": 1280,
+      "pixelWidth": 1920,
+      "pngBytes": 875066,
+      "width": 960,
+      "imageSHA256": "9c94623cb4efe68f99aa292adfd2efa534d8759e783ca28bfb023a61fa14439e"
     },
     {
-      "height" : 640,
-      "name" : "maintenance-960x640-light",
-      "pixelHeight" : 1280,
-      "pixelWidth" : 1920,
-      "pngBytes" : 824405,
-      "width" : 960
+      "height": 640,
+      "name": "maintenance-960x640-light",
+      "pixelHeight": 1280,
+      "pixelWidth": 1920,
+      "pngBytes": 829048,
+      "width": 960,
+      "imageSHA256": "cac70c5ac7703fe8e2af16479aac6a8e180fb29dbde6d84fb3b8349440dfefbb"
     },
     {
-      "height" : 640,
-      "name" : "device-960x640-light",
-      "pixelHeight" : 1280,
-      "pixelWidth" : 1920,
-      "pngBytes" : 900040,
-      "width" : 960
+      "height": 640,
+      "name": "device-960x640-light",
+      "pixelHeight": 1280,
+      "pixelWidth": 1920,
+      "pngBytes": 799119,
+      "width": 960,
+      "imageSHA256": "096127431ceb9924080b139b2f46f5b63f72df7cc32c5ff1d72263b9df84420e"
     },
     {
-      "height" : 820,
-      "name" : "grid-1280x820-light",
-      "pixelHeight" : 1640,
-      "pixelWidth" : 2560,
-      "pngBytes" : 1789851,
-      "width" : 1280
+      "height": 820,
+      "name": "grid-1280x820-light",
+      "pixelHeight": 1640,
+      "pixelWidth": 2560,
+      "pngBytes": 1762156,
+      "width": 1280,
+      "imageSHA256": "13f54bfb38dea6056146f8f66b3c583806156d3ef44e25334a09cd959748cc23"
     },
     {
-      "height" : 820,
-      "name" : "list-1280x820-light",
-      "pixelHeight" : 1640,
-      "pixelWidth" : 2560,
-      "pngBytes" : 1292187,
-      "width" : 1280
+      "height": 820,
+      "name": "list-1280x820-light",
+      "pixelHeight": 1640,
+      "pixelWidth": 2560,
+      "pngBytes": 1214923,
+      "width": 1280,
+      "imageSHA256": "d1a88e55daf80036ef741c599b6994d7550421f28633383641d24c9b7b60f532"
     },
     {
-      "height" : 820,
-      "name" : "queue-1280x820-light",
-      "pixelHeight" : 1640,
-      "pixelWidth" : 2560,
-      "pngBytes" : 1084009,
-      "width" : 1280
+      "height": 820,
+      "name": "queue-1280x820-light",
+      "pixelHeight": 1640,
+      "pixelWidth": 2560,
+      "pngBytes": 1067236,
+      "width": 1280,
+      "imageSHA256": "d768fbfc4967faf827834d4eccc97a619caa7f36058805f9a546172f75043140"
     },
     {
-      "height" : 820,
-      "name" : "maintenance-1280x820-light",
-      "pixelHeight" : 1640,
-      "pixelWidth" : 2560,
-      "pngBytes" : 1018004,
-      "width" : 1280
+      "height": 820,
+      "name": "maintenance-1280x820-light",
+      "pixelHeight": 1640,
+      "pixelWidth": 2560,
+      "pngBytes": 1024895,
+      "width": 1280,
+      "imageSHA256": "0f1c926b35a8507d569e766c475410d1af2f3014b467d9e2552f78c7be372396"
     },
     {
-      "height" : 820,
-      "name" : "device-1280x820-light",
-      "pixelHeight" : 1640,
-      "pixelWidth" : 2560,
-      "pngBytes" : 1091267,
-      "width" : 1280
+      "height": 820,
+      "name": "device-1280x820-light",
+      "pixelHeight": 1640,
+      "pixelWidth": 2560,
+      "pngBytes": 1035987,
+      "width": 1280,
+      "imageSHA256": "e999b3c926b4e2fb81c32714f691880db525cf19a5bf2c4e495875a9b7b58b8b"
     },
     {
-      "height" : 640,
-      "name" : "grid-compact120-960x640-light",
-      "pixelHeight" : 1280,
-      "pixelWidth" : 1920,
-      "pngBytes" : 1155304,
-      "width" : 960
+      "height": 640,
+      "name": "grid-compact120-960x640-light",
+      "pixelHeight": 1280,
+      "pixelWidth": 1920,
+      "pngBytes": 1100906,
+      "width": 960,
+      "imageSHA256": "a79915f6ae5100151f89c45a7ac47f7657ba66a3ac09f3195e9cf36156f613c6"
     },
     {
-      "height" : 440,
-      "name" : "settings-light",
-      "pixelHeight" : 880,
-      "pixelWidth" : 1040,
-      "pngBytes" : 102842,
-      "width" : 520
+      "height": 440,
+      "name": "settings-light",
+      "pixelHeight": 880,
+      "pixelWidth": 1040,
+      "pngBytes": 102842,
+      "width": 520,
+      "imageSHA256": "1c60fb54e6d51efe65b77c87b9bf0401496b42a79718479b9f6da03d463384f6"
     },
     {
-      "height" : 640,
-      "name" : "grid-960x640-dark",
-      "pixelHeight" : 1280,
-      "pixelWidth" : 1920,
-      "pngBytes" : 1270740,
-      "width" : 960
+      "height": 640,
+      "name": "grid-960x640-dark",
+      "pixelHeight": 1280,
+      "pixelWidth": 1920,
+      "pngBytes": 1042512,
+      "width": 960,
+      "imageSHA256": "e17f876252bd58f0961c4b7b486b880715463c86d2f2c70480857d571bb18c0d"
     },
     {
-      "height" : 640,
-      "name" : "list-960x640-dark",
-      "pixelHeight" : 1280,
-      "pixelWidth" : 1920,
-      "pngBytes" : 894968,
-      "width" : 960
+      "height": 640,
+      "name": "list-960x640-dark",
+      "pixelHeight": 1280,
+      "pixelWidth": 1920,
+      "pngBytes": 1023589,
+      "width": 960,
+      "imageSHA256": "c08be94ba1f8d671b50b7d09edea2bb9ba12ad91662f43aecf78c0f71397a066"
     },
     {
-      "height" : 640,
-      "name" : "queue-960x640-dark",
-      "pixelHeight" : 1280,
-      "pixelWidth" : 1920,
-      "pngBytes" : 917651,
-      "width" : 960
+      "height": 640,
+      "name": "queue-960x640-dark",
+      "pixelHeight": 1280,
+      "pixelWidth": 1920,
+      "pngBytes": 900186,
+      "width": 960,
+      "imageSHA256": "eb3d5b3606d9898506236cad5fc0f0563c8d1323c6838954d6b159ddabad1ce6"
     },
     {
-      "height" : 640,
-      "name" : "maintenance-960x640-dark",
-      "pixelHeight" : 1280,
-      "pixelWidth" : 1920,
-      "pngBytes" : 850744,
-      "width" : 960
+      "height": 640,
+      "name": "maintenance-960x640-dark",
+      "pixelHeight": 1280,
+      "pixelWidth": 1920,
+      "pngBytes": 856172,
+      "width": 960,
+      "imageSHA256": "4c589e879bbb5fe53cac1cf505f700cea1f5e946b7f43c74aa610292cba6be83"
     },
     {
-      "height" : 640,
-      "name" : "device-960x640-dark",
-      "pixelHeight" : 1280,
-      "pixelWidth" : 1920,
-      "pngBytes" : 941552,
-      "width" : 960
+      "height": 640,
+      "name": "device-960x640-dark",
+      "pixelHeight": 1280,
+      "pixelWidth": 1920,
+      "pngBytes": 822864,
+      "width": 960,
+      "imageSHA256": "806586d404dcb3af938bf5e949417ba2af412f2df641457eb70ef2a701a28737"
     },
     {
-      "height" : 820,
-      "name" : "grid-1280x820-dark",
-      "pixelHeight" : 1640,
-      "pixelWidth" : 2560,
-      "pngBytes" : 1764824,
-      "width" : 1280
+      "height": 820,
+      "name": "grid-1280x820-dark",
+      "pixelHeight": 1640,
+      "pixelWidth": 2560,
+      "pngBytes": 1747627,
+      "width": 1280,
+      "imageSHA256": "4af01a9a2b1041456717bb4a3aa27366a8eb4f2d1a9ae699960d0cac0f5109dc"
     },
     {
-      "height" : 820,
-      "name" : "list-1280x820-dark",
-      "pixelHeight" : 1640,
-      "pixelWidth" : 2560,
-      "pngBytes" : 1277448,
-      "width" : 1280
+      "height": 820,
+      "name": "list-1280x820-dark",
+      "pixelHeight": 1640,
+      "pixelWidth": 2560,
+      "pngBytes": 1214996,
+      "width": 1280,
+      "imageSHA256": "7c4b7bf6f2ac382f6bc4e14f0c59a969018b870693dde3af004ec88edebe45e2"
     },
     {
-      "height" : 820,
-      "name" : "queue-1280x820-dark",
-      "pixelHeight" : 1640,
-      "pixelWidth" : 2560,
-      "pngBytes" : 1088743,
-      "width" : 1280
+      "height": 820,
+      "name": "queue-1280x820-dark",
+      "pixelHeight": 1640,
+      "pixelWidth": 2560,
+      "pngBytes": 1070448,
+      "width": 1280,
+      "imageSHA256": "cc2ee2cce22d83c74426b73a86f493dd11d13c0a499ce38ff3371300840853ba"
     },
     {
-      "height" : 820,
-      "name" : "maintenance-1280x820-dark",
-      "pixelHeight" : 1640,
-      "pixelWidth" : 2560,
-      "pngBytes" : 1021695,
-      "width" : 1280
+      "height": 820,
+      "name": "maintenance-1280x820-dark",
+      "pixelHeight": 1640,
+      "pixelWidth": 2560,
+      "pngBytes": 1029199,
+      "width": 1280,
+      "imageSHA256": "abd116c2eb01465b0480a31815342b7ccbad967d4e69e754cca2d00ae7ffec7e"
     },
     {
-      "height" : 820,
-      "name" : "device-1280x820-dark",
-      "pixelHeight" : 1640,
-      "pixelWidth" : 2560,
-      "pngBytes" : 1111667,
-      "width" : 1280
+      "height": 820,
+      "name": "device-1280x820-dark",
+      "pixelHeight": 1640,
+      "pixelWidth": 2560,
+      "pngBytes": 1047877,
+      "width": 1280,
+      "imageSHA256": "d1104ed753fc2eebfd864525e99bfee062770f2710c459d703bc913f557b733e"
     },
     {
-      "height" : 640,
-      "name" : "grid-compact120-960x640-dark",
-      "pixelHeight" : 1280,
-      "pixelWidth" : 1920,
-      "pngBytes" : 1158833,
-      "width" : 960
+      "height": 640,
+      "name": "grid-compact120-960x640-dark",
+      "pixelHeight": 1280,
+      "pixelWidth": 1920,
+      "pngBytes": 1113504,
+      "width": 960,
+      "imageSHA256": "69e5e1d49b30b8919a2d568c194b729d5a2ca19f2dc7c850d27dd3935f3eec77"
     },
     {
-      "height" : 440,
-      "name" : "settings-dark",
-      "pixelHeight" : 880,
-      "pixelWidth" : 1040,
-      "pngBytes" : 105529,
-      "width" : 520
+      "height": 440,
+      "name": "settings-dark",
+      "pixelHeight": 880,
+      "pixelWidth": 1040,
+      "pngBytes": 105529,
+      "width": 520,
+      "imageSHA256": "8cbf65c99c5aa0d9bb0855b30a388216607bddf11a317cabdc0a3ce0cb3191fa"
     }
   ],
-  "fixtureOnly" : true,
-  "limitations" : [
-    "Native materials, menu\/button foreground colors, and dynamic NSColor\/inspector colors are not faithfully represented by offscreen cacheDisplay; verify in the live app.",
+  "fixtureOnly": true,
+  "limitations": [
+    "Native materials, menu/button foreground colors, and dynamic NSColor/inspector colors are not faithfully represented by offscreen cacheDisplay; verify in the live app.",
     "The unbundled harness has a generic app icon; app icon correctness is verified in the packaged app.",
     "Fixtures are synthetic; these captures do not establish NAS, USB, package identity, or installation behavior."
   ],
-  "noBootstrapUSBOrInstall" : true,
-  "productionSources" : true
+  "noBootstrapUSBOrInstall": true,
+  "productionSources": true,
+  "productionSourceSHA256": {
+    "Sources/SwitchShelfApp/AppModel.swift": "d2f730c3fc1d84c5b6e280e29e918cf5d4efa0f18c3f90af457499d4928bbae3",
+    "Sources/SwitchShelfApp/AppTypes.swift": "bd0f69b054eca4cacdbfa3b519809ed507616ce37a0f8c6e8693084531716da5",
+    "Sources/SwitchShelfApp/Components.swift": "420d2c88637114af6f58ffeada2fb23d32074d53ea7ea3da2e8f15680ec35551",
+    "Sources/SwitchShelfApp/CoverPalette.swift": "5f5e182b7950bd06b40e5f629034ad399657dbea28d8d73cfac3f517228f9712",
+    "Sources/SwitchShelfApp/DeviceView.swift": "bb27a0b5d5448df3050f441b8553868f685cac3240ea0c3e78f36ce7e38452ed",
+    "Sources/SwitchShelfApp/GameInteraction.swift": "592bf6bc1a864c9a9b04c1ca08cfd0a8576e536880b3af336c47461539ce5912",
+    "Sources/SwitchShelfApp/GameViews.swift": "1b3220bbdeb285d89ea57595a241af39c480b63c9078c18eee0023c76d6dd775",
+    "Sources/SwitchShelfApp/InspectorView.swift": "f3c489713ef6fc4f0856488964f2fcdf693f3d9cdb8f01a96acaed924392860d",
+    "Sources/SwitchShelfApp/InstallationSidebar.swift": "05c793e207cc73dea5a2a0d37235007f5f0271302b42a7e291b4659cba68d0d9",
+    "Sources/SwitchShelfApp/LibraryView.swift": "4a8648eb75567b421dc25df8741037732ffdb1c1206f473396e383e096c5f168",
+    "Sources/SwitchShelfApp/MTPInstallConfirmation.swift": "2d51462e4504af7cc3d588286d13392f42aa6006abd6a7e4c8e77367c857a882",
+    "Sources/SwitchShelfApp/MaintenanceView.swift": "d27c11cb4cbb5f4d8ce5504463d1174e289cf05b8ccc92394331b79754ddee92",
+    "Sources/SwitchShelfApp/QueueView.swift": "30d4d5b3889dcb7b49f5bb09c775eb786b1cb500bdd3e80dffa8dfde83bba862",
+    "Sources/SwitchShelfApp/RootView.swift": "afb584e7f50ea301e08ac83a5b77479a1e7bd979850c8c2b684fefd2c053d319",
+    "Sources/SwitchShelfApp/SettingsView.swift": "1bc2355a5772f0a0041d66aa69cd0c941d90c70a1c2231e3090859183748b7a8",
+    "Sources/SwitchShelfApp/SidebarView.swift": "f94ffeea720f1854534e6ffd2877751090d17ec17d4bc45eadfbc881410e993f",
+    "Sources/SwitchShelfApp/Stores.swift": "34b2335028a040d5421ad6c9bb63c7a95a65604a5db7ab44f44dde93b68917a5",
+    "Sources/SwitchShelfApp/SwitchShelfApp.swift": "90167bdd8a56dea93b907c9dcac8c0dc247ca8498d3ba57340446527caac640f",
+    "Sources/SwitchShelfApp/Theme.swift": "f693bec566b1e908253ae3cc232657f9425cd89d17b0e6364b8d6483d65e3fd7",
+    "Sources/SwitchShelfApp/WiFiConnectView.swift": "afe97a46d4e0c0e233c9dccf5fa6e76fd1fdf29c38638b057df3549909e8c4aa"
+  }
 }

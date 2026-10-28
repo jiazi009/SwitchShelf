@@ -1,0 +1,54 @@
+{
+  "captureMethod" : "active production WindowGroup contentView NSView.cacheDisplay (in-process)",
+  "checkedFrames" : {
+    "brand" : {
+      "height" : 34,
+      "width" : 208,
+      "x" : 14,
+      "y" : 96
+    },
+    "header" : {
+      "height" : 120,
+      "width" : 959,
+      "x" : 236,
+      "y" : 52
+    },
+    "installButton" : {
+      "height" : 39.56787109375,
+      "width" : 288,
+      "x" : 1212,
+      "y" : 753.43212890625
+    },
+    "staging" : {
+      "height" : 757,
+      "width" : 320,
+      "x" : 1196,
+      "y" : 52
+    },
+    "stagingViewport" : {
+      "height" : 495.43212890625,
+      "width" : 320,
+      "x" : 1196,
+      "y" : 170
+    }
+  },
+  "fixtureOnly" : true,
+  "libraryGames" : 0,
+  "name" : "empty-1516x809",
+  "nativeSizingNotOverridden" : true,
+  "noBootstrapUSBOrInstallation" : true,
+  "stagedGames" : 0,
+  "state" : "empty",
+  "viewport" : {
+    "height" : 809,
+    "width" : 1516,
+    "x" : 0,
+    "y" : 0
+  },
+  "windowFrame" : {
+    "height" : 809,
+    "width" : 1516,
+    "x" : 640,
+    "y" : 453
+  }
+}

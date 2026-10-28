@@ -126,12 +126,13 @@ final class NativePTPTransport: NSObject, @preconcurrency ICDeviceBrowserDelegat
 actor InventoryCoordinator {
     static let shared = InventoryCoordinator()
     private var busy = false
-    func read(runtimePath: String?, useLibmtp: Bool, storageDiagnosticsOnly: Bool = false) async throws -> InstalledInventory {
+    func read(runtimePath: String?, useLibmtp: Bool, useLibUSB: Bool = false, storageDiagnosticsOnly: Bool = false) async throws -> InstalledInventory {
         guard !busy else { throw DeviceServiceError(code: .busy, message: "只读清单会话正在进行；请等待完成。") }
         busy = true
         defer { busy = false }
         let transport: any InventoryTransport
-        if useLibmtp { transport = try NativeMTPSession(runtimePath: runtimePath) }
+        if useLibUSB { transport = try await LibUSBInventoryTransport.connect() }
+        else if useLibmtp { transport = try NativeMTPSession(runtimePath: runtimePath) }
         else { transport = try await NativePTPTransport.connect() }
         do {
             var inventory = try await InventoryReader().read(from: transport, storageDiagnosticsOnly: storageDiagnosticsOnly)

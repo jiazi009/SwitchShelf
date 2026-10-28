@@ -1,0 +1,44 @@
+{
+  "actualContentEvidence": "native-staging/{light,dark}-{animated,reduced} production WindowGroup snapshots with synthetic state",
+  "bundlePath": "/Users/jiazi/.codex/worktrees/mtp-transport-comparison/SwitchShelf/build/SwitchShelf.app",
+  "notDesktopScreenshotOrAXProof": true,
+  "pid": 46849,
+  "visibleWindows": [
+    {
+      "kCGWindowAlpha": 1,
+      "kCGWindowBounds": {
+        "Height": 729,
+        "Width": 1365,
+        "X": 602,
+        "Y": 231
+      },
+      "kCGWindowIsOnscreen": true,
+      "kCGWindowLayer": 0,
+      "kCGWindowMemoryUsage": 2432,
+      "kCGWindowName": "SwitchShelf",
+      "kCGWindowNumber": 13752,
+      "kCGWindowOwnerName": "SwitchShelf",
+      "kCGWindowOwnerPID": 46849,
+      "kCGWindowSharingState": 1,
+      "kCGWindowStoreType": 1
+    }
+  ],
+  "windowMetadataOnly": true,
+  "verifiedAt": "2026-10-28T01:10:10.006161+00:00",
+  "planCountBeforeAfter": 0,
+  "metadataTableCountsBeforeAfter": {
+    "sources": 1,
+    "games": 16,
+    "contents": 48,
+    "snapshot_meta": 1,
+    "snapshot_issues": 0,
+    "sqlite_sequence": 0
+  },
+  "previousPID": 92506,
+  "nativeQuitConfirmed": true,
+  "noHelperBeforeRestart": true,
+  "noPhysicalInstallation": true,
+  "strictSignatureVerified": true,
+  "metadataAndHistoryPreservationSHA256Matched": true,
+  "executableSHA256": "dd2c3d0147bb3d6aff2bc8a1760532a7311b5b512f266df552873a3fa3ebe9bc"
+}

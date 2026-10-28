@@ -29,7 +29,13 @@ public struct SphairaBatchStatus: Sendable, Identifiable {
     public let item: SphairaBatchItem
     public var state: State
     public var bytesSubmitted: UInt64
-    public var phase: String = ""
+    public var phase: String
+    public init(item: SphairaBatchItem, state: State, bytesSubmitted: UInt64, phase: String = "") {
+        self.item = item
+        self.state = state
+        self.bytesSubmitted = bytesSubmitted
+        self.phase = phase
+    }
 }
 
 /// Serial orchestration; every request remains protected by the existing isolated worker.

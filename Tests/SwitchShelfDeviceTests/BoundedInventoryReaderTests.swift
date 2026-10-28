@@ -13,6 +13,36 @@ struct BoundedInventoryReaderTests {
         return url
     }
 
+    @Test("Selected route is passed to the isolated probe")
+    func selectedRoute() async throws {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let inventory = InstalledInventory(deviceID: "ROUTE", isComplete: true)
+        let data = try encoder.encode(inventory)
+        let json = "{\"schemaVersion\":1,\"mode\":\"inventory\",\"status\":\"ok\",\"transport\":\"ROUTE\",\"inventory\":\(String(decoding: data, as: UTF8.self))}"
+        let scriptBody = "if [ \"$3\" = libusb ]; then route=libusb; else route=native; fi\nprintf '%s\\n' '\(json)' | sed \"s/ROUTE/$route/g\"\nexit 0\n"
+        let url = try script(scriptBody)
+        defer { try? FileManager.default.removeItem(at: url) }
+        let reader = BoundedInventoryReader(probeURL: url)
+        let native = try await reader.readInventory(timeoutSeconds: 1)
+        let usb = try await reader.readInventory(timeoutSeconds: 1, transport: .libusb)
+        #expect(native.deviceID == "native")
+        #expect(usb.deviceID == "libusb")
+    }
+
+    @Test("A probe claiming the wrong route cannot be accepted")
+    func mismatchedRoute() async throws {
+        let inventory = InstalledInventory(deviceID: "fixture", isComplete: true)
+        let encoder = JSONEncoder(); encoder.dateEncodingStrategy = .iso8601
+        let data = try encoder.encode(inventory)
+        let json = "{\"schemaVersion\":1,\"mode\":\"inventory\",\"status\":\"ok\",\"transport\":\"native\",\"inventory\":\(String(decoding: data, as: UTF8.self))}"
+        let url = try script("printf '%s\\n' '\(json)'\nexit 0\n")
+        defer { try? FileManager.default.removeItem(at: url) }
+        await #expect(throws: ProbeError.self) {
+            _ = try await BoundedInventoryReader(probeURL: url).readInventory(timeoutSeconds: 1, transport: .libusb)
+        }
+    }
+
     @Test("Partial JSON remains partial and comes from an exited process")
     func partial() async throws {
         let inventory = InstalledInventory(deviceID: "fixture-session", isComplete: false,
@@ -68,6 +98,19 @@ struct BoundedInventoryReaderTests {
             _ = try await reader.readInventory(timeoutSeconds: 1)
             Issue.record("Second attempt must not spawn another process")
         } catch ProbeError.previousProcessUnverified {}
+    }
+
+    @Test("Unverified exit fences retries even when the probe claims the wrong route")
+    func mismatchedRouteUnverifiedExit() async throws {
+        let url = try script("printf '%s\\n' '{\"schemaVersion\":1,\"mode\":\"inventory\",\"status\":\"error\",\"transport\":\"native\",\"error\":{\"code\":\"workerExitUnverified\",\"message\":\"unknown\"}}'\nexit 1\n")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let reader = BoundedInventoryReader(probeURL: url)
+        for _ in 0..<2 {
+            do {
+                _ = try await reader.readInventory(timeoutSeconds: 1, transport: .libusb)
+                Issue.record("Unverified exit must fence retries")
+            } catch ProbeError.previousProcessUnverified {}
+        }
     }
 
     @Test("A hung fake executable is stopped before a retry can begin")

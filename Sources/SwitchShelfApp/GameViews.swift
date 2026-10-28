@@ -1,18 +1,38 @@
 import AppKit
+import ImageIO
 import SwiftUI
 import SwitchShelfDomain
 import SwitchShelfLibrary
 
+/// Decoded, bounded pixels and palette can cross back to MainActor without
+/// forcing JPEG decoding or color sampling during the inspector animation.
+struct PreparedCover: Sendable {
+    let image: CGImage
+    let palette: CoverPalette
+
+    static func decode(_ thumbnail: CoverThumbnail) -> PreparedCover? {
+        guard !thumbnail.jpegData.isEmpty, thumbnail.jpegData.count <= 20 * 1024 * 1024,
+              let source = CGImageSourceCreateWithData(thumbnail.jpegData as CFData, nil),
+              let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                  kCGImageSourceCreateThumbnailFromImageAlways: true,
+                  kCGImageSourceThumbnailMaxPixelSize: CoverImageLoader.maxPixel,
+                  kCGImageSourceShouldCacheImmediately: true
+              ] as CFDictionary) else { return nil }
+        return PreparedCover(image: image, palette: CoverPalette.sample(image))
+    }
+}
+
 private final class CachedCover: NSObject {
     let image: NSImage
-    let isSquare: Bool
+    let thumbnail: CoverThumbnail
     let tint: Color
+    var isSquare: Bool { thumbnail.isSquare }
 
-    init(image: NSImage, isSquare: Bool) {
-        self.image = image
-        self.isSquare = isSquare
-        let palette = image.cgImage(forProposedRect: nil, context: nil, hints: nil)
-            .map(CoverPalette.sample) ?? .fallback
+    init(prepared: PreparedCover, thumbnail: CoverThumbnail) {
+        image = NSImage(cgImage: prepared.image,
+                        size: NSSize(width: prepared.image.width, height: prepared.image.height))
+        self.thumbnail = thumbnail
+        let palette = prepared.palette
         tint = Color(.sRGB, red: palette.red, green: palette.green, blue: palette.blue, opacity: 1)
     }
 }
@@ -35,7 +55,7 @@ private enum CoverImageCache {
     }
 
     static func insert(_ cover: CachedCover, for url: URL) {
-        let cost = Int(cover.image.size.width * cover.image.size.height * 4)
+        let cost = Int(cover.image.size.width * cover.image.size.height * 4) + cover.thumbnail.jpegData.count
         images.setObject(cover, forKey: url as NSURL, cost: cost)
     }
 }
@@ -145,7 +165,7 @@ struct CoverArtwork: View {
             store.save(created, for: url, byteCount: byteCount, modifiedAt: modifiedAt)
             return created
         }.value
-        apply(thumbnail, cacheKey: url)
+        await apply(thumbnail, cacheKey: url)
     }
 
     private func loadRemoteCover(titleID: String, cacheKey: URL) async {
@@ -163,18 +183,27 @@ struct CoverArtwork: View {
             store.save(created, for: cacheKey, byteCount: 0, modifiedAt: nil)
             return created
         }.value
-        apply(thumbnail, cacheKey: cacheKey)
+        await apply(thumbnail, cacheKey: cacheKey)
     }
 
-    private func apply(_ thumbnail: CoverThumbnail?, cacheKey: URL) {
+    private func apply(_ thumbnail: CoverThumbnail?, cacheKey: URL) async {
         guard !Task.isCancelled else { return }
-        if let thumbnail, let loaded = NSImage(data: thumbnail.jpegData) {
-            let loadedCover = CachedCover(image: loaded, isSquare: thumbnail.isSquare)
-            CoverImageCache.insert(loadedCover, for: cacheKey)
-            cover = loadedCover
-        } else {
-            cover = nil
+        guard let thumbnail else { cover = nil; return }
+        // Local source metadata was revalidated above. Reuse decoded pixels only
+        // when the validated thumbnail bytes still match, including offline hits.
+        if let cached = CoverImageCache.image(for: cacheKey), cached.thumbnail == thumbnail {
+            cover = cached
+            return
         }
+        let prepared = await Task.detached(priority: .utility) {
+            PreparedCover.decode(thumbnail)
+        }.value
+        guard !Task.isCancelled else { return }
+        if let prepared {
+            let loaded = CachedCover(prepared: prepared, thumbnail: thumbnail)
+            CoverImageCache.insert(loaded, for: cacheKey)
+            cover = loaded
+        } else { cover = nil }
     }
 }
 
@@ -266,6 +295,7 @@ struct GameCard: View {
     @Bindable var model: AppModel
     var game: Game
     var isSelected: Bool
+    let installationMotion: Namespace.ID
     @State private var isHovering = false
     @FocusState private var isFocused: Bool
     @Environment(\.colorScheme) private var colorScheme
@@ -276,15 +306,21 @@ struct GameCard: View {
     }
 
     var body: some View {
+        ZStack(alignment: .topTrailing) {
+            Button {
+                withAnimation(.snappy(duration: 0.36)) { model.handleGridTap(game) }
+            } label: {
         VStack(alignment: .leading, spacing: 8) {
             CoverArtwork(game: game, showsTitle: true, installationAssessment: assessment)
                 .aspectRatio(3 / 4, contentMode: .fit)
+                .modifier(InstallationMotion(id: game.id, namespace: installationMotion, enabled: !isSelected))
+                .accessibilityIdentifier("library-cover-grid-\(game.id)")
                 .overlay(alignment: .topLeading) {
                     ViewThatFits(in: .horizontal) {
                         HStack(alignment: .top, spacing: 6) {
                             availabilityBadges
                             Spacer(minLength: 0)
-                            identityBadge
+                            identityBadge.padding(.trailing, 28)
                         }
                         VStack(alignment: .leading, spacing: 4) {
                             identityBadge
@@ -293,10 +329,11 @@ struct GameCard: View {
                     }
                     .padding(7)
                 }
-                .overlay { selectionEdge }
+                .overlay {
+                    selectionEdge.animation(.smooth(duration: 0.18), value: isSelected)
+                }
                 .shadow(color: .black.opacity(isHovering ? 0.16 : 0.08), radius: isHovering ? 12 : 6, y: isHovering ? 6 : 3)
                 .scaleEffect(isHovering ? 1.012 : 1)
-                .animation(.smooth(duration: 0.22), value: isSelected)
                 .animation(.smooth(duration: 0.16), value: isHovering)
                 .animation(.smooth(duration: 0.16), value: isFocused)
 
@@ -315,28 +352,31 @@ struct GameCard: View {
             .padding(.horizontal, 2)
         }
         .contentShape(Rectangle())
-        .onTapGesture { model.handleGridTap(game) }
-        .onHover { hovering in
-            withAnimation(.smooth(duration: 0.16)) { isHovering = hovering }
+            }
+            .buttonStyle(.plain)
+            GameDetailsButton(model: model, game: game).padding(7)
         }
+        .onHover { isHovering = $0 }
         .focusable()
         .focused($isFocused)
         .focusEffectDisabled()
         .onKeyPress(.space) {
-            model.handleGridTap(game)
+            withAnimation(.snappy(duration: 0.36)) { model.handleGridTap(game) }
             return .handled
         }
         .onKeyPress(.return) {
-            model.handleGridTap(game)
+            withAnimation(.snappy(duration: 0.36)) { model.handleGridTap(game) }
             return .handled
         }
         .contextMenu { contextActions }
-        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("game-card-\(game.id)")
+        .accessibilityElement(children: .contain)
         .accessibilityLabel("\(game.title)，\(game.contentSummary)，\(formatByteCount(game.byteCount))")
         .accessibilityValue("\(isSelected ? "已选择" : "未选择")，\(assessment.state.label)")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
-        .accessibilityAction(named: "选择或取消选择") { model.handleGridTap(game) }
-        .accessibilityAction(named: "加入安装队列") { model.addToQueue(game) }
+        .accessibilityAction(named: "加入待选区") { model.handleGridTap(game) }
+        .accessibilityAction(named: "查看详情") { model.openGameDetails(game) }
+        .modifier(GameDetailsPopover(model: model, game: game))
     }
 
     /// Selected light stays in a thin rim on the cover. Clipped so it cannot paint the caption below.
@@ -396,10 +436,7 @@ struct GameCard: View {
     @ViewBuilder
     private var contextActions: some View {
         Button("在访达中显示") { model.revealGame(game) }
-        Button("加入安装队列") { model.addToQueue(game) }
-        if model.isInPlan(game.id) {
-            Button("查看安装队列") { model.showQueue() }
-        }
+        Button("加入待选区") { model.addToQueue(game) }
         Divider()
         if let titleID = game.contents.compactMap(\.titleID).first {
             Button("复制 Title ID") { model.copyTitleID(titleID) }
@@ -414,6 +451,7 @@ struct GameListRow: View {
     @Bindable var model: AppModel
     var game: Game
     var isSelected: Bool
+    let installationMotion: Namespace.ID
 
     private var assessment: InstallationAssessment { model.assessment(for: game) }
     private var isOffline: Bool {
@@ -421,65 +459,81 @@ struct GameListRow: View {
     }
 
     var body: some View {
-        HStack(spacing: 12) {
-            CoverArtwork(game: game, cornerRadius: 6)
-                .frame(width: 44, height: 44)
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 8) {
-                    Text(game.title)
-                        .font(.system(size: 13, weight: .semibold))
-                        .lineLimit(1)
-                    if assessment.state == .installed || assessment.state == .partial {
-                        InstallationMark(state: assessment.state)
-                            .help(assessment.explanation)
+        ZStack(alignment: .trailing) {
+            Button {
+                withAnimation(.snappy(duration: 0.36)) { model.handleGridTap(game) }
+            } label: {
+                HStack(spacing: 12) {
+                    CoverArtwork(game: game, cornerRadius: 6)
+                        .frame(width: 44, height: 44)
+                        .modifier(InstallationMotion(id: game.id, namespace: installationMotion, enabled: !isSelected))
+                        .accessibilityIdentifier("library-cover-list-\(game.id)")
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 8) {
+                            Text(game.title)
+                                .font(.system(size: 13, weight: .semibold))
+                                .lineLimit(1)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            if assessment.state == .installed || assessment.state == .partial {
+                                InstallationMark(state: assessment.state).help(assessment.explanation)
+                            }
+                        }
+                        HStack(spacing: 4) {
+                            Text(game.contentSummary).lineLimit(1).layoutPriority(1)
+                            Spacer(minLength: 4)
+                            Text(formatByteCount(game.byteCount))
+                                .monospacedDigit().fixedSize()
+                                .frame(width: 74, alignment: .trailing)
+                                .accessibilityIdentifier("library-bytes-\(game.id)")
+                        }
+                        .font(.system(size: 10)).foregroundStyle(.secondary)
+                        HStack(spacing: 5) {
+                            if isOffline {
+                                BadgePill(text: "离线", systemImage: "wifi.slash", tone: .neutral)
+                                    .fixedSize(horizontal: true, vertical: false)
+                            }
+                            if game.identification.isPending {
+                                BadgePill(text: game.identification.label, systemImage: "questionmark", tone: .warning)
+                                    .fixedSize(horizontal: true, vertical: false)
+                            }
+                            Text("\(game.contents.count) 个文件").font(.system(size: 9)).foregroundStyle(.secondary).fixedSize()
+                            if let source = model.sources(for: game).first {
+                                Text(source.name).font(.system(size: 9)).foregroundStyle(.tertiary).lineLimit(1)
+                            }
+                        }
                     }
+                    .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
                 }
-                HStack(spacing: 6) {
-                    Text(game.contentSummary)
-                    Text("·")
-                    Text(game.contents.count == 1 ? "1 个文件" : "\(game.contents.count) 个文件")
-                    if let source = model.sources(for: game).first {
-                        Text("·")
-                        Text(source.name).lineLimit(1)
-                    }
+                .padding(.trailing, 34)
+                .padding(.vertical, 6)
+                .padding(.horizontal, 6)
+                .background {
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .fill(isSelected ? Theme.accent.opacity(0.14) : Color.clear)
                 }
-                .font(.system(size: 10))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
+                .contentShape(Rectangle())
             }
-            Spacer(minLength: 12)
-            if isOffline {
-                BadgePill(text: "离线", systemImage: "wifi.slash", tone: .neutral)
-            }
-            if game.identification.isPending {
-                BadgePill(text: game.identification.label, systemImage: "questionmark", tone: .warning)
-            }
-            Text(formatByteCount(game.byteCount))
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
-                .monospacedDigit()
-                .fixedSize()
-                .frame(width: 74, alignment: .trailing)
+            .buttonStyle(.plain)
+            GameDetailsButton(model: model, game: game, placement: .list).padding(.trailing, 5)
         }
-        .padding(.vertical, 5)
-        .padding(.horizontal, 6)
-        .background {
-            RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .fill(isSelected ? Theme.accent.opacity(0.14) : Color.clear)
+        .accessibilityIdentifier("game-row-\(game.id)")
+        .focusable()
+        .onKeyPress(.return) {
+            withAnimation(.snappy(duration: 0.36)) { model.handleGridTap(game) }
+            return .handled
         }
-        .contentShape(Rectangle())
         .contextMenu {
             Button("在访达中显示") { model.revealGame(game) }
-            Button("加入安装队列") { model.addToQueue(game) }
-            if model.isInPlan(game.id) { Button("查看安装队列") { model.showQueue() } }
+            Button("加入待选区") { model.addToQueue(game) }
             Divider()
             if let titleID = game.contents.compactMap(\.titleID).first {
                 Button("复制 Title ID") { model.copyTitleID(titleID) }
             }
         }
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
         .accessibilityLabel("\(game.title)，\(game.contentSummary)，\(formatByteCount(game.byteCount))")
         .accessibilityValue(assessment.state.label)
+        .modifier(GameDetailsPopover(model: model, game: game))
     }
 }
 

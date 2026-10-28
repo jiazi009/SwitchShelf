@@ -97,7 +97,7 @@ struct MaintenanceView: View {
                 tone: .neutral
             )
             StatTile(
-                title: "安装队列",
+                title: "安装待选",
                 value: "\(model.plan.count) 项",
                 detail: formatByteCount(model.planTotalBytes),
                 symbol: "arrow.up.arrow.down.circle.fill"

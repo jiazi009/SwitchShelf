@@ -1,5 +1,6 @@
 import SwiftUI
 import SwitchShelfDomain
+import SwitchShelfDevice
 
 struct DeviceView: View {
     @Bindable var model: AppModel
@@ -100,6 +101,22 @@ struct DeviceView: View {
                     factRow("清单完整性", overview.completeness.text, known: overview.completeness != .unknown)
                     consoleFactRows
                     issueBlock
+                }
+
+                Divider().overlay(Theme.hairline)
+                VStack(alignment: .leading, spacing: 6) {
+                    Picker("清单连接方式", selection: Binding(
+                        get: { model.inventoryConnection },
+                        set: { model.selectInventoryConnection($0) }
+                    )) {
+                        Text("系统连接").tag(InventoryConnection.native)
+                        Text("libusb 直连").tag(InventoryConnection.libusb)
+                    }
+                    .pickerStyle(.segmented)
+                    .disabled(model.isDiscovering || model.isReadingInventory || model.isInstalling || model.isReviewingInstall)
+                    Text("仅用于读取设备清单，本次运行有效；重启后恢复系统连接。切换后会重新读取，安装连接不变。")
+                        .font(.system(size: 10.5)).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 Divider().overlay(Theme.hairline)

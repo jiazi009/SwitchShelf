@@ -3,7 +3,7 @@ import Foundation
 
 /// A small, bounded sample of the artwork, independent of the game's name or ID.
 /// Keep the resulting sRGB channels dark enough for white cover titles.
-struct CoverPalette {
+struct CoverPalette: Sendable {
     let red: Double
     let green: Double
     let blue: Double

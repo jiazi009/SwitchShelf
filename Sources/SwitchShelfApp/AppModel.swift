@@ -30,9 +30,12 @@ final class AppModel {
     private(set) var scanPhase: String?
     private(set) var isDiscovering = false
     private(set) var isReadingInventory = false
+    private(set) var inventoryConnection: InventoryConnection = .native
     private(set) var isCheckingPlan = false
     private(set) var preparation: SphairaPreflightResult?
     private(set) var isInstalling = false
+    private(set) var isVerifyingInstall = false
+    private(set) var installListConfirmed = false
     private(set) var isReviewingInstall = false
     private(set) var installStatuses: [SphairaBatchStatus] = []
 
@@ -55,7 +58,10 @@ final class AppModel {
             UserDefaults.standard.set(clamped, forKey: "SwitchShelf.coverSize")
         }
     }
-    var inspectorPresented = true
+    var detailGameID: String?
+    var showConnectionGuide = false
+    private(set) var isPreparingInstallation = false
+    private var omittedUpdates: [String: [LocalContent]] = [:]
     var searchFocusToken = 0
     var notice: AppNotice?
     var sourcePendingRemoval: LibrarySource?
@@ -80,9 +86,10 @@ final class AppModel {
     @ObservationIgnored private var firstSeenSaveTask: Task<Void, Never>?
     @ObservationIgnored private var bootstrapStarted = false
     @ObservationIgnored private var cacheWriteAllowed = false
-    @ObservationIgnored private var inspectorAutoHidden = false
-    @ObservationIgnored private var lastLayoutWidth: CGFloat = 0
     @ObservationIgnored private var deviceMonitorTask: Task<Void, Never>?
+    /// In-flight USB descriptor poll. Ignored by observation so a steady connection
+    /// does not republish the status pill or the staging list.
+    @ObservationIgnored private var devicePollActive = false
     @ObservationIgnored private var soundedSession: String?
     @ObservationIgnored private var automaticAttempts = 0
     @ObservationIgnored private var lastAutomaticAttempt: Date?
@@ -186,7 +193,8 @@ final class AppModel {
         case .all:
             result = games
         case .recent:
-            result = games.filter { recentGameIDs.contains($0.id) }
+            let recent = recentGameIDs
+            result = games.filter { recent.contains($0.id) }
         case .unidentified:
             result = games.filter { $0.identification.isPending }
         case .source(let id):
@@ -333,32 +341,20 @@ final class AppModel {
         installFilter = .all
     }
 
-    func toggleInspector() {
-        inspectorPresented.toggle()
-        inspectorAutoHidden = false
+    var detailGame: Game? { games.first { $0.id == detailGameID } }
+
+    func openGameDetails(_ game: Game) { detailGameID = game.id }
+    func closeGameDetails() { detailGameID = nil }
+
+    var installationPlanLocked: Bool {
+        isInstalling || isPreparingInstallation || isReviewingInstall || isVerifyingInstall || installationReview != nil
     }
 
-    func adaptInspector(to width: CGFloat) {
-        defer { lastLayoutWidth = width }
-        if lastLayoutWidth == 0 {
-            if width < 1120 {
-                inspectorAutoHidden = true
-                inspectorPresented = false
-            }
-            return
-        }
-        if width < 1120, lastLayoutWidth >= 1120 {
-            inspectorAutoHidden = true
-            inspectorPresented = false
-        } else if width >= 1240, lastLayoutWidth < 1240, inspectorAutoHidden {
-            inspectorAutoHidden = false
-            inspectorPresented = true
-        }
-    }
-
-    func handleGridTap(_ game: Game) {
-        let flags = NSApp.currentEvent?.modifierFlags ?? []
-        let ordered = filteredGames.map(\.id)
+    func handleGridTap(_ game: Game, modifiers: NSEvent.ModifierFlags? = nil) {
+        let flags = modifiers ?? NSApp.currentEvent?.modifierFlags ?? []
+        // Plain selection must not re-filter and locale-sort the entire library
+        // on the same main-thread turn that starts the native inspector animation.
+        let ordered = flags.contains(.shift) ? filteredGames.map(\.id) : []
 
         if flags.contains(.shift), let anchor = selectionAnchor,
            let anchorIndex = ordered.firstIndex(of: anchor),
@@ -378,8 +374,11 @@ final class AppModel {
             selectionAnchor = game.id
         }
         activeGameID = game.id
-        inspectorPresented = true
-        inspectorAutoHidden = false
+        if flags.contains(.shift) {
+            addSelectedToQueue()
+        } else if selectedGameIDs.contains(game.id) {
+            addToQueue(game)
+        }
     }
 
     func selectAllVisible() {
@@ -416,9 +415,9 @@ final class AppModel {
         )
     }
 
-    func assessment(for content: LocalContent) -> InstallationAssessment {
-        guard let game = games.first(where: { $0.contents.contains { $0.id == content.id } }) else {
-            return InstallationAssessment(state: .unknown, explanation: "这项内容不在当前游戏库中，不推断安装状态。")
+    func assessment(for content: LocalContent, in game: Game) -> InstallationAssessment {
+        guard game.contents.contains(where: { $0.id == content.id }) else {
+            return InstallationAssessment(state: .unknown, explanation: "这项内容不属于当前游戏，不推断安装状态。")
         }
         return InstallationAssessor.assess(
             content,
@@ -504,6 +503,7 @@ final class AppModel {
         await refreshSourceAvailability()
         await persistSnapshot()
         isBootstrapped = true
+        await resumeRecentInstallVerificationIfNeeded()
 
         let refreshOnLaunch = UserDefaults.standard.bool(forKey: AppSettings.refreshOnLaunch)
         if snapshot.games.isEmpty || refreshOnLaunch {
@@ -850,6 +850,7 @@ final class AppModel {
 
     private func reconcileSelection() {
         let ids = Set(games.map(\.id))
+        if let detailGameID, !ids.contains(detailGameID) { self.detailGameID = nil }
         selectedGameIDs.formIntersection(ids)
         if let activeGameID, !ids.contains(activeGameID) {
             self.activeGameID = selectedGameIDs.first
@@ -899,12 +900,26 @@ final class AppModel {
     }
 
     var canReadInventory: Bool {
-        mtpCandidateSignature != nil && !isReadingInventory && !isDiscovering && !isInstalling && !wifiBlocksUSB
+        mtpCandidateSignature != nil && !isReadingInventory && !isDiscovering && !installationPlanLocked && !wifiBlocksUSB
     }
 
     var inventoryIsCurrentSession: Bool {
         guard inventory != nil, let signature = inventorySessionSignature else { return false }
         return signature == mtpCandidateSignature
+    }
+
+    func selectInventoryConnection(_ connection: InventoryConnection) {
+        guard !isDiscovering, !isReadingInventory, !isInstalling, !isReviewingInstall,
+              connection != inventoryConnection else { return }
+        inventoryConnection = connection
+        inventory = cachedInventory
+        inventorySessionSignature = nil
+        inventoryComparison = nil
+        soundedSession = nil
+        automaticAttempts = 0
+        lastAutomaticAttempt = nil
+        if deviceDiscovery?.state == .ready { deviceDiscovery?.state = .waitingForMTP }
+        deviceDiscovery?.message = "读取方式已更改；当前设备清单等待重新读取。"
     }
 
     /// Poll only USB descriptors. MTP is opened at most twice for a new candidate,
@@ -921,11 +936,13 @@ final class AppModel {
     }
 
     private func monitorDevice() async {
-        guard !isDiscovering, !isReadingInventory, !isInstalling, !wifiBlocksUSB else { return }
-        isDiscovering = true
+        guard !devicePollActive, !isDiscovering, !isReadingInventory, !wifiBlocksUSB else { return }
+        guard !installationPlanLocked || isVerifyingInstall else { return }
+        devicePollActive = true
+        defer { devicePollActive = false }
         let previous = mtpCandidateSignature
         let result = await deviceService.discover()
-        guard !isInstalling, !wifiBlocksUSB else { isDiscovering = false; return }
+        guard !isInstalling, !wifiBlocksUSB else { return }
         // Keep successful MTP status while the same registry entry remains present.
         let newIDs = result.devices.map(\.id).sorted()
         let oldIDs = deviceDiscovery?.devices.map(\.id).sorted()
@@ -943,8 +960,7 @@ final class AppModel {
         } else if deviceDiscovery == nil {
             deviceDiscovery = result
         }
-        isDiscovering = false
-        guard let signature = mtpCandidateSignature, !automaticReadBlocked,
+        guard !isVerifyingInstall, let signature = mtpCandidateSignature, !automaticReadBlocked,
               !inventoryIsCurrentSession else { return }
         if openMTPIsRunning {
             wasOpenMTPRunning = true
@@ -984,6 +1000,10 @@ final class AppModel {
             return
         }
         isDiscovering = true
+        defer { isDiscovering = false }
+        await waitForDevicePoll()
+        devicePollActive = true
+        defer { devicePollActive = false }
         let previous = mtpCandidateSignature
         let result = await deviceService.discover()
         deviceDiscovery = result
@@ -992,7 +1012,12 @@ final class AppModel {
             inventorySessionSignature = nil
             soundedSession = nil
         }
-        isDiscovering = false
+    }
+
+    private func waitForDevicePoll() async {
+        while devicePollActive {
+            try? await Task.sleep(for: .milliseconds(40))
+        }
     }
 
     /// Detect USB, then read when there is a single 057e:201d candidate and OpenMTP is not running.
@@ -1041,14 +1066,16 @@ final class AppModel {
             notice = wifiBlocksUSBNotice
             return false
         }
-        guard canReadInventory, let signature = mtpCandidateSignature else {
-            notice = AppNotice(
-                level: .warning,
-                title: "未检测到可读取的 MTP 候选设备",
-                message: "请连接一台 Switch，开启 sphaira 的 MTP 或 DBI 的 Run MTP responder 后再次检测并读取。",
-                action: .refreshDevices,
-                actionLabel: "检测并读取"
-            )
+        guard canReadInventory || (isVerifyingInstall && !isDiscovering), let signature = mtpCandidateSignature else {
+            if !isVerifyingInstall {
+                notice = AppNotice(
+                    level: .warning,
+                    title: "未检测到可读取的 MTP 候选设备",
+                    message: "请连接一台 Switch，开启 sphaira 的 MTP 或 DBI 的 Run MTP responder 后再次检测并读取。",
+                    action: .refreshDevices,
+                    actionLabel: "检测并读取"
+                )
+            }
             return false
         }
         // A third-party MTP client does not participate in our advisory lease.
@@ -1060,10 +1087,10 @@ final class AppModel {
         isReadingInventory = true
         let preservedInventory = inventory
         let preservedSignature = inventorySessionSignature
-        notice = nil
+        if !isVerifyingInstall { notice = nil }
         var succeeded = false
         do {
-            let value = try await inventoryReader.readInventory()
+            let value = try await inventoryReader.readInventory(transport: inventoryConnection)
             // A disconnect/reconnect during the helper read must never attach its
             // result to a different USB registry entry, even with the same VID/PID.
             let latest = await deviceService.discover()
@@ -1084,7 +1111,7 @@ final class AppModel {
             deviceDiscovery?.state = .ready
             deviceDiscovery?.message = "MTP 已连接" + (sources.isEmpty ? "" : " · \(sources)")
                 + (value.isComplete ? " · 已读取完整内容清单。" : " · 安装清单尚未完整确认。")
-            if soundedSession != signature {
+            if !isVerifyingInstall, soundedSession != signature {
                 NSSound(named: "Glass")?.play()
                 soundedSession = signature
             }
@@ -1099,7 +1126,7 @@ final class AppModel {
                     notice = AppNotice(level: .warning, title: "设备清单未能保存到本机", message: "当前清单仍可查看；请检查应用数据目录后重新读取。", action: .openAppSupport, actionLabel: "打开目录")
                 }
             }
-            if !value.isComplete {
+            if !isVerifyingInstall && !value.isComplete {
                 let missingSource = value.mtpEvidence?.inventoryStorageNames.isEmpty == true
                 notice = AppNotice(
                     level: .warning,
@@ -1133,25 +1160,29 @@ final class AppModel {
                 inventorySessionSignature = nil
                 deviceDiscovery?.state = .waitingForMTP
                 deviceDiscovery?.message = retainedInventoryMessage(preservedInventory)
-                notice = AppNotice(
-                    level: .error,
-                    title: "重新读取失败，已保留上次清单",
-                    message: "\(error.localizedDescription) USB 候选未变化，已保留上次成功清单。",
-                    action: .readInventory,
-                    actionLabel: "重试"
-                )
+                if !isVerifyingInstall {
+                    notice = AppNotice(
+                        level: .error,
+                        title: "重新读取失败，已保留上次清单",
+                        message: "\(error.localizedDescription) USB 候选未变化，已保留上次成功清单。",
+                        action: .readInventory,
+                        actionLabel: "重试"
+                    )
+                }
             } else {
                 inventory = cachedInventory
                 inventorySessionSignature = nil
                 deviceDiscovery?.state = .waitingForMTP
                 deviceDiscovery?.message = "已发现 USB 候选设备，本次 MTP 读取未成功；请检查 MTP 模式和其他客户端。"
-                notice = AppNotice(
-                    level: .error,
-                    title: "读取已安装内容失败",
-                    message: error.localizedDescription,
-                    action: .readInventory,
-                    actionLabel: "重试"
-                )
+                if !isVerifyingInstall {
+                    notice = AppNotice(
+                        level: .error,
+                        title: "读取已安装内容失败",
+                        message: error.localizedDescription,
+                        action: .readInventory,
+                        actionLabel: "重试"
+                    )
+                }
             }
         }
         isReadingInventory = false
@@ -1285,11 +1316,113 @@ final class AppModel {
 
     // MARK: - Reviewed sphaira installation queue
 
+    private func updates(for item: PlanItem) -> [LocalContent] {
+        let ids = Set(item.contents.filter { $0.kind == .update }.map(\.id))
+        return games.first { $0.id == item.gameID }?.contents.filter { ids.contains($0.id) } ?? []
+    }
+
+    func needsUpdateChoice(_ item: PlanItem) -> Bool {
+        if BaseSelection.includesIntegratedBase(item.includedContents.map { ($0.kind, $0.format) }) {
+            return false
+        }
+        let candidates = updates(for: item)
+        return InstallContentDefaults.needsUpdateChoice(in: candidates)
+            && !item.includedContents.contains { $0.kind == .update }
+            && omittedUpdates[item.id] != candidates
+    }
+
+    func baseSelectionReminder(_ item: PlanItem) -> String? {
+        let bases = item.contents.filter { $0.kind == .base }
+        let included = item.includedContents
+        let includedBases = included.filter { $0.kind == .base }
+        if BaseSelection.integratedPackageHasCompany(included.map { ($0.kind, $0.format) }) {
+            return "XCI 整合包要单独安装。请取消其他本体、更新和 DLC。"
+        }
+        if included.count == 1, included[0].kind == .base, included[0].format == .xci, item.contents.count > 1 {
+            return "已默认只安装 XCI 整合包。其他本体、更新和 DLC 不会一起发送。"
+        }
+        if bases.count > 1, includedBases.count != 1 {
+            return "有多个本体。请只勾选一个；XCI 是整合包，NSP 是单独的本体。"
+        }
+        return nil
+    }
+
+    func omitUpdatesForThisInstallation(_ id: String) {
+        guard !installationPlanLocked, let item = plan.first(where: { $0.id == id }) else { return }
+        omittedUpdates[id] = updates(for: item)
+    }
+
+    func setAllPlanTargets(_ target: InstallTarget) {
+        guard !installationPlanLocked else { return }
+        for index in plan.indices { plan[index].target = target }
+        schedulePlanSave()
+    }
+
+    var installationConnectionBlocker: String? {
+        if automaticReadBlocked { return "上次 USB 探针退出未确认，请重启应用并检查设备后再安装。" }
+        if wifiBlocksUSB { return "请先断开无线 FTP，再使用 USB 安装。" }
+        if openMTPIsRunning { return "请完整退出 OpenMTP 等其他 MTP 客户端。" }
+        if isReadingInventory || isDiscovering { return "正在检测或读取设备，请稍候。" }
+        if isScanning { return "正在扫描来源，请等待文件清单稳定后再安装。" }
+        if mtpCandidateSignature == nil { return "尚未发现单台 Switch MTP 候选设备，请连接数据线并开启 sphaira MTP。" }
+        return nil
+    }
+
+    var canBeginStagedInstallation: Bool {
+        !plan.isEmpty && !installationPlanLocked && !isCheckingPlan
+            && plan.contains { !$0.includedContents.isEmpty }
+            && installationConnectionBlocker == nil && queueValidationIssues.isEmpty
+    }
+
+    func beginStagedInstallation() async {
+        guard canBeginStagedInstallation else {
+            showConnectionGuide = installationConnectionBlocker != nil
+            return
+        }
+        closeGameDetails()
+        showConnectionGuide = false
+        isPreparingInstallation = true
+        defer { isPreparingInstallation = false }
+        await waitForDevicePoll()
+        let expected = preflightInput
+        await checkPlan()
+        guard expected == preflightInput, preparationIsCurrent, preparation?.isPrepared == true else {
+            notice = AppNotice(level: .warning, title: "安装前检查未通过",
+                               message: preparation?.issues.first?.message ?? "来源或计划已变化，请检查待选文件后重试。")
+            return
+        }
+        guard let review = await makeMTPInstallationReview() else {
+            if notice == nil {
+                notice = AppNotice(level: .warning, title: "暂时无法开始安装", message: "连接或文件条件发生变化；未发送任何文件，请查看连接指引后重试。")
+            }
+            return
+        }
+        startMTPInstallation(review)
+    }
+
+    func cancelInstallationReview() {
+        installationReview = nil
+        reviewedPlan = nil
+    }
+
     var queueValidationIssues: [String] {
         var issues: [String] = []
         let selectedItems = plan.filter { !$0.includedContents.isEmpty }
         if !InstallQueueRules.targetsAreConsistent(selectedItems.map { $0.target.rawValue }) {
             issues.append("所选文件的计划目标不一致；请统一为 SD 卡或机身存储。")
+        }
+        for item in plan where needsUpdateChoice(item) {
+            issues.append("「\(item.title)」的更新版本或身份不明确；请展开文件清单选择一个更新，或明确本次不安装更新。")
+        }
+        for item in plan {
+            let included = item.includedContents.map { ($0.kind, $0.format) }
+            let bases = item.contents.filter { $0.kind == .base }
+            let includedBases = item.includedContents.filter { $0.kind == .base }
+            if BaseSelection.integratedPackageHasCompany(included) {
+                issues.append("「\(item.title)」选择了 XCI 整合包，请取消其他本体、更新和 DLC。整合包单独安装。")
+            } else if bases.count > 1, includedBases.count != 1 {
+                issues.append("「\(item.title)」有多个本体。请只保留一个；XCI 是整合包，NSP 是单独的本体。")
+            }
         }
         for item in selectedItems where UpdateSelection.hasConflict(
             updateIDs: Set(item.contents.filter { $0.kind == .update }.map(\.id)),
@@ -1300,12 +1433,12 @@ final class AppModel {
     }
 
     var canReviewMTPInstallation: Bool {
-        !isInstalling && !isReviewingInstall && !isReadingInventory && !isDiscovering && !isScanning &&
+        !isInstalling && !isVerifyingInstall && !isReviewingInstall && !isReadingInventory && !isDiscovering && !isScanning &&
         !isCheckingPlan && !wifiBlocksUSB && preparationIsCurrent && preparation?.isPrepared == true && queueValidationIssues.isEmpty
     }
 
-    func prepareMTPInstallationReview() async {
-        guard canReviewMTPInstallation else { return }
+    private func makeMTPInstallationReview() async -> SphairaBatchReview? {
+        guard canReviewMTPInstallation else { return nil }
         let input = preflightInput
         var candidates: [(String, String, URL, URL, UInt64)] = []
         for item in input.items {
@@ -1313,11 +1446,11 @@ final class AppModel {
             for entry in item.entries where entry.included {
                 guard let url = entry.sourceURL, entry.expectedBytes > 0,
                       let root = snapshot.sources.filter({ $0.availability == .online && isUnder(url, source: $0) })
-                        .max(by: { $0.url.path.count < $1.url.path.count })?.url else { return }
+                        .max(by: { $0.url.path.count < $1.url.path.count })?.url else { return nil }
                 candidates.append((title, item.intendedTarget, url, root, UInt64(entry.expectedBytes)))
             }
         }
-        guard !candidates.isEmpty else { return }
+        guard !candidates.isEmpty else { return nil }
         isReviewingInstall = true
         defer { isReviewingInstall = false }
         do {
@@ -1329,11 +1462,12 @@ final class AppModel {
                 }
             }.value
             guard input == preflightInput, !isInstalling, !isReadingInventory, !isDiscovering,
-                  !isScanning, !wifiBlocksUSB, preparationIsCurrent, queueValidationIssues.isEmpty else { return }
+                  !isScanning, !wifiBlocksUSB, preparationIsCurrent, queueValidationIssues.isEmpty else { return nil }
             reviewedPlan = input
-            startMTPInstallation(SphairaBatchReview(items: items))
+            return SphairaBatchReview(items: items)
         } catch {
             notice = AppNotice(level: .warning, title: "无法开始安装", message: "源文件元数据或路径已变化，请重新扫描并检查计划。未连接设备。")
+            return nil
         }
     }
 
@@ -1354,6 +1488,8 @@ final class AppModel {
             return
         }
         isInstalling = true
+        isVerifyingInstall = false
+        installListConfirmed = false
         installStatuses = []
         inventory = cachedInventory
         inventorySessionSignature = nil
@@ -1379,13 +1515,149 @@ final class AppModel {
             })
             let stopped = self.installStatuses.contains { if case .stopped = $0.state { true } else { false } }
             let incomplete = self.installStatuses.contains { if case .waiting = $0.state { true } else { false } }
-            self.notice = AppNotice(level: .warning,
-                title: stopped || incomplete ? "队列已停止" : "传输完成，等待设备确认",
-                message: stopped || incomplete ? "后续文件未发送。请查看设备上的安装结果；已经发送完成的文件不会自动重传。" : "文件已发送；请在设备端确认安装结果并刷新设备清单。")
+            let transferred = !self.installStatuses.isEmpty && self.installStatuses.allSatisfy { if case .transferred = $0.state { true } else { false } }
+            if transferred && !stopped && !incomplete {
+                self.isInstalling = false
+                self.isVerifyingInstall = true
+                self.showVerifyingNotice()
+                let confirmed = await self.confirmTransferredInstall()
+                self.finishInstallVerification(confirmed: confirmed)
+            } else {
+                self.installListConfirmed = false
+                self.notice = AppNotice(level: .warning,
+                    title: "队列已停止",
+                    message: "后续文件未发送。请查看设备上的安装结果；已经发送完成的文件不会自动重传。")
+            }
         }
     }
 
     func cancelMTPInstallation() { installTask?.cancel() }
+
+    /// sphaira publishes a title in Games only after it finishes installing.
+    /// A single read at transfer-complete is too early, so keep reading.
+    private func confirmTransferredInstall() async -> Bool {
+        let deadline = ContinuousClock.now.advanced(by: .seconds(360))
+        while !Task.isCancelled, ContinuousClock.now < deadline {
+            showVerifyingNotice()
+            while devicePollActive, !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(40))
+            }
+            if mtpCandidateSignature != nil, !isDiscovering, !isReadingInventory,
+               await readInventory(), transferredQueueShowsInstalled() {
+                return true
+            }
+            let remaining = ContinuousClock.now.duration(to: deadline)
+            if remaining <= .zero || Task.isCancelled { break }
+            try? await Task.sleep(for: min(.seconds(8), remaining))
+        }
+        return false
+    }
+
+    private func showVerifyingNotice() {
+        notice = AppNotice(
+            level: .info,
+            title: "正在核对已安装清单",
+            message: "文件已经发送。正在同一条 USB 连接上重新读取 Games 清单，不用拔线；所选游戏出现后才会显示安装成功。"
+        )
+    }
+
+    private func finishInstallVerification(confirmed: Bool) {
+        isVerifyingInstall = false
+        installListConfirmed = confirmed
+        if confirmed { NSSound(named: "Hero")?.play() }
+        notice = confirmed
+            ? AppNotice(level: .info, title: "游戏安装成功", message: "已重新读取设备清单，所选游戏显示为已安装。")
+            : AppNotice(level: .warning, title: "传输完成，等待设备确认", message: "已重新读取已安装清单，但所选游戏尚未全部显示为已安装。发送完成不等于安装成功。")
+    }
+
+    /// Continue a just-finished send after relaunch. Does not open the install endpoint or resend bytes.
+    private func resumeRecentInstallVerificationIfNeeded() async {
+        guard installStatuses.isEmpty, !isInstalling, !isVerifyingInstall, installTask == nil else { return }
+        let wanted = Set(plan.flatMap { $0.includedContents.map(\.fileName) })
+        guard !wanted.isEmpty, wanted.isSubset(of: recentTransferredFileNames()) else { return }
+        guard let items = await reviewedInstallItems() else { return }
+        guard Set(items.map(\.request.name)) == wanted else { return }
+        installStatuses = items.map {
+            SphairaBatchStatus(item: $0, state: .transferred, bytesSubmitted: $0.request.byteCount)
+        }
+        isVerifyingInstall = true
+        showVerifyingNotice()
+        installTask = Task { [weak self] in
+            guard let self else { return }
+            defer { self.installTask = nil }
+            let confirmed = await self.confirmTransferredInstall()
+            self.finishInstallVerification(confirmed: confirmed)
+        }
+    }
+
+    private func recentTransferredFileNames(within seconds: TimeInterval = 45 * 60) -> Set<String> {
+        let root = appDirectory.appendingPathComponent("MTPInstallAttempts", isDirectory: true)
+        guard let directories = try? FileManager.default.contentsOfDirectory(
+            at: root, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]
+        ) else { return [] }
+        var newest: [String: (date: Date, transferred: Bool)] = [:]
+        for directory in directories {
+            let requestURL = directory.appendingPathComponent("request.json")
+            let resultURL = directory.appendingPathComponent("supervisor-result.json")
+            guard let requestData = try? Data(contentsOf: requestURL),
+                  let request = try? JSONSerialization.jsonObject(with: requestData) as? [String: Any],
+                  let name = request["name"] as? String,
+                  let modified = try? resultURL.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate,
+                  Date().timeIntervalSince(modified) <= seconds,
+                  let resultData = try? Data(contentsOf: resultURL),
+                  let result = try? JSONSerialization.jsonObject(with: resultData) as? [String: Any],
+                  let transfer = result["transfer"] as? [String: Any] else { continue }
+            if let existing = newest[name], existing.date > modified { continue }
+            let failure = transfer["failure"]
+            let transferred = (transfer["outcome"] as? String) == "transferredAwaitingConfirmation"
+                && (transfer["releaseVerified"] as? Bool) == true
+                && (result["processExitVerified"] as? Bool) == true
+                && (failure == nil || failure is NSNull)
+            newest[name] = (modified, transferred)
+        }
+        return Set(newest.compactMap { $0.value.transferred ? $0.key : nil })
+    }
+
+    private func reviewedInstallItems() async -> [SphairaBatchItem]? {
+        let input = preflightInput
+        var candidates: [(String, String, URL, URL, UInt64)] = []
+        for item in input.items {
+            let title = plan.first(where: { $0.id == item.id })?.title ?? item.id
+            for entry in item.entries where entry.included {
+                guard let url = entry.sourceURL, entry.expectedBytes > 0,
+                      let root = snapshot.sources.filter({ $0.availability == .online && isUnder(url, source: $0) })
+                        .max(by: { $0.url.path.count < $1.url.path.count })?.url else { return nil }
+                candidates.append((title, item.intendedTarget, url, root, UInt64(entry.expectedBytes)))
+            }
+        }
+        guard !candidates.isEmpty else { return nil }
+        isReviewingInstall = true
+        defer { isReviewingInstall = false }
+        let sources = candidates
+        return try? await Task.detached(priority: .utility) {
+            try sources.map { title, target, url, root, size in
+                SphairaBatchItem(gameTitle: title, request: try SphairaInstallRequest.review(
+                    sourceURL: url, allowedRoot: root, expectedBytes: size, intendedTarget: target))
+            }
+        }.value
+    }
+
+    /// Fresh current-session inventory only. A transfer receipt is not install success.
+    private func transferredQueueShowsInstalled() -> Bool {
+        guard inventoryIsCurrentSession else { return false }
+        let sentNames = Set(installStatuses.compactMap { status -> String? in
+            if case .transferred = status.state { return status.item.request.name }
+            return nil
+        })
+        let relevant = plan.filter { !$0.includedContents.isEmpty }
+        guard !relevant.isEmpty, sentNames.count == installStatuses.count else { return false }
+        return relevant.allSatisfy { item in
+            let names = item.includedContents.map(\.fileName)
+            guard names.allSatisfy({ sentNames.contains($0) }),
+                  let game = games.first(where: { $0.id == item.gameID }) else { return false }
+            return assessment(for: game).state == .installed
+        }
+    }
 
     func openMTPInstallationRecords() {
         let url = appDirectory.appendingPathComponent("MTPInstallAttempts", isDirectory: true)
@@ -1406,24 +1678,14 @@ final class AppModel {
     }
 
     private func addToQueue(_ game: Game, persist: Bool) {
-        guard !isInstalling else { return }
+        guard !installationPlanLocked else { return }
         guard !game.contents.isEmpty else {
             notice = AppNotice(level: .info, title: "没有可加入的本地内容", message: "该条目没有可用于安装计划的文件。")
             return
         }
-        if let index = plan.firstIndex(where: { $0.gameID == game.id }) {
-            let existing = plan[index]
-            var refreshed = PlanItem(game: game, target: existing.target, note: existing.note, addedAt: existing.addedAt)
-            if !refreshed.contents.isEmpty {
-                let included = Set(existing.contents.filter(\.included).map(\.id))
-                for contentIndex in refreshed.contents.indices {
-                    refreshed.contents[contentIndex].included = included.contains(refreshed.contents[contentIndex].id)
-                }
-                plan[index] = refreshed
-            }
-        } else {
-            plan.append(PlanItem(game: game))
-        }
+        // A repeat click must preserve explicit file/target choices and order.
+        guard !isInPlan(game.id) else { return }
+        plan.append(PlanItem(game: game))
         if persist { schedulePlanSave() }
     }
 
@@ -1433,14 +1695,14 @@ final class AppModel {
     }
 
     func updatePlanTarget(_ id: String, target: InstallTarget) {
-        guard !isInstalling else { return }
+        guard !installationPlanLocked else { return }
         guard let index = plan.firstIndex(where: { $0.id == id }) else { return }
         plan[index].target = target
         schedulePlanSave()
     }
 
     func setPlanContentIncluded(_ itemID: String, contentID: String, included: Bool) {
-        guard !isInstalling else { return }
+        guard !installationPlanLocked else { return }
         guard let itemIndex = plan.firstIndex(where: { $0.id == itemID }),
               let contentIndex = plan[itemIndex].contents.firstIndex(where: { $0.id == contentID }) else { return }
         let contents = plan[itemIndex].contents
@@ -1454,14 +1716,14 @@ final class AppModel {
     }
 
     func updatePlanNote(_ id: String, note: String) {
-        guard !isInstalling else { return }
+        guard !installationPlanLocked else { return }
         guard let index = plan.firstIndex(where: { $0.id == id }) else { return }
         plan[index].note = note
         schedulePlanSave()
     }
 
     func movePlanItem(_ id: String, direction: Int) {
-        guard !isInstalling else { return }
+        guard !installationPlanLocked else { return }
         guard let index = plan.firstIndex(where: { $0.id == id }) else { return }
         let target = index + direction
         guard plan.indices.contains(target) else { return }
@@ -1470,14 +1732,16 @@ final class AppModel {
     }
 
     func removePlanItem(_ id: String) {
-        guard !isInstalling else { return }
+        guard !installationPlanLocked else { return }
         plan.removeAll { $0.id == id }
+        omittedUpdates[id] = nil
         schedulePlanSave()
     }
 
     func clearPlan() {
-        guard !isInstalling else { return }
+        guard !installationPlanLocked else { return }
         plan.removeAll()
+        omittedUpdates.removeAll()
         schedulePlanSave(immediate: true)
     }
 

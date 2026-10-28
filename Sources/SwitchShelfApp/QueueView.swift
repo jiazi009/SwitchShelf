@@ -19,7 +19,7 @@ struct QueueView: View {
                         EmptyStateView(
                             symbol: "arrow.up.arrow.down.circle",
                             title: "安装队列为空",
-                            message: "在游戏库选择游戏并“加入安装队列”。队列只保存本地计划，不会向设备写入任何内容。",
+                            message: "在游戏库点击游戏卡片加入右侧待选区，再点击底部“开始安装”。此页用于管理安装顺序与文件选择。",
                             actionTitle: "浏览游戏库",
                             action: { model.showAllGames() }
                         )
@@ -33,7 +33,7 @@ struct QueueView: View {
                                     index: index,
                                     count: model.plan.count
                                 )
-                                .disabled(model.isInstalling || model.isReviewingInstall)
+                                .disabled(model.installationPlanLocked)
                             }
                         }
                     }
@@ -101,16 +101,16 @@ struct QueueView: View {
 
     @ViewBuilder
     private var executionButtons: some View {
-        Button(model.isReviewingInstall ? "准备发送…" : "开始安装") {
-            Task { await model.prepareMTPInstallationReview() }
+        Button(model.isPreparingInstallation ? "检查文件…" : "开始安装") {
+            Task { await model.beginStagedInstallation() }
         }
         .buttonStyle(.borderedProminent)
         .controlSize(.large)
         .fixedSize(horizontal: true, vertical: false)
-        .disabled(!model.canReviewMTPInstallation)
+        .disabled(!model.canBeginStagedInstallation)
         .help(model.wifiBlocksUSB
               ? "无线 FTP 仍连接或正在连接，已暂停 USB 安装。"
-              : "需要检查通过、统一目标且每个游戏最多选择一个更新。点击后立即按顺序发送，不再弹出确认窗口。")
+              : "自动检查本地文件，再核对设备及目标；无需先手动检查计划。")
 
         Button("检查计划") { Task { await model.checkPlan() } }
             .buttonStyle(.bordered)
@@ -139,7 +139,7 @@ struct QueueView: View {
                         .font(.system(size: 13, weight: .semibold))
                     BadgePill(text: "按顺序发送", systemImage: "list.number", tone: .accent)
                 }
-                Text("点击开始安装后立即发送。Switch 必须进入 sphaira 的 MTP Install 页面；目标存储由设备端选择。文件发送完成不等于安装成功。")
+                Text("点击开始安装会检查文件并立即发送。Switch 必须进入 sphaira 的 MTP Install 页面；目标存储由设备端选择。文件发送完成不等于安装成功。")
                     .font(.system(size: 10.5))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

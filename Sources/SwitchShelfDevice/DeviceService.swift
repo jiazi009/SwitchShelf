@@ -44,6 +44,7 @@ public actor DeviceService {
         let runtime = RuntimeLocation.preferredPath()
         let inventory = try await InventoryCoordinator.shared.read(runtimePath: runtime,
             useLibmtp: ProcessInfo.processInfo.environment["SWITCHSHELF_MTP_TRANSPORT"] == "libmtp",
+            useLibUSB: ProcessInfo.processInfo.environment["SWITCHSHELF_MTP_TRANSPORT"] == "libusb",
             storageDiagnosticsOnly: storageDiagnosticsOnly)
         try Task.checkCancellation()
         return inventory

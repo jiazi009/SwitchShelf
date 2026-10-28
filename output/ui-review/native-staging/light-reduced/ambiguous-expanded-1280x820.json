@@ -1,0 +1,90 @@
+{
+  "captureMethod" : "active production WindowGroup contentView NSView.cacheDisplay (in-process)",
+  "checkedFrames" : {
+    "brand" : {
+      "height" : 34,
+      "width" : 208,
+      "x" : 14,
+      "y" : 96
+    },
+    "card-matrix-1" : {
+      "height" : 298.33333333333326,
+      "width" : 208,
+      "x" : 260,
+      "y" : 232
+    },
+    "details-grid-matrix-1" : {
+      "height" : 27,
+      "width" : 27,
+      "x" : 434,
+      "y" : 239
+    },
+    "gridViewport" : {
+      "height" : 572,
+      "width" : 723,
+      "x" : 236,
+      "y" : 212
+    },
+    "header" : {
+      "height" : 120,
+      "width" : 723,
+      "x" : 236,
+      "y" : 52
+    },
+    "installButton" : {
+      "height" : 39.56787109375,
+      "width" : 288,
+      "x" : 976,
+      "y" : 764.43212890625
+    },
+    "remove-staged-matrix-1" : {
+      "height" : 12,
+      "width" : 12,
+      "x" : 1243,
+      "y" : 248
+    },
+    "staged-title-matrix-1" : {
+      "height" : 30,
+      "width" : 212,
+      "x" : 1041,
+      "y" : 195
+    },
+    "staging" : {
+      "height" : 768,
+      "width" : 320,
+      "x" : 960,
+      "y" : 52
+    },
+    "staging-cover-matrix-1" : {
+      "height" : 60,
+      "width" : 46,
+      "x" : 985,
+      "y" : 195
+    },
+    "stagingViewport" : {
+      "height" : 458.43212890625,
+      "width" : 320,
+      "x" : 960,
+      "y" : 170
+    }
+  },
+  "fixtureOnly" : true,
+  "libraryGames" : 1,
+  "name" : "ambiguous-expanded-1280x820",
+  "nativeSizingNotOverridden" : true,
+  "noBootstrapUSBOrInstallation" : true,
+  "stagedGames" : 1,
+  "state" : "ambiguous-expanded",
+  "viewport" : {
+    "height" : 820,
+    "width" : 1280,
+    "x" : 0,
+    "y" : 0
+  },
+  "windowFrame" : {
+    "height" : 820,
+    "width" : 1280,
+    "x" : 640,
+    "y" : 442
+  }
+}

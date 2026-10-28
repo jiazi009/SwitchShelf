@@ -125,6 +125,23 @@ struct PlanContent: Codable, Identifiable, Equatable, Sendable {
     }
 }
 
+/// App-only defaults: candidate filename identities never become package proof.
+enum InstallContentDefaults {
+    static func latestUpdateID(in contents: [LocalContent]) -> String? {
+        let updates = contents.filter { $0.kind == .update }
+        guard !updates.isEmpty, updates.allSatisfy({ $0.rawVersion != nil }),
+              let identity = InstallationAssessor.normalizedID(updates.first?.titleID),
+              updates.allSatisfy({ InstallationAssessor.normalizedID($0.titleID) == identity }),
+              let highest = updates.compactMap(\.rawVersion).max() else { return nil }
+        let newest = updates.filter { $0.rawVersion == highest }
+        return newest.count == 1 ? newest[0].id : nil
+    }
+
+    static func needsUpdateChoice(in contents: [LocalContent]) -> Bool {
+        contents.contains { $0.kind == .update } && latestUpdateID(in: contents) == nil
+    }
+}
+
 struct PlanItem: Codable, Identifiable, Equatable, Sendable {
     var id: String
     var gameID: String
@@ -140,7 +157,7 @@ struct PlanItem: Codable, Identifiable, Equatable, Sendable {
         self.gameID = game.id
         self.title = game.title
         self.titleID = game.contents.compactMap(\.titleID).first
-        let selectedUpdateID = UpdateSelection.defaultID(in: game.contents)
+        let selectedUpdateID = InstallContentDefaults.latestUpdateID(in: game.contents)
         self.contents = game.contents
             .sorted { $0.kind.order == $1.kind.order ? $0.fileURL.lastPathComponent < $1.fileURL.lastPathComponent : $0.kind.order < $1.kind.order }
             .map { PlanContent(content: $0, included: $0.kind == .base || $0.kind == .dlc || ($0.kind == .update && $0.id == selectedUpdateID)) }

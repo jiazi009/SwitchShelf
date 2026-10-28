@@ -17,7 +17,7 @@ struct MTPInstallConfirmation: View {
             HStack {
                 Button("取消", action: onCancel).keyboardShortcut(.cancelAction)
                 Spacer()
-                Button("确认并发送队列", action: onConfirm)
+                Button("确认并开始安装", action: onConfirm)
                     .buttonStyle(.borderedProminent).tint(.orange)
                     .disabled(!authorizedFiles || !confirmedDevice || !exclusiveClient || !understandsRisk)
             }.padding(20)
@@ -28,7 +28,7 @@ struct MTPInstallConfirmation: View {
 
     private var confirmationDetails: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Label("确认 sphaira 安装队列", systemImage: "exclamationmark.triangle").font(.title2.bold())
+            Label("核对所选游戏与设备", systemImage: "exclamationmark.triangle").font(.title2.bold())
             Text("将依次读取并发送以下游戏包。传输完成不等于安装成功，请在设备端确认安装结果。")
                 .foregroundStyle(.secondary)
             GroupBox("发送顺序 · \(review.items.count) 个文件") {

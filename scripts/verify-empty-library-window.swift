@@ -9,16 +9,36 @@ import SwitchShelfLibrary
 /// App/WindowGroup is retained, but bootstrap, defaults and storage are isolated.
 extension AppModel {
     static func emptyLibraryWindowFixture() -> AppModel {
-        DispatchQueue.global().asyncAfter(deadline: .now() + 20) {
+        DispatchQueue.global().asyncAfter(deadline: .now() + (CommandLine.arguments.contains("--live-staging") ? 150 : 35)) {
             FileHandle.standardError.write(Data("Window regression timed out\n".utf8))
             exit(2)
         }
         let model = AppModel()
-        model.seedUIReview(LibrarySnapshot(), plan: [], page: .all, layout: .grid, inspector: true)
+        if CommandLine.arguments.contains("--live-staging") {
+            let root = URL(fileURLWithPath: ProcessInfo.processInfo.environment["SWITCHSHELF_UI_REVIEW_STATE"]!)
+            let source = LibrarySource(id: "live-fixture", url: root, name: "Synthetic only", availability: .offline)
+            let games = (1...3).map { index in
+                Game(id: "live-\(index)", title: "合成交互游戏 \(index)", contents: [
+                    LocalContent(id: "live-file-\(index)", kind: .base,
+                                 fileURL: root.appendingPathComponent("fixture-\(index).nsp"),
+                                 byteCount: 3, format: .nsp, availability: .offline)
+                ])
+            }
+            model.seedUIReview(LibrarySnapshot(sources: [source], games: games), plan: [], page: .all, layout: .grid, inspector: false)
+        } else {
+            model.seedUIReview(LibrarySnapshot(), plan: [], page: .all, layout: .grid, inspector: true)
+        }
         return model
     }
 
     func runEmptyLibraryWindowRegression() async {
+        if CommandLine.arguments.contains("--live-staging") {
+            print("LIVE_STAGING_PID \(ProcessInfo.processInfo.processIdentifier); synthetic, disconnected, no installation allowed")
+            fflush(stdout)
+            try? await Task.sleep(for: .seconds(140))
+            NSApp.terminate(nil)
+            return
+        }
         defer { UserDefaults(suiteName: "local.switchshelf.ui-review.fixture")?.removePersistentDomain(forName: "local.switchshelf.ui-review.fixture") }
         do {
             // A real display-cycle must run: offscreen layout alone did not reveal
@@ -31,9 +51,9 @@ extension AppModel {
                 try await Task.sleep(for: .seconds(1))
                 let actual = window.contentLayoutRect.size
                 print("LAYOUT \(width)x\(height): \(WindowLayoutEvidence.frames)")
-                for name in ["brand", "header"] {
+                for name in ["brand", "header", "installButton", "staging"] {
                     guard let frame = WindowLayoutEvidence.frames[name],
-                          frame.minY >= 0, frame.maxY <= actual.height else {
+                          frame.minY >= 0, frame.maxY <= (window.contentView?.bounds.height ?? actual.height) else {
                         throw WindowRegressionFailure.clippedContent
                     }
                 }
@@ -66,6 +86,7 @@ extension AppModel {
             try await Task.sleep(for: .seconds(1))
             try await runSelectionRegression(source: source)
             try await verifyCoverPreparation()
+            try await runInstallStagingRegression()
             let directory = URL(fileURLWithPath: ProcessInfo.processInfo.environment["SWITCHSHELF_UI_REVIEW_STATE"]!, isDirectory: true)
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             try Data("passed".utf8).write(to: directory.appendingPathComponent("window-regression-passed"))
@@ -125,11 +146,17 @@ extension AppModel {
         handleGridTap(ordered[7], modifiers: .shift)
         guard selectedGameIDs == Set(ordered[4...7].map(\.id)) else { throw WindowRegressionFailure.selection }
         clearSelection()
-        inspectorPresented = false
-        try await Task.sleep(for: .milliseconds(500))
+        closeGameDetails()
+        try await Task.sleep(for: .milliseconds(300))
         handleGridTap(ordered[3], modifiers: [])
-        try await Task.sleep(for: .seconds(1))
-        guard activeGame?.id == ordered[3].id, inspectorPresented else { throw WindowRegressionFailure.selection }
+        guard detailGame == nil else { throw WindowRegressionFailure.selection }
+        let staged = plan
+        openGameDetails(ordered[3])
+        try await Task.sleep(for: .milliseconds(400))
+        guard detailGame?.id == ordered[3].id, plan == staged else { throw WindowRegressionFailure.selection }
+        closeGameDetails()
+        try await Task.sleep(for: .milliseconds(300))
+        guard detailGame == nil, plan == staged else { throw WindowRegressionFailure.selection }
         for name in ["brand", "header"] {
             guard let frame = WindowLayoutEvidence.frames[name], frame.minY >= 0 else {
                 throw WindowRegressionFailure.clippedContent
@@ -141,6 +168,19 @@ extension AppModel {
 @MainActor
 enum WindowLayoutEvidence {
     static var frames: [String: CGRect] = [:]
+    static func press(_ frame: CGRect, in window: NSWindow) throws {
+        let height = window.contentView?.bounds.height ?? window.frame.height
+        let point = NSPoint(x: frame.midX, y: height - frame.midY)
+        window.makeKeyAndOrderFront(nil)
+        for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+            guard let event = NSEvent.mouseEvent(with: type, location: point, modifierFlags: [],
+                timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+                context: nil, eventNumber: 1, clickCount: 1, pressure: type == .leftMouseDown ? 1 : 0) else {
+                throw NSError(domain: "NativeFixtureEvent", code: 1)
+            }
+            NSApp.sendEvent(event)
+        }
+    }
     static func dump(_ view: NSView, in window: NSWindow, depth: Int = 0) {
         guard depth < 10 else { return }
         print(String(repeating: " ", count: depth) + "\(type(of: view)) frame=\(view.convert(view.bounds, to: nil)) visible=\(view.visibleRect)")

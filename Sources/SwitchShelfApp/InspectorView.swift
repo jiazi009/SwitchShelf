@@ -3,6 +3,7 @@ import SwitchShelfDomain
 
 struct InspectorView: View {
     @Bindable var model: AppModel
+    let game: Game
 
     var body: some View {
         VStack(spacing: 0) {
@@ -10,15 +11,8 @@ struct InspectorView: View {
             Divider().overlay(Theme.hairline)
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
-                    if model.isMultiSelection {
-                        MultiSelectionInspector(model: model)
-                            .padding(18)
-                    } else if let game = model.activeGame {
-                        GameInspector(model: model, game: game)
-                            .padding(18)
-                    } else {
-                        emptyState
-                    }
+                    GameInspector(model: model, game: game)
+                        .padding(18)
                 }
             }
             .scrollIndicators(.automatic)
@@ -37,7 +31,7 @@ struct InspectorView: View {
                 .textCase(.uppercase)
             Spacer()
             Button {
-                model.toggleInspector()
+                model.closeGameDetails()
             } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: 10, weight: .bold))
@@ -46,8 +40,10 @@ struct InspectorView: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .help("隐藏检查器（⌘⌥I）")
-            .accessibilityLabel("隐藏检查器")
+            .help("关闭详情")
+            .accessibilityLabel("关闭详情")
+            .accessibilityIdentifier("close-game-details")
+            .keyboardShortcut(.cancelAction)
         }
         .padding(.horizontal, 16)
         .frame(height: 44)
@@ -80,7 +76,6 @@ private struct GameInspector: View {
 
     private var assessment: InstallationAssessment { model.assessment(for: game) }
     private var gameSources: [LibrarySource] { model.sources(for: game) }
-    private var inPlan: Bool { model.isInPlan(game.id) }
 
     private var groupedContents: [(kind: ContentKind, contents: [LocalContent])] {
         let groups = Dictionary(grouping: game.contents, by: \.kind)
@@ -198,29 +193,6 @@ private struct GameInspector: View {
             }
 
             VStack(spacing: 8) {
-                if inPlan {
-                    Button {
-                        model.showQueue()
-                    } label: {
-                        Label("已加入安装队列 · 查看", systemImage: "checkmark.circle.fill")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-                    .accessibilityLabel("已在安装队列中，打开队列")
-                } else {
-                    Button {
-                        model.addToQueue(game)
-                    } label: {
-                        Label("加入安装队列", systemImage: "plus.circle.fill")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-                    .disabled(game.contents.isEmpty)
-                    .help(game.contents.isEmpty ? "该条目没有本地内容文件" : "把本地内容加入安装计划")
-                    .accessibilityLabel("加入安装队列")
-                }
                 Button {
                     model.revealGame(game)
                 } label: {
@@ -444,16 +416,6 @@ private struct MultiSelectionInspector: View {
             }
 
             VStack(spacing: 8) {
-                Button {
-                    model.addSelectedToQueue()
-                } label: {
-                    Label("全部加入安装队列", systemImage: "plus.circle.fill")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .accessibilityLabel("把 \(selected.count) 款游戏加入安装队列")
-
                 Button("清除选择") { model.clearSelection() }
                     .buttonStyle(.bordered)
                     .controlSize(.large)

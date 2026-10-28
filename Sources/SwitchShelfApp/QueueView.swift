@@ -19,7 +19,7 @@ struct QueueView: View {
                         EmptyStateView(
                             symbol: "arrow.up.arrow.down.circle",
                             title: "安装队列为空",
-                            message: "在游戏库选择游戏并“加入安装队列”。队列只保存本地计划，不会向设备写入任何内容。",
+                            message: "在游戏库点击游戏卡片加入右侧待选区，再点击底部“开始安装”。此页用于管理安装顺序与文件选择。",
                             actionTitle: "浏览游戏库",
                             action: { model.showAllGames() }
                         )
@@ -33,7 +33,7 @@ struct QueueView: View {
                                     index: index,
                                     count: model.plan.count
                                 )
-                                .disabled(model.isInstalling || model.isReviewingInstall)
+                                .disabled(model.installationPlanLocked)
                             }
                         }
                     }
@@ -44,13 +44,6 @@ struct QueueView: View {
             }
         }
         .background(Theme.canvas)
-        .sheet(item: $model.installationReview) { request in
-            MTPInstallConfirmation(review: request) {
-                model.confirmMTPInstallation(request)
-            } onCancel: {
-                model.installationReview = nil
-            }
-        }
         .alert("清空安装队列？", isPresented: $showClearAlert) {
             Button("清空队列", role: .destructive) { model.clearPlan() }
             Button("取消", role: .cancel) {}
@@ -108,16 +101,16 @@ struct QueueView: View {
 
     @ViewBuilder
     private var executionButtons: some View {
-        Button(model.isReviewingInstall ? "准备确认…" : "核对并发送安装队列…") {
-            Task { await model.prepareMTPInstallationReview() }
+        Button(model.isPreparingInstallation ? "检查文件…" : "开始安装") {
+            Task { await model.beginStagedInstallation() }
         }
         .buttonStyle(.borderedProminent)
         .controlSize(.large)
         .fixedSize(horizontal: true, vertical: false)
-        .disabled(!model.canReviewMTPInstallation)
+        .disabled(!model.canBeginStagedInstallation)
         .help(model.wifiBlocksUSB
               ? "无线 FTP 仍连接或正在连接，已暂停 USB 安装。"
-              : "需要检查通过、统一目标且每个游戏最多选择一个更新；此按钮先显示确认页，不会立即写设备。")
+              : "自动检查本地文件，再核对设备及目标；无需先手动检查计划。")
 
         Button("检查计划") { Task { await model.checkPlan() } }
             .buttonStyle(.bordered)

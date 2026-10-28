@@ -295,6 +295,7 @@ struct GameCard: View {
     @Bindable var model: AppModel
     var game: Game
     var isSelected: Bool
+    let installationMotion: Namespace.ID
     @State private var isHovering = false
     @FocusState private var isFocused: Bool
     @Environment(\.colorScheme) private var colorScheme
@@ -305,15 +306,20 @@ struct GameCard: View {
     }
 
     var body: some View {
+        ZStack(alignment: .topTrailing) {
+            Button {
+                withAnimation(.snappy(duration: 0.36)) { model.handleGridTap(game) }
+            } label: {
         VStack(alignment: .leading, spacing: 8) {
             CoverArtwork(game: game, showsTitle: true, installationAssessment: assessment)
                 .aspectRatio(3 / 4, contentMode: .fit)
+                .modifier(InstallationMotion(id: game.id, namespace: installationMotion, enabled: !isSelected))
                 .overlay(alignment: .topLeading) {
                     ViewThatFits(in: .horizontal) {
                         HStack(alignment: .top, spacing: 6) {
                             availabilityBadges
                             Spacer(minLength: 0)
-                            identityBadge
+                            identityBadge.padding(.trailing, 28)
                         }
                         VStack(alignment: .leading, spacing: 4) {
                             identityBadge
@@ -345,26 +351,30 @@ struct GameCard: View {
             .padding(.horizontal, 2)
         }
         .contentShape(Rectangle())
-        .onTapGesture { model.handleGridTap(game) }
+            }
+            .buttonStyle(.plain)
+            GameDetailsButton(model: model, game: game).padding(7)
+        }
         .onHover { isHovering = $0 }
         .focusable()
         .focused($isFocused)
         .focusEffectDisabled()
         .onKeyPress(.space) {
-            model.handleGridTap(game)
+            withAnimation(.snappy(duration: 0.36)) { model.handleGridTap(game) }
             return .handled
         }
         .onKeyPress(.return) {
-            model.handleGridTap(game)
+            withAnimation(.snappy(duration: 0.36)) { model.handleGridTap(game) }
             return .handled
         }
         .contextMenu { contextActions }
-        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("game-card-\(game.id)")
+        .accessibilityElement(children: .contain)
         .accessibilityLabel("\(game.title)，\(game.contentSummary)，\(formatByteCount(game.byteCount))")
         .accessibilityValue("\(isSelected ? "已选择" : "未选择")，\(assessment.state.label)")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
-        .accessibilityAction(named: "选择或取消选择") { model.handleGridTap(game) }
-        .accessibilityAction(named: "加入安装队列") { model.addToQueue(game) }
+        .accessibilityAction(named: "加入待选区") { model.handleGridTap(game) }
+        .accessibilityAction(named: "查看详情") { model.openGameDetails(game) }
     }
 
     /// Selected light stays in a thin rim on the cover. Clipped so it cannot paint the caption below.
@@ -424,7 +434,7 @@ struct GameCard: View {
     @ViewBuilder
     private var contextActions: some View {
         Button("在访达中显示") { model.revealGame(game) }
-        Button("加入安装队列") { model.addToQueue(game) }
+        Button("加入待选区") { model.addToQueue(game) }
         if model.isInPlan(game.id) {
             Button("查看安装队列") { model.showQueue() }
         }
@@ -442,6 +452,7 @@ struct GameListRow: View {
     @Bindable var model: AppModel
     var game: Game
     var isSelected: Bool
+    let installationMotion: Namespace.ID
 
     private var assessment: InstallationAssessment { model.assessment(for: game) }
     private var isOffline: Bool {
@@ -449,9 +460,14 @@ struct GameListRow: View {
     }
 
     var body: some View {
+        ZStack(alignment: .trailing) {
+            Button {
+                withAnimation(.snappy(duration: 0.36)) { model.handleGridTap(game) }
+            } label: {
         HStack(spacing: 12) {
             CoverArtwork(game: game, cornerRadius: 6)
                 .frame(width: 44, height: 44)
+                .modifier(InstallationMotion(id: game.id, namespace: installationMotion, enabled: !isSelected))
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 8) {
                     Text(game.title)
@@ -489,6 +505,7 @@ struct GameListRow: View {
                 .fixedSize()
                 .frame(width: 74, alignment: .trailing)
         }
+        .padding(.trailing, 34)
         .padding(.vertical, 5)
         .padding(.horizontal, 6)
         .background {
@@ -496,16 +513,26 @@ struct GameListRow: View {
                 .fill(isSelected ? Theme.accent.opacity(0.14) : Color.clear)
         }
         .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            GameDetailsButton(model: model, game: game).padding(.trailing, 5)
+        }
+        .accessibilityIdentifier("game-row-\(game.id)")
+        .focusable()
+        .onKeyPress(.return) {
+            withAnimation(.snappy(duration: 0.36)) { model.handleGridTap(game) }
+            return .handled
+        }
         .contextMenu {
             Button("在访达中显示") { model.revealGame(game) }
-            Button("加入安装队列") { model.addToQueue(game) }
+            Button("加入待选区") { model.addToQueue(game) }
             if model.isInPlan(game.id) { Button("查看安装队列") { model.showQueue() } }
             Divider()
             if let titleID = game.contents.compactMap(\.titleID).first {
                 Button("复制 Title ID") { model.copyTitleID(titleID) }
             }
         }
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
         .accessibilityLabel("\(game.title)，\(game.contentSummary)，\(formatByteCount(game.byteCount))")
         .accessibilityValue(assessment.state.label)
     }

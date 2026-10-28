@@ -47,6 +47,7 @@ struct UIReviewLayout {
                         PlanItem(game: $0, note: "UI fixture：很长的本地计划备注，用于确认窗口变窄后文字和按钮不会挤出卡片。")
                     }, page: page, layout: scenario == "list" ? .list : .grid, inspector: width >= 1280)
                     let view = RootView(model: model)
+                        .environment(\.installationAnimationsEnabled, !CommandLine.arguments.contains("--reduce-motion"))
                         .environment(\.colorScheme, scheme)
                         .defaultAppStorage(fixtureDefaults)
                     let name = "\(scenario)-\(Int(size.width))x\(Int(size.height))-\(dark ? "dark" : "light")"
@@ -145,11 +146,13 @@ struct UIReviewLayout {
     @MainActor
     static func render<V: View>(_ content: V, size: NSSize, appearance: NSAppearance,
                                 name: String, output: URL) throws -> [String: Any] {
+        print("Rendering fixture: \(name)")
+        fflush(stdout)
         let window = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.titled, .resizable],
                               backing: .buffered, defer: false)
         window.appearance = appearance
         window.isReleasedWhenClosed = false
-        let host = NSHostingView(rootView: content)
+        let host = NSHostingView(rootView: content.frame(width: size.width, height: size.height, alignment: .topLeading))
         host.sizingOptions = []
         host.frame = NSRect(origin: .zero, size: size)
         window.contentView = host

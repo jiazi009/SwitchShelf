@@ -57,7 +57,10 @@ final class AppModel {
             UserDefaults.standard.set(clamped, forKey: "SwitchShelf.coverSize")
         }
     }
-    var inspectorPresented = true
+    var detailGameID: String?
+    var showConnectionGuide = false
+    private(set) var isPreparingInstallation = false
+    private var omittedUpdates: [String: [LocalContent]] = [:]
     var searchFocusToken = 0
     var notice: AppNotice?
     var sourcePendingRemoval: LibrarySource?
@@ -82,8 +85,6 @@ final class AppModel {
     @ObservationIgnored private var firstSeenSaveTask: Task<Void, Never>?
     @ObservationIgnored private var bootstrapStarted = false
     @ObservationIgnored private var cacheWriteAllowed = false
-    @ObservationIgnored private var inspectorAutoHidden = false
-    @ObservationIgnored private var lastLayoutWidth: CGFloat = 0
     @ObservationIgnored private var deviceMonitorTask: Task<Void, Never>?
     @ObservationIgnored private var soundedSession: String?
     @ObservationIgnored private var automaticAttempts = 0
@@ -336,27 +337,13 @@ final class AppModel {
         installFilter = .all
     }
 
-    func toggleInspector() {
-        inspectorPresented.toggle()
-        inspectorAutoHidden = false
-    }
+    var detailGame: Game? { games.first { $0.id == detailGameID } }
 
-    func adaptInspector(to width: CGFloat) {
-        defer { lastLayoutWidth = width }
-        if lastLayoutWidth == 0 {
-            if width < 1120 {
-                inspectorAutoHidden = true
-                inspectorPresented = false
-            }
-            return
-        }
-        if width < 1120, lastLayoutWidth >= 1120 {
-            inspectorAutoHidden = true
-            inspectorPresented = false
-        } else if width >= 1240, lastLayoutWidth < 1240, inspectorAutoHidden {
-            inspectorAutoHidden = false
-            inspectorPresented = true
-        }
+    func openGameDetails(_ game: Game) { detailGameID = game.id }
+    func closeGameDetails() { detailGameID = nil }
+
+    var installationPlanLocked: Bool {
+        isInstalling || isPreparingInstallation || isReviewingInstall || installationReview != nil
     }
 
     func handleGridTap(_ game: Game, modifiers: NSEvent.ModifierFlags? = nil) {
@@ -383,8 +370,11 @@ final class AppModel {
             selectionAnchor = game.id
         }
         activeGameID = game.id
-        inspectorPresented = true
-        inspectorAutoHidden = false
+        if flags.contains(.shift) {
+            addSelectedToQueue()
+        } else if selectedGameIDs.contains(game.id) {
+            addToQueue(game)
+        }
     }
 
     func selectAllVisible() {
@@ -855,6 +845,7 @@ final class AppModel {
 
     private func reconcileSelection() {
         let ids = Set(games.map(\.id))
+        if let detailGameID, !ids.contains(detailGameID) { self.detailGameID = nil }
         selectedGameIDs.formIntersection(ids)
         if let activeGameID, !ids.contains(activeGameID) {
             self.activeGameID = selectedGameIDs.first
@@ -904,7 +895,7 @@ final class AppModel {
     }
 
     var canReadInventory: Bool {
-        mtpCandidateSignature != nil && !isReadingInventory && !isDiscovering && !isInstalling && !wifiBlocksUSB
+        mtpCandidateSignature != nil && !isReadingInventory && !isDiscovering && !installationPlanLocked && !wifiBlocksUSB
     }
 
     var inventoryIsCurrentSession: Bool {
@@ -940,7 +931,7 @@ final class AppModel {
     }
 
     private func monitorDevice() async {
-        guard !isDiscovering, !isReadingInventory, !isInstalling, !wifiBlocksUSB else { return }
+        guard !isDiscovering, !isReadingInventory, !installationPlanLocked, !wifiBlocksUSB else { return }
         isDiscovering = true
         let previous = mtpCandidateSignature
         let result = await deviceService.discover()
@@ -1304,11 +1295,80 @@ final class AppModel {
 
     // MARK: - Reviewed sphaira installation queue
 
+    private func updates(for item: PlanItem) -> [LocalContent] {
+        let ids = Set(item.contents.filter { $0.kind == .update }.map(\.id))
+        return games.first { $0.id == item.gameID }?.contents.filter { ids.contains($0.id) } ?? []
+    }
+
+    func needsUpdateChoice(_ item: PlanItem) -> Bool {
+        let candidates = updates(for: item)
+        return InstallContentDefaults.needsUpdateChoice(in: candidates)
+            && !item.includedContents.contains { $0.kind == .update }
+            && omittedUpdates[item.id] != candidates
+    }
+
+    func omitUpdatesForThisInstallation(_ id: String) {
+        guard !installationPlanLocked, let item = plan.first(where: { $0.id == id }) else { return }
+        omittedUpdates[id] = updates(for: item)
+    }
+
+    func setAllPlanTargets(_ target: InstallTarget) {
+        guard !installationPlanLocked else { return }
+        for index in plan.indices { plan[index].target = target }
+        schedulePlanSave()
+    }
+
+    var installationConnectionBlocker: String? {
+        if automaticReadBlocked { return "上次 USB 探针退出未确认，请重启应用并检查设备后再安装。" }
+        if wifiBlocksUSB { return "请先断开无线 FTP，再使用 USB 安装。" }
+        if openMTPIsRunning { return "请完整退出 OpenMTP 等其他 MTP 客户端。" }
+        if isReadingInventory || isDiscovering { return "正在检测或读取设备，请稍候。" }
+        if isScanning { return "正在扫描来源，请等待文件清单稳定后再安装。" }
+        if mtpCandidateSignature == nil { return "尚未发现单台 Switch MTP 候选设备，请连接数据线并开启 sphaira MTP。" }
+        return nil
+    }
+
+    var canBeginStagedInstallation: Bool {
+        !plan.isEmpty && !installationPlanLocked && !isCheckingPlan
+            && plan.contains { !$0.includedContents.isEmpty }
+            && installationConnectionBlocker == nil && queueValidationIssues.isEmpty
+    }
+
+    func beginStagedInstallation() async {
+        guard canBeginStagedInstallation else {
+            showConnectionGuide = installationConnectionBlocker != nil
+            return
+        }
+        closeGameDetails()
+        showConnectionGuide = false
+        isPreparingInstallation = true
+        defer { isPreparingInstallation = false }
+        let expected = preflightInput
+        await checkPlan()
+        guard expected == preflightInput, preparationIsCurrent, preparation?.isPrepared == true else {
+            notice = AppNotice(level: .warning, title: "安装前检查未通过",
+                               message: preparation?.issues.first?.message ?? "来源或计划已变化，请检查待选文件后重试。")
+            return
+        }
+        await prepareMTPInstallationReview()
+        if installationReview == nil, notice == nil {
+            notice = AppNotice(level: .warning, title: "暂时无法开始安装", message: "连接或文件条件发生变化；未发送任何文件，请查看连接指引后重试。")
+        }
+    }
+
+    func cancelInstallationReview() {
+        installationReview = nil
+        reviewedPlan = nil
+    }
+
     var queueValidationIssues: [String] {
         var issues: [String] = []
         let selectedItems = plan.filter { !$0.includedContents.isEmpty }
         if !InstallQueueRules.targetsAreConsistent(selectedItems.map { $0.target.rawValue }) {
             issues.append("所选文件的计划目标不一致；请统一为 SD 卡或机身存储。")
+        }
+        for item in plan where needsUpdateChoice(item) {
+            issues.append("「\(item.title)」的更新版本或身份不明确；请展开文件清单选择一个更新，或明确本次不安装更新。")
         }
         for item in selectedItems where UpdateSelection.hasConflict(
             updateIDs: Set(item.contents.filter { $0.kind == .update }.map(\.id)),
@@ -1425,24 +1485,14 @@ final class AppModel {
     }
 
     private func addToQueue(_ game: Game, persist: Bool) {
-        guard !isInstalling else { return }
+        guard !installationPlanLocked else { return }
         guard !game.contents.isEmpty else {
             notice = AppNotice(level: .info, title: "没有可加入的本地内容", message: "该条目没有可用于安装计划的文件。")
             return
         }
-        if let index = plan.firstIndex(where: { $0.gameID == game.id }) {
-            let existing = plan[index]
-            var refreshed = PlanItem(game: game, target: existing.target, note: existing.note, addedAt: existing.addedAt)
-            if !refreshed.contents.isEmpty {
-                let included = Set(existing.contents.filter(\.included).map(\.id))
-                for contentIndex in refreshed.contents.indices {
-                    refreshed.contents[contentIndex].included = included.contains(refreshed.contents[contentIndex].id)
-                }
-                plan[index] = refreshed
-            }
-        } else {
-            plan.append(PlanItem(game: game))
-        }
+        // A repeat click must preserve explicit file/target choices and order.
+        guard !isInPlan(game.id) else { return }
+        plan.append(PlanItem(game: game))
         if persist { schedulePlanSave() }
     }
 
@@ -1452,14 +1502,14 @@ final class AppModel {
     }
 
     func updatePlanTarget(_ id: String, target: InstallTarget) {
-        guard !isInstalling else { return }
+        guard !installationPlanLocked else { return }
         guard let index = plan.firstIndex(where: { $0.id == id }) else { return }
         plan[index].target = target
         schedulePlanSave()
     }
 
     func setPlanContentIncluded(_ itemID: String, contentID: String, included: Bool) {
-        guard !isInstalling else { return }
+        guard !installationPlanLocked else { return }
         guard let itemIndex = plan.firstIndex(where: { $0.id == itemID }),
               let contentIndex = plan[itemIndex].contents.firstIndex(where: { $0.id == contentID }) else { return }
         let contents = plan[itemIndex].contents
@@ -1473,14 +1523,14 @@ final class AppModel {
     }
 
     func updatePlanNote(_ id: String, note: String) {
-        guard !isInstalling else { return }
+        guard !installationPlanLocked else { return }
         guard let index = plan.firstIndex(where: { $0.id == id }) else { return }
         plan[index].note = note
         schedulePlanSave()
     }
 
     func movePlanItem(_ id: String, direction: Int) {
-        guard !isInstalling else { return }
+        guard !installationPlanLocked else { return }
         guard let index = plan.firstIndex(where: { $0.id == id }) else { return }
         let target = index + direction
         guard plan.indices.contains(target) else { return }
@@ -1489,14 +1539,16 @@ final class AppModel {
     }
 
     func removePlanItem(_ id: String) {
-        guard !isInstalling else { return }
+        guard !installationPlanLocked else { return }
         plan.removeAll { $0.id == id }
+        omittedUpdates[id] = nil
         schedulePlanSave()
     }
 
     func clearPlan() {
-        guard !isInstalling else { return }
+        guard !installationPlanLocked else { return }
         plan.removeAll()
+        omittedUpdates.removeAll()
         schedulePlanSave(immediate: true)
     }
 

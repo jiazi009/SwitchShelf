@@ -33,7 +33,10 @@ extension AppModel {
         self.layout = layout
         coverSize = 172
         sortOrder = .title
-        inspectorPresented = inspector
+        detailGameID = nil
+        selectedGameIDs.removeAll()
+        activeGameID = nil
+        notice = nil
         cacheLoaded = true
         isBootstrapped = true
         deviceDiscovery = DeviceDiscovery(state: .disconnected, message: "UI fixture：未连接任何真实设备；不会执行 USB 枚举。")
@@ -42,6 +45,7 @@ extension AppModel {
             activeGameID = game.id
         }
     }
+    func seedUIReviewDevice(_ value: DeviceDiscovery) { deviceDiscovery = value }
 }
 '''
 if '--selection-baseline' in sys.argv:
@@ -55,10 +59,35 @@ if '--empty-library-window' in sys.argv:
     entry = (root / 'Sources/SwitchShelfApp/SwitchShelfApp.swift').read_text()
     entry = entry.replace('private var model = AppModel()', 'private var model = AppModel.emptyLibraryWindowFixture()')
     entry = entry.replace('await model.bootstrap()', 'await model.runEmptyLibraryWindowRegression()')
-    entry = entry.replace('RootView(model: model)', 'RootView(model: model).defaultAppStorage(UserDefaults(suiteName: "local.switchshelf.ui-review.fixture")!).preferredColorScheme(CommandLine.arguments.contains("--dark") ? .dark : .light)')
+    entry = entry.replace('RootView(model: model)', 'RootView(model: model).defaultAppStorage(UserDefaults(suiteName: "local.switchshelf.ui-review.fixture")!).preferredColorScheme(CommandLine.arguments.contains("--dark") ? .dark : .light).environment(\\.installationAnimationsEnabled, !CommandLine.arguments.contains("--reduce-motion"))')
     (temporary / 'SwitchShelfApp.swift').write_text(entry)
     (temporary / 'EmptyLibraryWindowRegression.swift').write_text(
         (root / 'scripts/verify-empty-library-window.swift').read_text())
+    (temporary / 'InstallStagingRegression.swift').write_text(
+        (root / 'scripts/verify-install-staging.swift').read_text())
+    sidebar = (temporary / 'InstallationSidebar.swift').read_text()
+    for identifier, key in [('begin-staged-installation', 'installButton'), ('installation-sidebar', 'staging')]:
+        anchor = '.accessibilityIdentifier("' + identifier + '")'
+        sidebar = sidebar.replace(anchor, anchor + '\n'
+            '        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: {\n'
+            '            WindowLayoutEvidence.frames["' + key + '"] = $0\n'
+            '        }')
+    anchor = r'.accessibilityIdentifier("staging-cover-\(item.gameID)")'
+    sidebar = sidebar.replace(anchor, anchor + '\n'
+        '        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: {\n'
+        r'            WindowLayoutEvidence.frames["staging-cover-\(item.gameID)"] = $0' + '\n'
+        '        }')
+    (temporary / 'InstallationSidebar.swift').write_text(sidebar)
+    for filename, identifier, key in [
+        ('GameInteraction.swift', r'game-details-\(game.id)', r'details-\(game.id)'),
+        ('InspectorView.swift', 'close-game-details', 'details-close')]:
+        source = (temporary / filename).read_text()
+        anchor = '.accessibilityIdentifier("' + identifier + '")'
+        source = source.replace(anchor, anchor + '\n'
+            '        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: {\n'
+            '            WindowLayoutEvidence.frames["' + key + '"] = $0\n'
+            '        }')
+        (temporary / filename).write_text(source)
     for filename, anchor in [('SidebarView.swift', 'brand'), ('LibraryView.swift', 'header')]:
         source = (temporary / filename).read_text()
         source = source.replace('            ' + anchor + '\n', '            ' + anchor + '\n'
@@ -74,6 +103,13 @@ game = game.replace(
     '            .appendingPathComponent("SwitchShelf/CoverThumbnails", isDirectory: true)',
     'directory: URL(fileURLWithPath: ProcessInfo.processInfo.environment["SWITCHSHELF_UI_REVIEW_STATE"]!, isDirectory: true)'
     '.appendingPathComponent("CoverThumbnails", isDirectory: true)')
+if '--empty-library-window' in sys.argv:
+    for identifier, key in [(r'game-card-\(game.id)', r'card-\(game.id)'), (r'game-row-\(game.id)', r'row-\(game.id)')]:
+        anchor = '.accessibilityIdentifier("' + identifier + '")'
+        game = game.replace(anchor, anchor + '\n'
+            '        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: {\n'
+            '            WindowLayoutEvidence.frames["' + key + '"] = $0\n'
+            '        }')
 (temporary / 'GameViews.swift').write_text(game)
 PY
 
@@ -106,6 +142,7 @@ with open(sys.argv[1], 'wb') as f:
                   'CFBundleExecutable': 'WindowRegression', 'CFBundlePackageType': 'APPL',
                   'CFBundleName': 'SwitchShelf window regression', 'LSMinimumSystemVersion': '26.0'}, f)
 PY
+    codesign --force --sign - "$task_temporary/WindowRegression.app" >/dev/null 2>&1
     open -W -n "$task_temporary/WindowRegression.app" \
         --env "SWITCHSHELF_UI_REVIEW_STATE=$task_temporary/state" \
         --stdout "$task_temporary/window.out" --stderr "$task_temporary/window.err" --args "$@"

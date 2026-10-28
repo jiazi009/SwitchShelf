@@ -47,12 +47,13 @@ struct AppCommands: Commands {
             }
             .keyboardShortcut("f", modifiers: .command)
 
-            Button("选择全部可见游戏") {
+            Button("全部可见游戏加入待选区") {
                 model.selectAllVisible()
+                model.addSelectedToQueue()
             }
-            .disabled(!model.isLibraryPage || model.filteredGames.isEmpty)
+            .disabled(!model.isLibraryPage || model.filteredGames.isEmpty || model.installationPlanLocked)
 
-            Button("清除选择") {
+            Button("清除浏览选择（保留待选区）") {
                 model.clearSelection()
             }
             .disabled(model.selectedGameIDs.isEmpty)
@@ -71,11 +72,14 @@ struct AppCommands: Commands {
 
             Divider()
 
-            Button(model.inspectorPresented ? "隐藏检查器" : "显示检查器") {
-                model.toggleInspector()
+            Button("查看当前游戏详情") {
+                if let game = model.activeGame { model.openGameDetails(game) }
             }
             .keyboardShortcut("i", modifiers: [.command, .option])
-            .disabled(!model.isLibraryPage || model.games.isEmpty)
+            .disabled(!model.isLibraryPage || model.activeGame == nil)
+
+            Button("将选择加入待选区") { model.addSelectedToQueue() }
+                .disabled(model.selectedGameIDs.isEmpty || model.installationPlanLocked)
 
             Button("全部游戏") {
                 model.showAllGames()

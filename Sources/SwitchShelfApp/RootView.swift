@@ -5,76 +5,79 @@ struct RootView: View {
     @Bindable var model: AppModel
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.installationAnimationsEnabled) private var animationsEnabled
+    @Namespace private var installationMotion
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
-                SidebarView(model: model)
-                    .navigationSplitViewColumnWidth(min: 214, ideal: 236, max: 286)
-            } detail: {
-                if model.games.isEmpty {
-                    // On macOS, attaching even a hidden inspector to the empty
-                    // library can loop NSHostingView/NSWindow size constraints.
-                    // Do not install the native inspector until it has content.
-                    detail
-                } else {
-                    detail
-                        .inspector(isPresented: Binding(
-                            get: { model.inspectorPresented && model.isLibraryPage },
-                            set: { model.inspectorPresented = $0 }
-                        )) {
-                            InspectorView(model: model)
-                                .inspectorColumnWidth(min: 300, ideal: 336, max: 440)
-                        }
-                }
-            }
-        .navigationSplitViewStyle(.balanced)
-        .onGeometryChange(for: CGFloat.self) { proxy in
-            proxy.size.width
-        } action: { width in
-            model.adaptInspector(to: width)
+            SidebarView(model: model)
+                .navigationSplitViewColumnWidth(min: 214, ideal: 236, max: 286)
+        } detail: {
+            pageContent
+                .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
         }
+        .navigationSplitViewStyle(.balanced)
         .background(WindowWash())
         .frame(minWidth: 960, maxWidth: .infinity, minHeight: 640, maxHeight: .infinity)
         .background(WindowChrome())
         .tint(Theme.accent)
         .transaction { transaction in
-            if reduceMotion {
+            if reduceMotion || !animationsEnabled {
                 transaction.animation = nil
                 transaction.disablesAnimations = true
             }
         }
-        .alert(
-            "移除来源？",
-            isPresented: Binding(
-                get: { model.sourcePendingRemoval != nil },
-                set: { if !$0 { model.sourcePendingRemoval = nil } }
-            ),
-            presenting: model.sourcePendingRemoval
-        ) { source in
-            Button("移除来源", role: .destructive) {
-                model.removeSource(source)
+        .popover(isPresented: Binding(
+            get: { model.detailGame != nil },
+            set: { if !$0 { model.closeGameDetails() } }
+        ), arrowEdge: .trailing) {
+            if let game = model.detailGame {
+                InspectorView(model: model, game: game)
+                    .frame(width: 370, height: 560)
             }
-            Button("取消", role: .cancel) {
-                model.sourcePendingRemoval = nil
+        }
+        .sheet(item: Binding(
+            get: { model.installationReview },
+            set: { if $0 == nil { model.cancelInstallationReview() } }
+        )) { review in
+            MTPInstallConfirmation(review: review) {
+                model.confirmMTPInstallation(review)
+            } onCancel: {
+                model.cancelInstallationReview()
             }
+        }
+        .onChange(of: model.isLibraryPage) { _, isLibrary in
+            if !isLibrary { model.closeGameDetails() }
+        }
+        .alert("移除来源？", isPresented: Binding(
+            get: { model.sourcePendingRemoval != nil },
+            set: { if !$0 { model.sourcePendingRemoval = nil } }
+        ), presenting: model.sourcePendingRemoval) { source in
+            Button("移除来源", role: .destructive) { model.removeSource(source) }
+            Button("取消", role: .cancel) { model.sourcePendingRemoval = nil }
         } message: { source in
             Text("将移除「\(source.name)」及其缓存条目。磁盘上的游戏文件不会被移动或删除。")
         }
     }
 
     @ViewBuilder
-    private var detail: some View {
-        switch model.selection ?? .all {
-        case .queue:
-            QueueView(model: model)
-        case .device:
-            DeviceView(model: model)
-        case .wifi:
-            WiFiConnectView(model: model)
-        case .maintenance:
-            MaintenanceView(model: model)
-        case .all, .recent, .unidentified, .source:
-            LibraryView(model: model)
+    private var pageContent: some View {
+        if model.isLibraryPage {
+            HStack(spacing: 0) {
+                LibraryView(model: model, installationMotion: installationMotion)
+                    .frame(minWidth: 0, maxWidth: .infinity)
+                Divider().overlay(Theme.hairline)
+                InstallationSidebar(model: model, installationMotion: installationMotion)
+                    .frame(width: 320)
+            }
+        } else {
+            switch model.selection ?? .all {
+            case .queue: QueueView(model: model)
+            case .device: DeviceView(model: model)
+            case .wifi: WiFiConnectView(model: model)
+            case .maintenance: MaintenanceView(model: model)
+            default: EmptyView()
+            }
         }
     }
 }

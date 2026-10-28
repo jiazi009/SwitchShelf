@@ -79,6 +79,8 @@ public actor SphairaInstaller {
             .appendingPathComponent("SwitchShelf/MTPInstallAttempts", isDirectory: true)
     }
 
+    public var hasUnverifiedWorker: Bool { exitUnverified }
+
     public func install(_ request: SphairaInstallRequest, timeoutSeconds: TimeInterval = 7200,
                         stallSeconds: TimeInterval = 120,
                         progress: @escaping @Sendable (SphairaInstallProgress) async -> Void = { _ in }) async throws -> SphairaInstallReport {

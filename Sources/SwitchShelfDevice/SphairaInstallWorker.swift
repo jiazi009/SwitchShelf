@@ -48,10 +48,10 @@ public enum SphairaInstallWorker {
                         try await journal.update(bytes: bytes, phase: "transferring")
                     }
                     result = uploaded
-                    let deviceIsBusy = uploaded.failure == .deviceBusy && uploaded.bytesSubmitted == 0
+                    let deviceIsBusy = uploaded.failure == .deviceBusy && uploaded.bytesSubmitted == 0 && uploaded.releaseVerified
                     guard deviceIsBusy, attempt < busyAttempts else { break }
                 } catch {
-                    guard result?.failure == .deviceBusy, result?.bytesSubmitted == 0, attempt < busyAttempts else { throw error }
+                    guard result?.failure == .deviceBusy, result?.bytesSubmitted == 0, result?.releaseVerified == true, attempt < busyAttempts else { throw error }
                 }
                 try await journal.update(bytes: 0, phase: "waiting")
                 try await Task.sleep(for: busyInterval)

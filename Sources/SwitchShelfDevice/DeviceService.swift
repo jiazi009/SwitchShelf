@@ -41,11 +41,7 @@ public actor DeviceService {
 
     private func read(storageDiagnosticsOnly: Bool) async throws -> InstalledInventory {
         try Task.checkCancellation()
-        let runtime = RuntimeLocation.preferredPath()
-        let inventory = try await InventoryCoordinator.shared.read(runtimePath: runtime,
-            useLibmtp: ProcessInfo.processInfo.environment["SWITCHSHELF_MTP_TRANSPORT"] == "libmtp",
-            useLibUSB: ProcessInfo.processInfo.environment["SWITCHSHELF_MTP_TRANSPORT"] == "libusb",
-            storageDiagnosticsOnly: storageDiagnosticsOnly)
+        let inventory = try await InventoryCoordinator.shared.read(storageDiagnosticsOnly: storageDiagnosticsOnly)
         try Task.checkCancellation()
         return inventory
     }
@@ -119,20 +115,5 @@ private enum USBDiscovery {
             result.append(USBDescriptor(vendorID: vendor, productID: product, registryID: registryID))
         }
         return result
-    }
-}
-
-enum RuntimeLocation {
-    static func preferredPath() -> String? {
-        if let override = ProcessInfo.processInfo.environment["SWITCHSHELF_LIBMTP_PATH"], !override.isEmpty {
-            return override
-        }
-        if let frameworks = Bundle.main.privateFrameworksURL {
-            for name in ["libmtp.dylib", "libmtp.9.dylib"] {
-                let path = frameworks.appendingPathComponent(name).path
-                if FileManager.default.fileExists(atPath: path) { return path }
-            }
-        }
-        return nil // Bridge searches executable-relative Frameworks, then development locations.
     }
 }

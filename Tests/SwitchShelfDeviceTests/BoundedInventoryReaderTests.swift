@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 import Testing
 import SwitchShelfDomain
@@ -13,7 +14,7 @@ struct BoundedInventoryReaderTests {
         return url
     }
 
-    @Test("Selected route is passed to the isolated probe")
+    @Test("The default and explicit inventory route are both libusb")
     func selectedRoute() async throws {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -24,9 +25,9 @@ struct BoundedInventoryReaderTests {
         let url = try script(scriptBody)
         defer { try? FileManager.default.removeItem(at: url) }
         let reader = BoundedInventoryReader(probeURL: url)
-        let native = try await reader.readInventory(timeoutSeconds: 1)
+        let defaultResult = try await reader.readInventory(timeoutSeconds: 1)
         let usb = try await reader.readInventory(timeoutSeconds: 1, transport: .libusb)
-        #expect(native.deviceID == "native")
+        #expect(defaultResult.deviceID == "libusb")
         #expect(usb.deviceID == "libusb")
     }
 
@@ -50,7 +51,7 @@ struct BoundedInventoryReaderTests {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         let data = try encoder.encode(inventory)
-        let json = "{\"schemaVersion\":1,\"mode\":\"inventory\",\"status\":\"partial\",\"inventory\":\(String(decoding: data, as: UTF8.self))}"
+        let json = "{\"schemaVersion\":1,\"mode\":\"inventory\",\"status\":\"partial\",\"transport\":\"libusb\",\"inventory\":\(String(decoding: data, as: UTF8.self))}"
         let url = try script("printf '%s\\n' '\(json)'\nexit 2\n")
         defer { try? FileManager.default.removeItem(at: url) }
         let result = try await BoundedInventoryReader(probeURL: url).readInventory(timeoutSeconds: 1)
@@ -64,7 +65,7 @@ struct BoundedInventoryReaderTests {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         let data = try encoder.encode(inventory)
-        let json = "{\"schemaVersion\":1,\"mode\":\"inventory\",\"status\":\"ok\",\"inventory\":\(String(decoding: data, as: UTF8.self))}"
+        let json = "{\"schemaVersion\":1,\"mode\":\"inventory\",\"status\":\"ok\",\"transport\":\"libusb\",\"inventory\":\(String(decoding: data, as: UTF8.self))}"
         let url = try script("printf '%s\\n' '\(json)'\nexit 0\n")
         defer { try? FileManager.default.removeItem(at: url) }
         await #expect(throws: ProbeError.self) {
@@ -74,7 +75,7 @@ struct BoundedInventoryReaderTests {
 
     @Test("Session access failure retains an actionable MTP error")
     func sessionAccessFailure() async throws {
-        let json = #"{"schemaVersion":1,"mode":"inventory","status":"error","error":{"code":"accessDeniedOrBusy","message":"fixture"}}"#
+        let json = #"{"schemaVersion":1,"mode":"inventory","status":"error","transport":"libusb","error":{"code":"accessDeniedOrBusy","message":"fixture"}}"#
         let url = try script("printf '%s\\n' '\(json)'\nexit 1\n")
         defer { try? FileManager.default.removeItem(at: url) }
         do {
@@ -111,6 +112,107 @@ struct BoundedInventoryReaderTests {
                 Issue.record("Unverified exit must fence retries")
             } catch ProbeError.previousProcessUnverified {}
         }
+    }
+
+    @Test("Supervisor signal, malformed output and inconsistent exit fence later opens")
+    func unknownWorkerExitFencesAllRetries() async throws {
+        for failureBody in [
+            "kill -TERM $$",
+            "printf '%s\\n' 'malformed'; exit 1",
+            "printf '%s\\n' '{\"schemaVersion\":1,\"mode\":\"inventory\",\"status\":\"error\",\"transport\":\"libusb\",\"error\":{\"code\":\"busy\",\"message\":\"fixture\"}}'; exit 0"
+        ] {
+            let marker = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            defer { try? FileManager.default.removeItem(at: marker) }
+            let url = try script("printf '%s\\n' started >> '\(marker.path)'\n" + failureBody + "\n")
+            defer { try? FileManager.default.removeItem(at: url) }
+            let reader = BoundedInventoryReader(probeURL: url)
+            for _ in 0..<2 {
+                do {
+                    _ = try await reader.readInventory(timeoutSeconds: 1)
+                    Issue.record("Unknown worker exit must fence every later open")
+                } catch ProbeError.previousProcessUnverified {}
+            }
+            #expect(await reader.hasUnverifiedWorker)
+            #expect(try String(contentsOf: marker, encoding: .utf8) == "started\n")
+        }
+    }
+
+    @Test("Cancellation asks the supervisor to reap its worker before retry")
+    func cancellationWaitsForVerifiedWorkerExit() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let ready = directory.appendingPathComponent("ready")
+        let workerPID = directory.appendingPathComponent("worker-pid")
+        let retry = directory.appendingPathComponent("retry")
+        let inventory = InstalledInventory(deviceID: "fixture", isComplete: true)
+        let encoder = JSONEncoder(); encoder.dateEncodingStrategy = .iso8601
+        let data = try encoder.encode(inventory)
+        let json = "{\"schemaVersion\":1,\"mode\":\"inventory\",\"status\":\"ok\",\"transport\":\"libusb\",\"inventory\":\(String(decoding: data, as: UTF8.self))}"
+        let url = try script("""
+        if [ -e '\(retry.path)' ]; then printf '%s\\n' '\(json)'; exit 0; fi
+        /bin/sleep 30 &
+        worker=$!
+        printf '%s' "$worker" > '\(workerPID.path)'
+        touch '\(ready.path)'
+        while [ ! -e "$SWITCHSHELF_PROBE_CANCEL_PATH" ]; do /bin/sleep 0.02; done
+        kill "$worker"
+        wait "$worker" 2>/dev/null
+        printf '%s\\n' '{"schemaVersion":1,"mode":"inventory","status":"error","transport":"libusb","error":{"code":"cancelled","message":"worker reaped"}}'
+        exit 1
+        """)
+        defer { try? FileManager.default.removeItem(at: url) }
+        let reader = BoundedInventoryReader(probeURL: url)
+        let task = Task { try await reader.readInventory(timeoutSeconds: 30) }
+        let readyDeadline = ContinuousClock.now.advanced(by: .seconds(3))
+        while !FileManager.default.fileExists(atPath: ready.path), ContinuousClock.now < readyDeadline {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        #expect(FileManager.default.fileExists(atPath: ready.path))
+        let started = ContinuousClock.now
+        task.cancel()
+        await #expect(throws: CancellationError.self) { try await task.value }
+        #expect(started.duration(to: .now) < .seconds(3))
+        #expect(await !reader.hasUnverifiedWorker)
+        let pid = try #require(Int32(String(contentsOf: workerPID, encoding: .utf8)))
+        #expect(Darwin.kill(pid, 0) == -1 && errno == ESRCH)
+        try Data().write(to: retry)
+        #expect(try await reader.readInventory(timeoutSeconds: 1).isComplete)
+    }
+
+    @Test("A task cancelled before reading launches no helper")
+    func cancelledBeforeLaunch() async throws {
+        let marker = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: marker) }
+        let url = try script("touch '\(marker.path)'\nexit 1\n")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let reader = BoundedInventoryReader(probeURL: url)
+        let task = Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            return try await reader.readInventory(timeoutSeconds: 1)
+        }
+        await #expect(throws: CancellationError.self) { try await task.value }
+        #expect(!FileManager.default.fileExists(atPath: marker.path))
+        #expect(await !reader.hasUnverifiedWorker)
+    }
+
+    @Test("An unresponsive supervisor is fenced after cancellation")
+    func unresponsiveCancellationFences() async throws {
+        let url = try script("exec /bin/sleep 30\n")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let reader = BoundedInventoryReader(probeURL: url)
+        let task = Task { try await reader.readInventory(timeoutSeconds: 30) }
+        try await Task.sleep(for: .milliseconds(200))
+        task.cancel()
+        do {
+            _ = try await task.value
+            Issue.record("Unresponsive supervisor must fence")
+        } catch ProbeError.previousProcessUnverified {}
+        #expect(await reader.hasUnverifiedWorker)
+        do {
+            _ = try await reader.readInventory(timeoutSeconds: 1)
+            Issue.record("A fenced reader must not spawn again")
+        } catch ProbeError.previousProcessUnverified {}
     }
 
     @Test("A hung fake executable is stopped before a retry can begin")

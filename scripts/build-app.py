@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the native app with required libusb installation runtime and optional libmtp inventory fallback."""
+"""Build the native app with the required libusb inventory and installation runtime."""
 from pathlib import Path
 import argparse
 import os
@@ -10,7 +10,6 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument("--with-libmtp", action="store_true", help="Bundle optional libmtp fallback and its native dependencies")
 parser.add_argument("--icon", type=Path, help="Selected PNG app icon; otherwise use Assets/AppIcon.png if present")
 args = parser.parse_args()
 icon = args.icon or ROOT / "Assets" / "AppIcon.png"
@@ -77,8 +76,8 @@ def copy_library(source):
         subprocess.run(["install_name_tool", "-change", old, "@loader_path/" + new.name, str(target)], check=True)
     return target
 
-# The installation helper uses a real streamed libusb data phase, not whole-file
-# ImageCaptureCore outData. Never ship an enabled installer without its runtime.
+# Inventory and installation use the same explicitly opened libusb adapter.
+# Never ship the app without its runtime.
 usb = next((p for p in (Path("/opt/homebrew/lib/libusb-1.0.0.dylib"),
                       Path("/usr/local/lib/libusb-1.0.0.dylib")) if p.exists()), None)
 if not usb:
@@ -98,16 +97,9 @@ version = usb.resolve().parent.parent.name
     f"Corresponding upstream source: https://github.com/libusb/libusb/tree/v{version}\n"
     "The library can be replaced with a compatible libusb 1.0 ABI build.\n", encoding="utf-8")
 
-mtp = next((p for p in (Path("/opt/homebrew/lib/libmtp.dylib"), Path("/usr/local/lib/libmtp.dylib")) if p.exists()), None) if args.with_libmtp else None
-if mtp:
-    target = copy_library(mtp)
-    alias = frameworks / "libmtp.dylib"
-    if alias.is_symlink():
-        alias.unlink()
-    if not alias.exists():
-        alias.symlink_to(target.name)
-elif args.with_libmtp:
-    print("libmtp runtime not available: bundle will show an actionable device-read error.")
+# Remove optional runtimes left by an older app bundle; all USB sessions use libusb.
+for stale in frameworks.glob("libmtp*.dylib"):
+    stale.unlink()
 
 for target in copied.values():
     subprocess.run(["codesign", "--force", "--sign", "-", str(target)], check=True)

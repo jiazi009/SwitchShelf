@@ -44,6 +44,8 @@ private actor CallbackLatch {
     func release() { released = true; continuation?.resume(); continuation = nil }
 }
 private actor BusyTransport: SphairaUploadTransport {
+    var closeFails = false
+    init(closeFails: Bool = false) { self.closeFails = closeFails }
     func inspectSession() -> SphairaUploadSession {
         .init(deviceVersion: "Sphaira/fixture", supportedOperations: [0x9808, 0x100d],
               storages: [.init(id: 9, name: "Games"), .init(id: 8, name: "Install")], lastTransaction: 20)
@@ -60,7 +62,7 @@ private actor BusyTransport: SphairaUploadTransport {
         PTPCodec.append(UInt32(21), to: &data)
         return data
     }
-    func close() {}
+    func close() throws { if closeFails { throw SphairaUploadError.invalidResponse } }
 }
 private actor WorkerTransport: SphairaUploadTransport {
     var responses = 0
@@ -140,6 +142,22 @@ struct SphairaInstallerTests {
         let state = try SphairaAttemptFile.load(SphairaInstallProgress.self, at: fixture.attempts.appendingPathComponent("state.json"))
         #expect(state.phase == "transferring" && state.bytesSubmitted == 13)
         #expect(try Data(contentsOf: fixture.source) == Data(0..<13))
+    }
+
+    @Test func deviceBusyWithUnverifiedReleaseNeverRetries() async throws {
+        let fixture = try InstallFixture(); defer { fixture.remove() }
+        let request = try fixture.request().confirmed()
+        let observer = FactoryObservation()
+        let result = await SphairaInstallWorker.execute(request: request, directory: fixture.attempts,
+            leaseURL: fixture.directory.appendingPathComponent("lease"),
+            busyInterval: .milliseconds(1), busyAttempts: 3) {
+                _ = await observer.opened()
+                return BusyTransport(closeFails: true)
+            }
+        #expect(result.transfer.failure == .deviceBusy)
+        #expect(result.transfer.bytesSubmitted == 0)
+        #expect(!result.transfer.releaseVerified)
+        #expect(await observer.opens == 1)
     }
 
     @Test func persistentDeviceBusySendsNothingAndStops() async throws {

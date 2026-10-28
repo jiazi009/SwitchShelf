@@ -18,13 +18,13 @@ struct ProbeResult: Codable {
     var error: ProbeFailure?
 }
 let usage = """
-Usage: switchshelf-probe [discover|inventory|storages] [--timeout 1...120] [--transport native|libmtp|libusb] [--json]
+Usage: switchshelf-probe [discover|inventory|storages] [--timeout 1...120] [--transport libusb] [--json]
 
 Default: discover (IOKit only; never opens MTP). JSON is always emitted.
 inventory is explicitly opt-in, metadata-only, and must not overlap another device client.
 Supported inventory storages: sphaira Games and DBI Installed games. Other storages are never traversed.
 storages is explicitly opt-in and lists storage descriptions only; it never lists content objects.
-Default inventory transport: native (system ImageCaptureCore broker); libusb is an explicit read-only comparison route.
+Inventory transport: libusb only, shared with installation. No alternate transport or automatic fallback.
 Installation is not a public probe mode; the app uses a separate token-gated, explicitly confirmed direct worker.
 Exit: 0 successful, 2 incomplete inventory (also successful storage-only diagnostics), 1 error, 64 usage, 124 deadline exceeded.
 Inventory identities are session-scoped; runtime environment remains unknown.
@@ -48,6 +48,7 @@ func failure(mode: String, code: String, message: String, transport: String? = n
 // Worker output is an owner-only temporary JSON file. Native stdout/stderr are discarded
 // by the parent: no serials or unrelated libusb diagnostics can contaminate JSON/logs.
 let arguments = Array(CommandLine.arguments.dropFirst())
+let invocationParentPID = getppid()
 // Separate explicit installation entry point. Never reached by discover/inventory/storages.
 // A direct parent process passes one reviewed, confirmed request in a private directory.
 if arguments.first == "--sphaira-install-worker" {
@@ -74,10 +75,22 @@ if arguments.first == "--sphaira-install-worker" {
     Darwin.exit(1)
 }
 if arguments.first == "--internal-worker", arguments.count == 4,
-   ProcessInfo.processInfo.environment["SWITCHSHELF_PROBE_WORKER_TOKEN"] == arguments[1] {
+   ProcessInfo.processInfo.environment["SWITCHSHELF_PROBE_WORKER_TOKEN"] == arguments[1],
+   UUID(uuidString: arguments[1]) != nil,
+   ["discover", "inventory", "storages"].contains(arguments[2]),
+   invocationParentPID > 1,
+   ProcessInfo.processInfo.environment["SWITCHSHELF_PROBE_PARENT_PID"] == String(invocationParentPID) {
     let mode = arguments[2]
     let output = URL(fileURLWithPath: arguments[3])
-    let transport = ProcessInfo.processInfo.environment["SWITCHSHELF_MTP_TRANSPORT"] ?? "native"
+    let transport = "libusb"
+    // A supervisor killed by its caller cannot leave a native worker orphaned.
+    // A Dispatch timer remains independent of blocked Swift actor/native calls.
+    let parentWatch = DispatchSource.makeTimerSource(queue: .global(qos: .utility))
+    parentWatch.schedule(deadline: .now(), repeating: .milliseconds(200))
+    parentWatch.setEventHandler {
+        if getppid() != invocationParentPID { Darwin._exit(1) }
+    }
+    parentWatch.resume()
     Task { @MainActor in
         let result: ProbeResult
         var code: Int32 = 0
@@ -120,14 +133,14 @@ if arguments.first == "--internal-worker", arguments.count == 4,
         catch { Darwin.exit(1) }
         Darwin.exit(code)
     }
-    RunLoop.main.run()
+    withExtendedLifetime(parentWatch) { RunLoop.main.run() }
     Darwin.exit(1)
 }
 if arguments.contains("--help") || arguments.contains("-h") {
     print(usage); Darwin.exit(0)
 }
 var mode = "discover"
-var transport = "native"
+var transport = "libusb"
 var timeout: Int?
 var index = 0
 if let first = arguments.first, ["discover", "inventory", "storages"].contains(first) { mode = first; index = 1 }
@@ -139,7 +152,7 @@ while index < arguments.count {
     }
     let value = arguments[index + 1]
     if option == "--timeout", let seconds = Int(value), (1...120).contains(seconds) { timeout = seconds }
-    else if option == "--transport", ["native", "libmtp", "libusb"].contains(value) { transport = value }
+    else if option == "--transport", value == "libusb" { transport = value }
     else { emit(failure(mode: mode, code: "usage", message: usage), exitCode: 64) }
     index += 2
 }
@@ -158,28 +171,44 @@ let token = UUID().uuidString
 process.arguments = ["--internal-worker", token, mode, output.path]
 var environment = ProcessInfo.processInfo.environment
 environment["SWITCHSHELF_PROBE_WORKER_TOKEN"] = token
-environment["SWITCHSHELF_MTP_TRANSPORT"] = transport
+environment["SWITCHSHELF_PROBE_PARENT_PID"] = String(getpid())
+environment.removeValue(forKey: "SWITCHSHELF_MTP_TRANSPORT")
 process.environment = environment
 process.standardOutput = FileHandle.nullDevice
 process.standardError = FileHandle.nullDevice
 process.standardInput = FileHandle.nullDevice
 let finished = DispatchSemaphore(value: 0)
+let cancelPath = ProcessInfo.processInfo.environment["SWITCHSHELF_PROBE_CANCEL_PATH"]
+func cancellationRequested() -> Bool {
+    getppid() != invocationParentPID || cancelPath.map { FileManager.default.fileExists(atPath: $0) } == true
+}
+if cancellationRequested() {
+    try? manager.removeItem(at: directory)
+    emit(failure(mode: mode, code: "cancelled", message: "Read-only probe cancelled before worker launch.",
+        transport: mode == "discover" ? nil : transport), exitCode: 1)
+}
 process.terminationHandler = { _ in finished.signal() }
 do { try process.run() }
 catch {
     try? manager.removeItem(at: directory)
     emit(failure(mode: mode, code: "launchFailed", message: "Cannot launch isolated read-only probe worker."), exitCode: 1)
 }
-if finished.wait(timeout: .now() + .seconds(seconds)) == .timedOut {
+let deadline = ContinuousClock.now.advanced(by: .seconds(seconds))
+while finished.wait(timeout: .now() + .milliseconds(50)) == .timedOut {
+    let cancelled = cancellationRequested()
+    guard cancelled || ContinuousClock.now >= deadline else { continue }
     process.terminate()
     if finished.wait(timeout: .now() + .milliseconds(300)) == .timedOut {
         Darwin.kill(process.processIdentifier, SIGKILL)
-        if finished.wait(timeout: .now() + .milliseconds(300)) == .timedOut {
-            // A later invocation cannot assume the USB worker is gone.
+        if finished.wait(timeout: .now() + .milliseconds(700)) == .timedOut {
+            // No new USB operation is safe without positive direct-worker exit.
             emit(failure(mode: mode, code: "workerExitUnverified", message: "Cannot verify the read-only worker exited; do not retry while it may still own the USB session.", transport: mode == "discover" ? nil : transport), exitCode: 1)
         }
     }
     try? manager.removeItem(at: directory)
+    if cancelled {
+        emit(failure(mode: mode, code: "cancelled", message: "Read-only probe cancelled; direct USB worker exit verified, inventory coverage unknown.", transport: mode == "discover" ? nil : transport), exitCode: 1)
+    }
     emit(failure(mode: mode, code: "timeout", message: "Read-only probe exceeded \(seconds)s; worker stopped, coverage unknown. Keep sphaira/DBI in MTP mode and check permissions/other clients before a manual retry.", transport: mode == "discover" ? nil : transport), exitCode: 124)
 }
 let result: ProbeResult

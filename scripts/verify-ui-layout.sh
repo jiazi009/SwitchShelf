@@ -142,7 +142,7 @@ swiftc -parse-as-library -swift-version 6 -target arm64-apple-macosx26.0 \
   "${task_sources[@]}" \
   -L "$task_modules" -lSwitchShelfDomain -lSwitchShelfLibrary -lSwitchShelfDevice -lSwitchShelfBackend \
   "$task_modules/CDBIBridge.o" "$task_modules/CDBIBackendUSB.o" \
-  -framework AppKit -framework SwiftUI -framework IOKit -framework ImageCaptureCore -lsqlite3 \
+  -framework AppKit -framework SwiftUI -framework IOKit -lsqlite3 \
   -o "$task_temporary/SwitchShelfUIReview"
 
 task_executable="$task_temporary/SwitchShelfUIReview"

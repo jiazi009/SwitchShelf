@@ -384,17 +384,7 @@ struct InventoryTests {
         #expect(!result.isComplete)
         #expect(result.issues.allSatisfy { !$0.contains("FixtureFailure") })
     }
-    @Test func missingRuntimeIsActionableAndReleasesGateWithoutUSB() throws {
-        for _ in 0..<2 {
-            do {
-                _ = try NativeMTPSession(runtimePath: "/SwitchShelf-fixture/nonexistent/libmtp.9.dylib")
-                Issue.record("Missing runtime unexpectedly opened")
-            } catch let error as DeviceServiceError {
-                #expect(error.code == .runtimeMissing)
-                #expect(error.message.contains("SWITCHSHELF_LIBMTP_PATH"))
-            }
-        }
-    }
+
 }
 
 private func ptpString(_ value: String) -> Data {

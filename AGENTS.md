@@ -8,3 +8,4 @@
 - Report tests, files, commit and limitations via the injected Orca orchestration lifecycle. Read coordinator messages at checkpoints.
 - If a .codegraph/ directory exists, use CodeGraph before grep/find or reading code; otherwise skip it. Do not index automatically.
 
+每次完成一个功能开发，都提交一次 commit

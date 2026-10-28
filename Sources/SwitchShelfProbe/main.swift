@@ -87,8 +87,9 @@ if arguments.first == "--internal-worker", arguments.count == 4,
     // A Dispatch timer remains independent of blocked Swift actor/native calls.
     let parentWatch = DispatchSource.makeTimerSource(queue: .global(qos: .utility))
     parentWatch.schedule(deadline: .now(), repeating: .milliseconds(200))
-    parentWatch.setEventHandler {
-        if getppid() != invocationParentPID { Darwin._exit(1) }
+    let expectedParentPID = invocationParentPID
+    parentWatch.setEventHandler { @Sendable [expectedParentPID] in
+        if getppid() != expectedParentPID { Darwin._exit(1) }
     }
     parentWatch.resume()
     Task { @MainActor in

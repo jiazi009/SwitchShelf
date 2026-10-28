@@ -12,6 +12,25 @@ extension EnvironmentValues {
     }
 }
 
+/// A confirmed row leaves toward the sidebar edge. Reduced motion keeps only a
+/// short fade; disabled animations also keep fixture captures deterministic.
+enum InstallationStagingMotion {
+    static func animation(reduceMotion: Bool, enabled: Bool) -> Animation? {
+        guard enabled else { return nil }
+        return reduceMotion ? .easeOut(duration: 0.15) : .smooth(duration: 0.38)
+    }
+
+    static func transition(completed: Bool, reduceMotion: Bool, enabled: Bool) -> AnyTransition {
+        guard enabled else { return .identity }
+        guard !reduceMotion else { return .opacity }
+        let insertion = AnyTransition.opacity.combined(with: .scale(scale: 0.94))
+        let removal = completed
+            ? AnyTransition.move(edge: .trailing).combined(with: .opacity)
+            : insertion
+        return .asymmetric(insertion: insertion, removal: removal)
+    }
+}
+
 /// Shared between the original cover and its derived staging thumbnail. Source
 /// package files are never moved or copied by this visual transition.
 struct InstallationMotion: ViewModifier {

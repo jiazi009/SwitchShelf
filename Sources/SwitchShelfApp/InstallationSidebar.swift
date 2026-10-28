@@ -87,6 +87,11 @@ struct InstallationSidebar: View {
             if model.isInstalling {
                 Button("停止当前传输", role: .destructive) { model.cancelMTPInstallation() }
                     .font(.caption)
+            } else if model.isVerifyingInstall {
+                Button("停止核对") { model.cancelMTPInstallation() }
+                    .font(.caption)
+                    .help("停止读取设备清单，保留已发送的游戏和待选文件。")
+                    .accessibilityIdentifier("cancel-install-verification")
             }
         }
         .padding(16)
@@ -104,7 +109,7 @@ struct InstallationSidebar: View {
             let detail = model.installListConfirmed
                 ? "已重新读取设备清单，所选游戏显示为已安装。"
                 : model.isVerifyingInstall
-                    ? "正在同一条 USB 连接上反复读取 Games 清单，不用拔线。所选游戏出现后才会显示安装成功。"
+                    ? model.verificationDetail ?? "正在通过 libusb 读取 Games 清单；确认所选内容后显示安装成功。"
                     : "已提交 \(formatByteCount(Int64(clamping: submitted))) / \(formatByteCount(Int64(clamping: total)))。发送完成不等于设备已确认安装。"
             progressBlock(
                 title: summary.headline,
@@ -140,6 +145,8 @@ struct InstallationSidebar: View {
 private struct StagedGameList: View {
     @Bindable var model: AppModel
     let installationMotion: Namespace.ID
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.installationAnimationsEnabled) private var animationsEnabled
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -158,7 +165,10 @@ private struct StagedGameList: View {
                         StagedGameCard(model: model, item: item, index: index,
                                        installationMotion: installationMotion)
                             .id(item.id)
-                            .transition(.opacity.combined(with: .scale(scale: 0.94)))
+                            .transition(InstallationStagingMotion.transition(
+                                completed: model.completedInstallGameIDs.contains(item.gameID),
+                                reduceMotion: reduceMotion,
+                                enabled: animationsEnabled))
                     }
                     if model.plan.isEmpty {
                         Text("点击左侧游戏卡片加入待选区")
@@ -169,6 +179,8 @@ private struct StagedGameList: View {
                     }
                 }
                 .padding(14)
+                .animation(InstallationStagingMotion.animation(
+                    reduceMotion: reduceMotion, enabled: animationsEnabled), value: model.plan.map(\.id))
             }
             .accessibilityIdentifier("staging-viewport")
             .onChange(of: model.plan.count) { old, count in
@@ -195,7 +207,8 @@ private struct StagedGameCard: View {
                     else { CoverPlaceholder(title: item.title, seed: item.id) }
                 }
                 .frame(width: 46, height: 60)
-                .modifier(InstallationMotion(id: item.gameID, namespace: installationMotion))
+                .modifier(InstallationMotion(id: item.gameID, namespace: installationMotion,
+                                             enabled: !model.completedInstallGameIDs.contains(item.gameID)))
                 .accessibilityIdentifier("staging-cover-\(item.gameID)")
                 VStack(alignment: .leading, spacing: 5) {
                     Text(item.title).font(.system(size: 12, weight: .semibold)).lineLimit(2)

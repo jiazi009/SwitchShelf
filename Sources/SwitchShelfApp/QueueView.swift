@@ -44,13 +44,6 @@ struct QueueView: View {
             }
         }
         .background(Theme.canvas)
-        .sheet(item: $model.installationReview) { request in
-            MTPInstallConfirmation(review: request) {
-                model.confirmMTPInstallation(request)
-            } onCancel: {
-                model.installationReview = nil
-            }
-        }
         .alert("清空安装队列？", isPresented: $showClearAlert) {
             Button("清空队列", role: .destructive) { model.clearPlan() }
             Button("取消", role: .cancel) {}
@@ -108,7 +101,7 @@ struct QueueView: View {
 
     @ViewBuilder
     private var executionButtons: some View {
-        Button(model.isReviewingInstall ? "准备确认…" : "核对并发送安装队列…") {
+        Button(model.isReviewingInstall ? "准备发送…" : "开始安装") {
             Task { await model.prepareMTPInstallationReview() }
         }
         .buttonStyle(.borderedProminent)
@@ -117,7 +110,7 @@ struct QueueView: View {
         .disabled(!model.canReviewMTPInstallation)
         .help(model.wifiBlocksUSB
               ? "无线 FTP 仍连接或正在连接，已暂停 USB 安装。"
-              : "需要检查通过、统一目标且每个游戏最多选择一个更新；此按钮先显示确认页，不会立即写设备。")
+              : "需要检查通过、统一目标且每个游戏最多选择一个更新。点击后立即按顺序发送，不再弹出确认窗口。")
 
         Button("检查计划") { Task { await model.checkPlan() } }
             .buttonStyle(.bordered)
@@ -146,7 +139,7 @@ struct QueueView: View {
                         .font(.system(size: 13, weight: .semibold))
                     BadgePill(text: "按顺序发送", systemImage: "list.number", tone: .accent)
                 }
-                Text("检查计划后核对所有文件及设备端设置。Switch 必须进入 sphaira 的 MTP Install 页面；目标存储由设备端选择。文件发送完成不等于安装成功。")
+                Text("点击开始安装后立即发送。Switch 必须进入 sphaira 的 MTP Install 页面；目标存储由设备端选择。文件发送完成不等于安装成功。")
                     .font(.system(size: 10.5))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

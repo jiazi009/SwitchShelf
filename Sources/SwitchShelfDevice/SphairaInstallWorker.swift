@@ -16,6 +16,7 @@ public enum SphairaInstallWorker {
     }
 
     static func execute(request: SphairaInstallRequest, directory: URL, leaseURL: URL,
+                        busyInterval: Duration = .seconds(3), busyAttempts: Int = 200,
                         makeTransport: @Sendable () async throws -> any SphairaUploadTransport) async -> SphairaInstallReport {
         var source: SphairaPackageSource?
         var completedResult: SphairaUploadResult?
@@ -33,15 +34,36 @@ public enum SphairaInstallWorker {
             try await journal.update(bytes: 0, phase: "opening")
             let lease = try DeviceLease.acquire(at: leaseURL)
             defer { lease.release() }
-            let transport = try await makeTransport()
-            let result = await SphairaMTPUpload().upload(name: request.name, from: openedSource, through: transport) { bytes in
-                try await journal.update(bytes: bytes, phase: "transferring")
+            // Sphaira returns PTP Device Busy (0x2019) while it is still installing the
+            // previous file. That refusal sends nothing. Wait for the same file, then
+            // open a new session. A transfer that already submitted bytes is never repeated.
+            var result: SphairaUploadResult?
+            var attempt = 0
+            while attempt < max(1, busyAttempts) {
+                try Task.checkCancellation()
+                attempt += 1
+                do {
+                    let transport = try await makeTransport()
+                    let uploaded = await SphairaMTPUpload().upload(name: request.name, from: openedSource, through: transport) { bytes in
+                        try await journal.update(bytes: bytes, phase: "transferring")
+                    }
+                    result = uploaded
+                    let deviceIsBusy = uploaded.failure == .deviceBusy && uploaded.bytesSubmitted == 0
+                    guard deviceIsBusy, attempt < busyAttempts else { break }
+                } catch {
+                    guard result?.failure == .deviceBusy, result?.bytesSubmitted == 0, attempt < busyAttempts else { throw error }
+                }
+                try await journal.update(bytes: 0, phase: "waiting")
+                try await Task.sleep(for: busyInterval)
             }
+            guard let result else { throw SphairaUploadError.invalidResponse }
             completedResult = result
             await openedSource.close()
             let message: String
             if result.outcome == .transferredAwaitingConfirmation {
                 message = "文件传输已获 MTP 确认，等待核对 sphaira 安装结果；这不代表已安装。"
+            } else if result.failure == .deviceBusy {
+                message = "设备仍在安装上一份文件，这一份还没有发送。请等 Switch 显示完成后再继续。设备返回 PTP 错误 0x2019。"
             } else if result.outcome == .notStarted {
                 message = "未开始发送游戏包。请检查 sphaira 模式、文件和连接。"
             } else {

@@ -34,7 +34,6 @@ final class AppModel {
     private(set) var preparation: SphairaPreflightResult?
     private(set) var isInstalling = false
     private(set) var isReviewingInstall = false
-    var installationReview: SphairaBatchReview?
     private(set) var installStatuses: [SphairaBatchStatus] = []
 
     // MARK: UI state
@@ -142,7 +141,7 @@ final class AppModel {
             guard let source = snapshot.sources.first(where: { $0.id == id }) else { return "" }
             return "\(sourceGameCount(id)) 款游戏 · 来源\(source.availability.label)"
         case .queue:
-            return "\(plan.count) 项计划 · \(formatByteCount(planTotalBytes)) · " + (isInstalling ? "正在发送队列" : "需确认后发送")
+            return "\(plan.count) 项计划 · \(formatByteCount(planTotalBytes)) · " + (isInstalling ? "正在发送队列" : "点击后立即发送")
         case .device:
             return deviceSubtitle
         case .wifi:
@@ -1332,27 +1331,26 @@ final class AppModel {
             guard input == preflightInput, !isInstalling, !isReadingInventory, !isDiscovering,
                   !isScanning, !wifiBlocksUSB, preparationIsCurrent, queueValidationIssues.isEmpty else { return }
             reviewedPlan = input
-            installationReview = SphairaBatchReview(items: items)
+            startMTPInstallation(SphairaBatchReview(items: items))
         } catch {
-            notice = AppNotice(level: .warning, title: "无法准备安装确认", message: "源文件元数据或路径已变化，请重新扫描并检查计划。未连接设备。")
+            notice = AppNotice(level: .warning, title: "无法开始安装", message: "源文件元数据或路径已变化，请重新扫描并检查计划。未连接设备。")
         }
     }
 
-    func confirmMTPInstallation(_ review: SphairaBatchReview) {
+    private func startMTPInstallation(_ review: SphairaBatchReview) {
         if wifiBlocksUSB {
             notice = wifiBlocksUSBNotice
             return
         }
         guard !isInstalling, !isReadingInventory, !isDiscovering, !isScanning, !wifiBlocksUSB,
-              installationReview?.id == review.id, reviewedPlan == preflightInput,
+              !review.items.isEmpty, reviewedPlan == preflightInput,
               preparationIsCurrent, queueValidationIssues.isEmpty else {
-            installationReview = nil
+            reviewedPlan = nil
             return
         }
-        installationReview = nil
         reviewedPlan = nil
         if NSWorkspace.shared.runningApplications.contains(where: { $0.bundleIdentifier == "io.ganeshrvel.openmtp" }) {
-            notice = AppNotice(level: .warning, title: "请先完整退出 OpenMTP", message: "未启动传输。请退出其他 MTP 客户端后重新核对确认。")
+            notice = AppNotice(level: .warning, title: "请先完整退出 OpenMTP", message: "未启动传输。请退出其他 MTP 客户端后再点击开始安装。")
             return
         }
         isInstalling = true
@@ -1371,10 +1369,11 @@ final class AppModel {
                     guard let self, self.isInstalling else { return }
                     switch event {
                     case .statuses(let statuses): self.installStatuses = statuses
-                    case .progress(let id, let bytes):
+                    case .progress(let id, let bytes, let phase):
                         guard let index = self.installStatuses.firstIndex(where: { $0.item.id == id }),
                               case .sending = self.installStatuses[index].state else { return }
                         self.installStatuses[index].bytesSubmitted = bytes
+                        self.installStatuses[index].phase = phase
                     }
                 }
             })
@@ -1382,7 +1381,7 @@ final class AppModel {
             let incomplete = self.installStatuses.contains { if case .waiting = $0.state { true } else { false } }
             self.notice = AppNotice(level: .warning,
                 title: stopped || incomplete ? "队列已停止" : "传输完成，等待设备确认",
-                message: stopped || incomplete ? "后续文件未发送；请检查各项结果及设备状态，不会自动重试。" : "文件已发送；请在设备端确认安装结果并刷新设备清单。")
+                message: stopped || incomplete ? "后续文件未发送。请查看设备上的安装结果；已经发送完成的文件不会自动重传。" : "文件已发送；请在设备端确认安装结果并刷新设备清单。")
         }
     }
 

@@ -55,13 +55,15 @@ protocol SphairaUploadSource: Sendable {
 
 public struct SphairaUploadResult: Sendable, Equatable, Codable {
     public enum Outcome: String, Sendable, Codable { case notStarted, deviceStateUnknown, transferredAwaitingConfirmation }
-    public enum Failure: String, Sendable, Codable { case cancelled, source, transport, protocolViolation, unsupportedSession, invalidRequest, alreadyUsed }
+    public enum Failure: String, Sendable, Codable { case cancelled, source, transport, protocolViolation, unsupportedSession, invalidRequest, alreadyUsed, deviceBusy }
     public let outcome: Outcome
     /// Host-side submission, NOT a device installation acknowledgment or resume offset.
     public let bytesSubmitted: UInt64
     public let failure: Failure?
     public let releaseVerified: Bool
     public var detail: String? = nil
+    /// Explicit PTP response, when the device sent one. `0x2019` with no submitted bytes means the operation was refused as busy.
+    public var responseCode: UInt16? = nil
 }
 
 /// Single-file, single-use engine, opened only in the confirmed isolated worker.
@@ -82,6 +84,7 @@ actor SphairaMTPUpload {
         var outcome = SphairaUploadResult.Outcome.notStarted
         var failure: SphairaUploadResult.Failure?
         var detail: String?
+        var responseCode: UInt16?
         var submitted: UInt64 = 0
         var sourceOperation = false
         let byteCount = source.byteCount
@@ -145,10 +148,17 @@ actor SphairaMTPUpload {
             failure = .cancelled
         } catch {
             if let native = error as? SphairaNativeError { detail = native.localizedDescription }
+            var refusedWhileBusy = false
             if let error = error as? SphairaUploadError, case .responseCode(let code) = error {
+                responseCode = code
                 detail = String(format: "设备返回 PTP 错误 0x%04X；请核对 MTP Install 模式和设备屏幕。", Int(code))
+                // An explicit Device Busy response means this operation was not accepted.
+                refusedWhileBusy = code == 0x2019 && submitted == 0
             }
-            if sourceOperation { failure = .source }
+            if refusedWhileBusy {
+                outcome = .notStarted
+                failure = .deviceBusy
+            } else if sourceOperation { failure = .source }
             else if let error = error as? SphairaUploadError {
                 switch error {
                 case .unsupportedSession: failure = .unsupportedSession
@@ -159,6 +169,6 @@ actor SphairaMTPUpload {
         }
         var released = true
         do { try await transport.close() } catch { released = false }
-        return .init(outcome: outcome, bytesSubmitted: submitted, failure: failure, releaseVerified: released, detail: detail)
+        return .init(outcome: outcome, bytesSubmitted: submitted, failure: failure, releaseVerified: released, detail: detail, responseCode: responseCode)
     }
 }

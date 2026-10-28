@@ -297,7 +297,7 @@ struct DeviceView: View {
                     Image(systemName: "lock.shield.fill")
                         .font(.system(size: 10))
                         .foregroundStyle(Theme.installed)
-                    Text("这里只读取 Games / Installed games 元数据；Mounts、Contents、存档、安装与测速入口不参与扫描。安装队列需核对文件并确认，在 sphaira 进入 MTP Install 并选择目标存储。发送期间暂停清单读取；发送完成不等于安装成功。侧边栏「无线连接」是另一条 DBI FTP，不会从本页打开。")
+                    Text("这里只读取 Games / Installed games 元数据；Mounts、Contents、存档、安装与测速入口不参与扫描。点击开始安装会检查文件并立即发送；请先在 sphaira 进入 MTP Install 并选择目标存储。发送期间暂停清单读取；发送完成不等于安装成功。侧边栏「无线连接」是另一条 DBI FTP，不会从本页打开。")
                         .font(.system(size: 10))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)

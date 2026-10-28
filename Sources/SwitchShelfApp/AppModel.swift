@@ -37,6 +37,7 @@ final class AppModel {
     private(set) var isVerifyingInstall = false
     private(set) var installListConfirmed = false
     private(set) var isReviewingInstall = false
+    var installationReview: SphairaBatchReview?
     private(set) var installStatuses: [SphairaBatchStatus] = []
 
     // MARK: UI state

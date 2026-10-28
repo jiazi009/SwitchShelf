@@ -30,12 +30,13 @@ final class AppModel {
     private(set) var scanPhase: String?
     private(set) var isDiscovering = false
     private(set) var isReadingInventory = false
-    private(set) var inventoryConnection: InventoryConnection = .native
     private(set) var isCheckingPlan = false
     private(set) var preparation: SphairaPreflightResult?
     private(set) var isInstalling = false
     private(set) var isVerifyingInstall = false
     private(set) var installListConfirmed = false
+    private(set) var completedInstallGameIDs: Set<String> = []
+    private(set) var verificationDetail: String?
     private(set) var isReviewingInstall = false
     var installationReview: SphairaBatchReview?
     private(set) var installStatuses: [SphairaBatchStatus] = []
@@ -69,9 +70,9 @@ final class AppModel {
 
     // MARK: Services
     @ObservationIgnored private let scanner: any LibraryScanning = LibraryScanner()
-    @ObservationIgnored private let deviceService = DeviceService()
+    @ObservationIgnored private let discoverDevice: @Sendable () async -> DeviceDiscovery
     @ObservationIgnored private let wifiClient = WiFiFTPClient()
-    @ObservationIgnored private let inventoryReader = BoundedInventoryReader()
+    @ObservationIgnored private let inventoryReader: BoundedInventoryReader
     @ObservationIgnored private let preflightService = SphairaPreflightService()
     @ObservationIgnored private let mtpInstaller = SphairaInstaller()
     @ObservationIgnored private var installTask: Task<Void, Never>?
@@ -98,9 +99,12 @@ final class AppModel {
     @ObservationIgnored private var cachedInventory: InstalledInventory?
     @ObservationIgnored private var wasOpenMTPRunning = false
 
-    init() {
+    init(appDirectory: URL? = nil, inventoryReader: BoundedInventoryReader = BoundedInventoryReader(),
+         discoverDevice: @escaping @Sendable () async -> DeviceDiscovery = { await DeviceService().discover() }) {
+        self.inventoryReader = inventoryReader
+        self.discoverDevice = discoverDevice
         let defaults = UserDefaults.standard
-        let directory = Self.applicationSupportDirectory()
+        let directory = appDirectory ?? Self.applicationSupportDirectory()
         self.appDirectory = directory
         self.planStore = LocalPlanStore(directory: directory)
         self.inventoryCache = InventoryCache(directory: directory)
@@ -436,7 +440,6 @@ final class AppModel {
         cachedInventory = await inventoryCache.load()
         inventoryCacheSaved = cachedInventory != nil
         inventory = cachedInventory
-        startDeviceMonitoring()
 
         do {
             try FileManager.default.createDirectory(at: appDirectory, withIntermediateDirectories: true)
@@ -504,7 +507,7 @@ final class AppModel {
         await refreshSourceAvailability()
         await persistSnapshot()
         isBootstrapped = true
-        await resumeRecentInstallVerificationIfNeeded()
+        startDeviceMonitoring()
 
         let refreshOnLaunch = UserDefaults.standard.bool(forKey: AppSettings.refreshOnLaunch)
         if snapshot.games.isEmpty || refreshOnLaunch {
@@ -901,26 +904,12 @@ final class AppModel {
     }
 
     var canReadInventory: Bool {
-        mtpCandidateSignature != nil && !isReadingInventory && !isDiscovering && !installationPlanLocked && !wifiBlocksUSB
+        mtpCandidateSignature != nil && !automaticReadBlocked && !isReadingInventory && !isDiscovering && !installationPlanLocked && !wifiBlocksUSB
     }
 
     var inventoryIsCurrentSession: Bool {
         guard inventory != nil, let signature = inventorySessionSignature else { return false }
         return signature == mtpCandidateSignature
-    }
-
-    func selectInventoryConnection(_ connection: InventoryConnection) {
-        guard !isDiscovering, !isReadingInventory, !isInstalling, !isReviewingInstall,
-              connection != inventoryConnection else { return }
-        inventoryConnection = connection
-        inventory = cachedInventory
-        inventorySessionSignature = nil
-        inventoryComparison = nil
-        soundedSession = nil
-        automaticAttempts = 0
-        lastAutomaticAttempt = nil
-        if deviceDiscovery?.state == .ready { deviceDiscovery?.state = .waitingForMTP }
-        deviceDiscovery?.message = "读取方式已更改；当前设备清单等待重新读取。"
     }
 
     /// Poll only USB descriptors. MTP is opened at most twice for a new candidate,
@@ -942,7 +931,7 @@ final class AppModel {
         devicePollActive = true
         defer { devicePollActive = false }
         let previous = mtpCandidateSignature
-        let result = await deviceService.discover()
+        let result = await discoverDevice()
         guard !isInstalling, !wifiBlocksUSB else { return }
         // Keep successful MTP status while the same registry entry remains present.
         let newIDs = result.devices.map(\.id).sorted()
@@ -995,7 +984,7 @@ final class AppModel {
     }
 
     func refreshDevices() async {
-        guard !isDiscovering, !isReadingInventory, !isInstalling else { return }
+        guard !isDiscovering, !isReadingInventory, !installationPlanLocked else { return }
         if wifiBlocksUSB {
             notice = wifiBlocksUSBNotice
             return
@@ -1006,7 +995,7 @@ final class AppModel {
         devicePollActive = true
         defer { devicePollActive = false }
         let previous = mtpCandidateSignature
-        let result = await deviceService.discover()
+        let result = await discoverDevice()
         deviceDiscovery = result
         if previous != mtpCandidateSignature {
             inventory = cachedInventory
@@ -1016,7 +1005,7 @@ final class AppModel {
     }
 
     private func waitForDevicePoll() async {
-        while devicePollActive {
+        while devicePollActive, !Task.isCancelled {
             try? await Task.sleep(for: .milliseconds(40))
         }
     }
@@ -1024,7 +1013,7 @@ final class AppModel {
     /// Detect USB, then read when there is a single 057e:201d candidate and OpenMTP is not running.
     /// A failed read leaves the last cached snapshot available as historical data.
     func detectAndRead(announceWhenMissing: Bool = true) async {
-        guard !isDiscovering, !isReadingInventory, !isInstalling else { return }
+        guard !isDiscovering, !isReadingInventory, !installationPlanLocked else { return }
         if wifiBlocksUSB {
             if announceWhenMissing { notice = wifiBlocksUSBNotice }
             return
@@ -1061,13 +1050,13 @@ final class AppModel {
     }
 
     @discardableResult
-    func readInventory() async -> Bool {
-        guard !isReadingInventory, !isInstalling else { return false }
+    func readInventory(forVerification: Bool = false, timeoutSeconds: Int = 60) async -> Bool {
+        guard !Task.isCancelled, !automaticReadBlocked, !isReadingInventory, !isInstalling else { return false }
         if wifiBlocksUSB {
             notice = wifiBlocksUSBNotice
             return false
         }
-        guard canReadInventory || (isVerifyingInstall && !isDiscovering), let signature = mtpCandidateSignature else {
+        guard canReadInventory || (forVerification && isVerifyingInstall && !isDiscovering), let signature = mtpCandidateSignature else {
             if !isVerifyingInstall {
                 notice = AppNotice(
                     level: .warning,
@@ -1086,15 +1075,16 @@ final class AppModel {
             return false
         }
         isReadingInventory = true
+        defer { isReadingInventory = false }
         let preservedInventory = inventory
         let preservedSignature = inventorySessionSignature
         if !isVerifyingInstall { notice = nil }
         var succeeded = false
         do {
-            let value = try await inventoryReader.readInventory(transport: inventoryConnection)
+            let value = try await inventoryReader.readInventory(timeoutSeconds: timeoutSeconds)
             // A disconnect/reconnect during the helper read must never attach its
             // result to a different USB registry entry, even with the same VID/PID.
-            let latest = await deviceService.discover()
+            let latest = await discoverDevice()
             deviceDiscovery = latest
             guard mtpCandidateSignature == signature else {
                 inventory = cachedInventory
@@ -1102,7 +1092,6 @@ final class AppModel {
                 soundedSession = nil
                 automaticAttempts = 0
                 lastAutomaticAttempt = nil
-                isReadingInventory = false
                 return false
             }
             inventoryComparison = compareInventory(cachedInventory, with: value)
@@ -1139,13 +1128,17 @@ final class AppModel {
                     actionLabel: "重新读取"
                 )
             }
+            if isVerifyingInstall {
+                verificationDetail = value.isComplete ? "已取得完整 Games 清单，正在核对所选内容与版本。" : "Games 清单尚未完整，暂不确认安装成功。"
+            }
             succeeded = true
         } catch {
+            if isVerifyingInstall { verificationDetail = error.localizedDescription }
             soundedSession = nil
             if let probeError = error as? ProbeError, case .previousProcessUnverified = probeError {
                 automaticReadBlocked = true
             }
-            let latest = await deviceService.discover()
+            let latest = await discoverDevice()
             deviceDiscovery = latest
             guard mtpCandidateSignature == signature else {
                 inventory = cachedInventory
@@ -1153,7 +1146,6 @@ final class AppModel {
                 soundedSession = nil
                 automaticAttempts = 0
                 lastAutomaticAttempt = nil
-                isReadingInventory = false
                 return false
             }
             if preservedSignature == signature, let preservedInventory {
@@ -1186,7 +1178,6 @@ final class AppModel {
                 }
             }
         }
-        isReadingInventory = false
         return succeeded
     }
 
@@ -1385,6 +1376,7 @@ final class AppModel {
         isPreparingInstallation = true
         defer { isPreparingInstallation = false }
         await waitForDevicePoll()
+        guard !Task.isCancelled else { return }
         let expected = preflightInput
         await checkPlan()
         guard expected == preflightInput, preparationIsCurrent, preparation?.isPrepared == true else {
@@ -1434,7 +1426,7 @@ final class AppModel {
     }
 
     var canReviewMTPInstallation: Bool {
-        !isInstalling && !isVerifyingInstall && !isReviewingInstall && !isReadingInventory && !isDiscovering && !isScanning &&
+        !automaticReadBlocked && !isInstalling && !isVerifyingInstall && !isReviewingInstall && !isReadingInventory && !isDiscovering && !isScanning &&
         !isCheckingPlan && !wifiBlocksUSB && preparationIsCurrent && preparation?.isPrepared == true && queueValidationIssues.isEmpty
     }
 
@@ -1477,8 +1469,8 @@ final class AppModel {
             notice = wifiBlocksUSBNotice
             return
         }
-        guard !isInstalling, !isReadingInventory, !isDiscovering, !isScanning, !wifiBlocksUSB,
-              !review.items.isEmpty, reviewedPlan == preflightInput,
+        guard !automaticReadBlocked, !isVerifyingInstall, !isInstalling, !isReadingInventory, !isDiscovering, !isScanning, !wifiBlocksUSB,
+              let signature = mtpCandidateSignature, !review.items.isEmpty, reviewedPlan == preflightInput,
               preparationIsCurrent, queueValidationIssues.isEmpty else {
             reviewedPlan = nil
             return
@@ -1491,6 +1483,8 @@ final class AppModel {
         isInstalling = true
         isVerifyingInstall = false
         installListConfirmed = false
+        completedInstallGameIDs = []
+        verificationDetail = nil
         installStatuses = []
         inventory = cachedInventory
         inventorySessionSignature = nil
@@ -1514,6 +1508,7 @@ final class AppModel {
                     }
                 }
             })
+            if await installer.hasUnverifiedWorker { self.automaticReadBlocked = true }
             let stopped = self.installStatuses.contains { if case .stopped = $0.state { true } else { false } }
             let incomplete = self.installStatuses.contains { if case .waiting = $0.state { true } else { false } }
             let transferred = !self.installStatuses.isEmpty && self.installStatuses.allSatisfy { if case .transferred = $0.state { true } else { false } }
@@ -1521,8 +1516,8 @@ final class AppModel {
                 self.isInstalling = false
                 self.isVerifyingInstall = true
                 self.showVerifyingNotice()
-                let confirmed = await self.confirmTransferredInstall()
-                self.finishInstallVerification(confirmed: confirmed)
+                let confirmed = await self.confirmTransferredInstall(expectedSignature: signature)
+                await self.finishInstallVerification(confirmed: confirmed)
             } else {
                 self.installListConfirmed = false
                 self.notice = AppNotice(level: .warning,
@@ -1532,25 +1527,42 @@ final class AppModel {
         }
     }
 
-    func cancelMTPInstallation() { installTask?.cancel() }
+    func cancelMTPInstallation() {
+        if isVerifyingInstall {
+            // A user stop must not immediately trigger the background read again.
+            automaticAttempts = 2
+            lastAutomaticAttempt = Date()
+        }
+        installTask?.cancel()
+    }
 
-    /// sphaira publishes a title in Games only after it finishes installing.
-    /// A single read at transfer-complete is too early, so keep reading.
-    private func confirmTransferredInstall() async -> Bool {
+    /// Only the USB registry entry used for the send may confirm this batch.
+    /// Each helper fully exits before another session opens; no transport fallback.
+    private func confirmTransferredInstall(expectedSignature: String) async -> Bool {
         let deadline = ContinuousClock.now.advanced(by: .seconds(360))
-        while !Task.isCancelled, ContinuousClock.now < deadline {
+        while !Task.isCancelled, !automaticReadBlocked, ContinuousClock.now < deadline {
             showVerifyingNotice()
-            while devicePollActive, !Task.isCancelled {
-                try? await Task.sleep(for: .milliseconds(40))
-            }
-            if mtpCandidateSignature != nil, !isDiscovering, !isReadingInventory,
-               await readInventory(), transferredQueueShowsInstalled() {
-                return true
+            await waitForDevicePoll()
+            guard !Task.isCancelled else { break }
+            deviceDiscovery = await discoverDevice()
+            guard mtpCandidateSignature == expectedSignature else {
+                inventory = cachedInventory
+                inventorySessionSignature = nil
+                verificationDetail = "USB 已断开或候选设备已变化；停止核对，请重新连接后手动读取清单。"
+                return false
             }
             let remaining = ContinuousClock.now.duration(to: deadline)
-            if remaining <= .zero || Task.isCancelled { break }
-            try? await Task.sleep(for: min(.seconds(8), remaining))
+            let seconds = min(30, max(1, Int(remaining.components.seconds)))
+            if await readInventory(forVerification: true, timeoutSeconds: seconds), transferredQueueShowsInstalled() {
+                return true
+            }
+            if Task.isCancelled || automaticReadBlocked { break }
+            let pause = ContinuousClock.now.duration(to: deadline)
+            if pause <= .zero { break }
+            do { try await Task.sleep(for: min(.seconds(8), pause)) }
+            catch { break }
         }
+        if Task.isCancelled { verificationDetail = "已停止核对；已发送的文件不会自动重传。" }
         return false
     }
 
@@ -1558,105 +1570,61 @@ final class AppModel {
         notice = AppNotice(
             level: .info,
             title: "正在核对已安装清单",
-            message: "文件已经发送。正在同一条 USB 连接上重新读取 Games 清单，不用拔线；所选游戏出现后才会显示安装成功。"
+            message: verificationDetail ?? "文件已经发送。正在通过 libusb 读取 Games 清单并核对所选内容和版本；核对成功后才会移出待选区。"
         )
     }
 
-    private func finishInstallVerification(confirmed: Bool) {
-        isVerifyingInstall = false
+    private func finishInstallVerification(confirmed: Bool) async {
+        // Keep the plan locked until the success indication has had time to appear.
         installListConfirmed = confirmed
-        if confirmed { NSSound(named: "Hero")?.play() }
-        notice = confirmed
-            ? AppNotice(level: .info, title: "游戏安装成功", message: "已重新读取设备清单，所选游戏显示为已安装。")
-            : AppNotice(level: .warning, title: "传输完成，等待设备确认", message: "已重新读取已安装清单，但所选游戏尚未全部显示为已安装。发送完成不等于安装成功。")
-    }
-
-    /// Continue a just-finished send after relaunch. Does not open the install endpoint or resend bytes.
-    private func resumeRecentInstallVerificationIfNeeded() async {
-        guard installStatuses.isEmpty, !isInstalling, !isVerifyingInstall, installTask == nil else { return }
-        let wanted = Set(plan.flatMap { $0.includedContents.map(\.fileName) })
-        guard !wanted.isEmpty, wanted.isSubset(of: recentTransferredFileNames()) else { return }
-        guard let items = await reviewedInstallItems() else { return }
-        guard Set(items.map(\.request.name)) == wanted else { return }
-        installStatuses = items.map {
-            SphairaBatchStatus(item: $0, state: .transferred, bytesSubmitted: $0.request.byteCount)
-        }
-        isVerifyingInstall = true
-        showVerifyingNotice()
-        installTask = Task { [weak self] in
-            guard let self else { return }
-            defer { self.installTask = nil }
-            let confirmed = await self.confirmTransferredInstall()
-            self.finishInstallVerification(confirmed: confirmed)
-        }
-    }
-
-    private func recentTransferredFileNames(within seconds: TimeInterval = 45 * 60) -> Set<String> {
-        let root = appDirectory.appendingPathComponent("MTPInstallAttempts", isDirectory: true)
-        guard let directories = try? FileManager.default.contentsOfDirectory(
-            at: root, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]
-        ) else { return [] }
-        var newest: [String: (date: Date, transferred: Bool)] = [:]
-        for directory in directories {
-            let requestURL = directory.appendingPathComponent("request.json")
-            let resultURL = directory.appendingPathComponent("supervisor-result.json")
-            guard let requestData = try? Data(contentsOf: requestURL),
-                  let request = try? JSONSerialization.jsonObject(with: requestData) as? [String: Any],
-                  let name = request["name"] as? String,
-                  let modified = try? resultURL.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate,
-                  Date().timeIntervalSince(modified) <= seconds,
-                  let resultData = try? Data(contentsOf: resultURL),
-                  let result = try? JSONSerialization.jsonObject(with: resultData) as? [String: Any],
-                  let transfer = result["transfer"] as? [String: Any] else { continue }
-            if let existing = newest[name], existing.date > modified { continue }
-            let failure = transfer["failure"]
-            let transferred = (transfer["outcome"] as? String) == "transferredAwaitingConfirmation"
-                && (transfer["releaseVerified"] as? Bool) == true
-                && (result["processExitVerified"] as? Bool) == true
-                && (failure == nil || failure is NSNull)
-            newest[name] = (modified, transferred)
-        }
-        return Set(newest.compactMap { $0.value.transferred ? $0.key : nil })
-    }
-
-    private func reviewedInstallItems() async -> [SphairaBatchItem]? {
-        let input = preflightInput
-        var candidates: [(String, String, URL, URL, UInt64)] = []
-        for item in input.items {
-            let title = plan.first(where: { $0.id == item.id })?.title ?? item.id
-            for entry in item.entries where entry.included {
-                guard let url = entry.sourceURL, entry.expectedBytes > 0,
-                      let root = snapshot.sources.filter({ $0.availability == .online && isUnder(url, source: $0) })
-                        .max(by: { $0.url.path.count < $1.url.path.count })?.url else { return nil }
-                candidates.append((title, item.intendedTarget, url, root, UInt64(entry.expectedBytes)))
+        if confirmed {
+            completedInstallGameIDs = Set(plan.filter { !$0.includedContents.isEmpty }.map(\.gameID))
+            NSSound(named: "Hero")?.play()
+            notice = AppNotice(level: .info, title: "游戏安装成功", message: "已通过设备清单核对所选内容和版本，正在移出待选区。")
+            // Cancellation after confirmation must not undo the evidence or leave a
+            // completed item staged for an accidental second send.
+            try? await Task.sleep(for: .milliseconds(600))
+            plan.removeAll { completedInstallGameIDs.contains($0.gameID) }
+            selectedGameIDs.subtract(completedInstallGameIDs)
+            omittedUpdates = omittedUpdates.filter { id, _ in plan.contains { $0.id == id } }
+            preparation = nil
+            reviewedPlan = nil
+            planSaveTask?.cancel()
+            do {
+                try await planStore.savePlan(plan)
+                notice = AppNotice(level: .info, title: "游戏安装成功", message: "已核对所选内容和版本，并移出安装待选区。包身份仍按现有证据显示。")
+            } catch {
+                notice = AppNotice(level: .warning, title: "游戏已安装，待选区保存失败",
+                                   message: "本次已移出待选区，但磁盘计划未能更新：\(error.localizedDescription)",
+                                   action: .savePlan, actionLabel: "重试保存")
             }
+        } else {
+            notice = AppNotice(level: .warning, title: "传输完成，安装尚未确认",
+                               message: verificationDetail ?? "Games 清单中的所选内容或版本尚未全部确认；待选项已保留，不会自动重传。")
         }
-        guard !candidates.isEmpty else { return nil }
-        isReviewingInstall = true
-        defer { isReviewingInstall = false }
-        let sources = candidates
-        return try? await Task.detached(priority: .utility) {
-            try sources.map { title, target, url, root, size in
-                SphairaBatchItem(gameTitle: title, request: try SphairaInstallRequest.review(
-                    sourceURL: url, allowedRoot: root, expectedBytes: size, intendedTarget: target))
-            }
-        }.value
+        isVerifyingInstall = false
     }
 
     /// Fresh current-session inventory only. A transfer receipt is not install success.
     private func transferredQueueShowsInstalled() -> Bool {
-        guard inventoryIsCurrentSession else { return false }
-        let sentNames = Set(installStatuses.compactMap { status -> String? in
-            if case .transferred = status.state { return status.item.request.name }
-            return nil
-        })
+        guard inventoryIsCurrentSession, inventory?.isComplete == true, !installStatuses.isEmpty,
+              installStatuses.allSatisfy({ if case .transferred = $0.state { true } else { false } }) else { return false }
         let relevant = plan.filter { !$0.includedContents.isEmpty }
-        guard !relevant.isEmpty, sentNames.count == installStatuses.count else { return false }
+        let selected = relevant.flatMap(\.includedContents)
+        guard !selected.isEmpty, selected.count == installStatuses.count else { return false }
+        // File names alone are not a durable identity. Match this batch's reviewed
+        // source path, byte count and target before consulting fresh device records.
         return relevant.allSatisfy { item in
-            let names = item.includedContents.map(\.fileName)
-            guard names.allSatisfy({ sentNames.contains($0) }),
-                  let game = games.first(where: { $0.id == item.gameID }) else { return false }
-            return assessment(for: game).state == .installed
+            guard let game = games.first(where: { $0.id == item.gameID }) else { return false }
+            return item.includedContents.allSatisfy { content in
+                guard content.byteCount > 0, let local = game.contents.first(where: { $0.id == content.id }),
+                      installStatuses.contains(where: { status in
+                          let request = status.item.request
+                          return request.sourceURL == local.fileURL && request.byteCount == UInt64(content.byteCount)
+                              && request.intendedTarget == item.target.rawValue
+                      }) else { return false }
+                return assessment(for: local, in: game).state == .installed
+            }
         }
     }
 

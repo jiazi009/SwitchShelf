@@ -44,7 +44,7 @@ struct DeviceView: View {
                     .font(.system(size: 11.5, weight: .medium))
             }
             .buttonStyle(.glass)
-            .disabled(model.isDiscovering || model.isReadingInventory || model.isInstalling || model.wifiBlocksUSB)
+            .disabled(model.isDiscovering || model.isReadingInventory || model.installationPlanLocked || model.wifiBlocksUSB)
             .help("应用会自动检测连接；也可以手动重新检测并读取清单。")
             .accessibilityLabel("检测并读取，只读")
         }
@@ -105,16 +105,9 @@ struct DeviceView: View {
 
                 Divider().overlay(Theme.hairline)
                 VStack(alignment: .leading, spacing: 6) {
-                    Picker("清单连接方式", selection: Binding(
-                        get: { model.inventoryConnection },
-                        set: { model.selectInventoryConnection($0) }
-                    )) {
-                        Text("系统连接").tag(InventoryConnection.native)
-                        Text("libusb 直连").tag(InventoryConnection.libusb)
-                    }
-                    .pickerStyle(.segmented)
-                    .disabled(model.isDiscovering || model.isReadingInventory || model.isInstalling || model.isReviewingInstall)
-                    Text("仅用于读取设备清单，本次运行有效；重启后恢复系统连接。切换后会重新读取，安装连接不变。")
+                    Label("libusb 直连", systemImage: "cable.connector")
+                        .font(.system(size: 11.5, weight: .medium))
+                    Text("设备清单、安装和安装后核对统一使用 libusb；每次操作完成并释放连接后才开始下一次。")
                         .font(.system(size: 10.5)).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -132,7 +125,7 @@ struct DeviceView: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
-                    .disabled(model.isDiscovering || model.isReadingInventory || model.isInstalling || model.wifiBlocksUSB)
+                    .disabled(model.isDiscovering || model.isReadingInventory || model.installationPlanLocked || model.wifiBlocksUSB)
                     .help("立即重新检测并只读读取设备清单。")
                     .accessibilityLabel("检测并读取，只读")
 
@@ -501,7 +494,7 @@ struct DeviceView: View {
                     Button("检测并读取") { Task { await model.detectAndRead() } }
                         .buttonStyle(.bordered)
                         .controlSize(.small)
-                        .disabled(model.isDiscovering || model.isReadingInventory || model.isInstalling || model.wifiBlocksUSB)
+                        .disabled(model.isDiscovering || model.isReadingInventory || model.installationPlanLocked || model.wifiBlocksUSB)
                 }
 
                 HStack {

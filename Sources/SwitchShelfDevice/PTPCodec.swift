@@ -20,7 +20,7 @@ enum PTPCodec {
         let type = try cursor.u16()
         let code = try cursor.u16()
         _ = try cursor.u32()
-        // ImageCaptureCore reassigns transaction IDs; only one request may be in flight.
+        // The transport validates transaction IDs against its single in-flight request.
         guard length == data.count, data.count >= 12, data.count <= 32,
               data.count % 4 == 0, type == 3 else { throw invalid("Malformed PTP response container.") }
         guard code == 0x2001 else {

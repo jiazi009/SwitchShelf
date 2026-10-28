@@ -46,7 +46,7 @@ enum SphairaUploadCodec {
         return data
     }
 
-    /// Raw PTP transport only. Unlike ImageCaptureCore, it must preserve transaction IDs.
+    /// Raw PTP transport preserves and validates transaction IDs.
     static func response(_ data: Data, transaction: UInt32, parameters expectedCount: Int) throws -> [UInt32] {
         guard data.count >= 12, data.count <= 32, data.count.isMultiple(of: 4), (0...5).contains(expectedCount) else {
             throw SphairaUploadError.invalidResponse

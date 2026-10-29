@@ -1,0 +1,236 @@
+{
+  "schemaVersion": 1,
+  "test": "user-authorized Goose Game reinstall and current-session manual recognition",
+  "baseline": {
+    "observedAt": "2026-10-28T15:53:01Z",
+    "isComplete": true,
+    "recordCount": 22,
+    "goosePresent": false
+  },
+  "attempts": [
+    {
+      "requestID": "ED719257-BD20-4B3D-8C7D-67BAA89E1110",
+      "name": "Untitled Goose Game [010082400BCC6000][v0].nsp",
+      "byteCount": 834297609,
+      "intendedTarget": "sd",
+      "result": {
+        "schemaVersion": 1,
+        "message": "文件传输已获 MTP 确认，等待核对 sphaira 安装结果；这不代表已安装。",
+        "transfer": {
+          "outcome": "transferredAwaitingConfirmation",
+          "bytesSubmitted": 834297609,
+          "releaseVerified": true
+        },
+        "processExitVerified": true,
+        "requestID": "ED719257-BD20-4B3D-8C7D-67BAA89E1110"
+      }
+    },
+    {
+      "requestID": "57459E9F-343A-4F79-868F-26E9E7AA3052",
+      "name": "[UPD][v1.1.2]Untitled Goose Game [010082400BCC6800][v458752][US].nsp",
+      "byteCount": 375633682,
+      "intendedTarget": "sd",
+      "result": {
+        "processExitVerified": true,
+        "message": "文件传输已获 MTP 确认，等待核对 sphaira 安装结果；这不代表已安装。",
+        "schemaVersion": 1,
+        "requestID": "57459E9F-343A-4F79-868F-26E9E7AA3052",
+        "transfer": {
+          "outcome": "transferredAwaitingConfirmation",
+          "releaseVerified": true,
+          "bytesSubmitted": 375633682
+        }
+      }
+    }
+  ],
+  "after": {
+    "observedAt": "2026-10-29T12:31:16Z",
+    "isComplete": true,
+    "recordCount": 24,
+    "mtpEvidence": {
+      "gameDirectoryCount": 9,
+      "inventoryStorageNames": [
+        "Games"
+      ],
+      "metadataObjectCount": 33,
+      "reportedStorageCount": 9,
+      "reportedStorageNames": [
+        "microSD card",
+        "Album (Image SD)",
+        "Contents (microSD card)",
+        "Contents (System)",
+        "Contents (User)",
+        "Games",
+        "Install (NSP, XCI, NSZ, XCZ, MSP)",
+        "Mounts",
+        "DevNull (Speed Test)"
+      ],
+      "storageDiagnosticsOnly": false
+    },
+    "selectedRecords": [
+      {
+        "id": "mtp-session-FE8FEF67-8C67-4965-BA97-AC81F5385447:4294967289:33",
+        "kind": "update",
+        "name": "Untitled Goose Game 1.1.2 [010082400BCC6800][v458752][UPD].nsp",
+        "objectPath": "Games/Untitled Goose Game [010082400BCC6000]/Untitled Goose Game 1.1.2 [010082400BCC6800][v458752][UPD].nsp",
+        "rawVersion": 458752,
+        "titleID": "010082400BCC6800"
+      },
+      {
+        "id": "mtp-session-FE8FEF67-8C67-4965-BA97-AC81F5385447:4294967289:32",
+        "kind": "base",
+        "name": "Untitled Goose Game [010082400BCC6000][v0][BASE].nsp",
+        "objectPath": "Games/Untitled Goose Game [010082400BCC6000]/Untitled Goose Game [010082400BCC6000][v0][BASE].nsp",
+        "rawVersion": 0,
+        "titleID": "010082400BCC6000"
+      }
+    ],
+    "persistedPlan": []
+  },
+  "deviceInfoObservation": {
+    "deviceInfo": {
+      "captureFormats": [],
+      "deviceVersion": "Sphaira/1.0.8 HOS/19.0.1",
+      "functionalMode": 0,
+      "imageFormats": [
+        "0x3000",
+        "0x3001"
+      ],
+      "manufacturer": "Nintendo",
+      "model": "Nintendo Switch",
+      "standardVersion": 100,
+      "supportedDeviceProperties": [],
+      "supportedEvents": [
+        "0x4002",
+        "0x4003",
+        "0x4004",
+        "0x4005",
+        "0x4007",
+        "0x400C"
+      ],
+      "supportedOperations": [
+        "0x1001",
+        "0x1002",
+        "0x1003",
+        "0x1004",
+        "0x1005",
+        "0x1007",
+        "0x1008",
+        "0x1009",
+        "0x100C",
+        "0x100D",
+        "0x100B",
+        "0x9801",
+        "0x9802",
+        "0x9803",
+        "0x9804",
+        "0x9805",
+        "0x9808"
+      ],
+      "vendorExtensionDescription": "microsoft.com: 1.0;",
+      "vendorExtensionID": 6,
+      "vendorExtensionVersion": 100
+    },
+    "mode": "bounded-read-only-device-info",
+    "observedAt": "2026-10-29T12:31:42Z",
+    "retainedSerialOrVolumeLabel": false,
+    "schemaVersion": 1,
+    "sessionReleaseVerified": true,
+    "status": "ok",
+    "storages": [
+      {
+        "accessCapability": 0,
+        "description": "microSD card",
+        "filesystemType": 2,
+        "freeObjects": 0,
+        "freeSpaceBytes": 55641833472,
+        "maximumCapacityBytes": 126420779008,
+        "sessionStorageID": "0xFFFFFFFE",
+        "storageType": 3
+      },
+      {
+        "accessCapability": 0,
+        "description": "Album (Image SD)",
+        "filesystemType": 2,
+        "freeObjects": 0,
+        "freeSpaceBytes": 55641833472,
+        "maximumCapacityBytes": 126420779008,
+        "sessionStorageID": "0xFFFFFFFD",
+        "storageType": 3
+      },
+      {
+        "accessCapability": 0,
+        "description": "Contents (microSD card)",
+        "filesystemType": 2,
+        "freeObjects": 0,
+        "freeSpaceBytes": 55641833472,
+        "maximumCapacityBytes": 126420779008,
+        "sessionStorageID": "0xFFFFFFFC",
+        "storageType": 3
+      },
+      {
+        "accessCapability": 0,
+        "description": "Contents (System)",
+        "filesystemType": 2,
+        "freeObjects": 0,
+        "freeSpaceBytes": 1025916928,
+        "maximumCapacityBytes": 2683027456,
+        "sessionStorageID": "0xFFFFFFFB",
+        "storageType": 3
+      },
+      {
+        "accessCapability": 0,
+        "description": "Contents (User)",
+        "filesystemType": 2,
+        "freeObjects": 0,
+        "freeSpaceBytes": 3061039104,
+        "maximumCapacityBytes": 27903639552,
+        "sessionStorageID": "0xFFFFFFFA",
+        "storageType": 3
+      },
+      {
+        "accessCapability": 0,
+        "description": "Games",
+        "filesystemType": 2,
+        "freeObjects": 0,
+        "freeSpaceBytes": 274877906944,
+        "maximumCapacityBytes": 274877906944,
+        "sessionStorageID": "0xFFFFFFF9",
+        "storageType": 3
+      },
+      {
+        "accessCapability": 0,
+        "description": "Install (NSP, XCI, NSZ, XCZ, MSP)",
+        "filesystemType": 2,
+        "freeObjects": 0,
+        "freeSpaceBytes": 55641833472,
+        "maximumCapacityBytes": 126420779008,
+        "sessionStorageID": "0xFFFFFFF8",
+        "storageType": 3
+      },
+      {
+        "accessCapability": 0,
+        "description": "Mounts",
+        "filesystemType": 2,
+        "freeObjects": 0,
+        "freeSpaceBytes": 274877906944,
+        "maximumCapacityBytes": 274877906944,
+        "sessionStorageID": "0xFFFFFFF7",
+        "storageType": 3
+      },
+      {
+        "accessCapability": 0,
+        "description": "DevNull (Speed Test)",
+        "filesystemType": 2,
+        "freeObjects": 0,
+        "freeSpaceBytes": 274877906944,
+        "maximumCapacityBytes": 274877906944,
+        "sessionStorageID": "0xFFFFFFF6",
+        "storageType": 3
+      }
+    ],
+    "transport": "libusb"
+  },
+  "deviceResult": "User explicitly confirmed the Switch screen displayed installation success; Games evidence arrived after user restarted sphaira and enabled MTP.",
+  "identityLimit": "Local package identity remains filename-derived; payload bytes are not cryptographically verified."
+}

@@ -1,5 +1,10 @@
 # SwitchShelf implementation architecture
 
+## Current connection baseline — 2026-10-29
+
+This section supersedes historical transport/default and installation-gate descriptions below. Inventory, installation and verification now use libusb only; ImageCaptureCore and libmtp entry points are removed. Healthy completed upload sessions send CloseSession before host release. All helpers retain the shared DeviceLease, bounded execution/cancellation, verified exit and cross-operation fencing. Automatic install verification is limited to four reads on the sending USB registry entry; Games can be cached by sphaira, so an explicit manual read after device-side refresh can finish the batch without resending. Selected content and raw versions, not whole-library completeness, govern completion. Confirmed staged items animate out and are immediately saved out of the plan. User-authorized physical Goose Game base/update reinstall and recognition passed; package identity remains filename-derived. See [release review](Reports/release-review-2026-10-29.md) for exact evidence and remaining public-distribution gates.
+
+
 ## Product and visual baseline
 SwiftUI native macOS 26+, arm64, 03-liquid-glass.png is the selected visual reference. Sidebar and toolbar use native glass/material; content and inspector remain readable neutral surfaces. Main content 1280×820, minimum 960×640, with a fixed 320-point installation staging sidebar and an independent game-detail popover. Chinese interface, dark/light, keyboard and accessibility.
 

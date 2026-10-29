@@ -1,5 +1,10 @@
 # SwitchShelf coordinated development plan
 
+## Release connection review — 2026-10-29
+
+Completed the user-requested libusb-only migration, healthy PTP session handoff, safe DeviceBusy retry/cancellation/worker-exit fencing, bounded cached-Games verification, manual post-refresh confirmation, and confirmed staging exit/persistence. The user-authorized Goose Game base/update reinstall sent 1,209,931,291 bytes successfully; after sphaira was reopened, fresh Games contained BASE v0 and UPD v458752, the live app showed installed, and the saved plan became empty. Final offline suite 297 tests, AppModel harness 34 assertions, helper runtime smoke, 51 cover checks, 24 layouts and 64 native geometry cases passed. Ad-hoc 0.3.4 is a local release candidate; Developer ID/notarization and broader device/SMB interruption acceptance remain separate. Full findings and exact limits: [release review](Reports/release-review-2026-10-29.md).
+
+
 ## Installation-first staging UI — 2026-10-28
 
 Implemented the confirmed interaction: multiple card clicks accumulate the persistent plan in a fixed 320-point right sidebar, artwork animates into it, and a bottom start button remains visible. Card info controls open a separate closable detail popover without staging or install controls. Base/all DLC/uniquely newest same-identity update are defaults; ambiguous updates require a choice or explicit current-session omission. Start automatically preflights then presents the existing file/device/target confirmation in the library; the reviewed serial transfer engine is unchanged. Existing plans and source data are preserved.

@@ -265,4 +265,152 @@ struct MTPFileServiceTests {
             #expect(await counts.factories == 0)
         }
     }
+
+    @Test func albumIndexCollectsScreenshotsFromRecognizedRootsOnly() async throws {
+        let transport = AlbumTreeTransport(
+            stores: [
+                albumStore(1, "Album"), albumStore(2, "Games"), albumStore(3, "microSD card"),
+                albumStore(4, "SD Card install"), albumStore(5, "相册工具"), albumStore(6, "Album (Image SD)")
+            ],
+            objects: [
+                fileObject(10, name: "2024", parent: 0, storage: 1, folder: true),
+                fileObject(11, name: "01", parent: 10, storage: 1, folder: true),
+                fileObject(12, name: "a.jpg", parent: 11, storage: 1, size: 6),
+                fileObject(13, name: "b.MP4", parent: 11, storage: 1, size: 6),
+                fileObject(14, name: "c.txt", parent: 11, storage: 1, size: 6),
+                fileObject(15, name: "root.png", parent: 0, storage: 1, size: 4),
+                fileObject(20, name: "skip.jpg", parent: 0, storage: 2, size: 6),
+                fileObject(30, name: "Nintendo", parent: 0, storage: 3, folder: true),
+                fileObject(31, name: "Album", parent: 30, storage: 3, folder: true),
+                fileObject(32, name: "d.jpeg", parent: 31, storage: 3, size: 6),
+                fileObject(33, name: "Other", parent: 30, storage: 3, folder: true),
+                fileObject(34, name: "e.jpg", parent: 33, storage: 3, size: 6),
+                fileObject(35, name: "readme.txt", parent: 0, storage: 3, size: 4),
+                fileObject(40, name: "f.jpg", parent: 0, storage: 4, size: 6),
+                fileObject(50, name: "tool.png", parent: 0, storage: 5, size: 8),
+                fileObject(60, name: "g.JPG", parent: 0, storage: 6, size: 6)
+            ],
+            children: [
+                1: [.max: [10, 15], 10: [11], 11: [12, 13, 14]],
+                2: [.max: [20]],
+                3: [.max: [30, 35], 30: [31, 33], 31: [32], 33: [34]],
+                4: [.max: [40]],
+                5: [.max: [50]],
+                6: [.max: [60]]
+            ])
+        let result = await MTPFileWorker.execute(.albumIndex()) { transport }
+        #expect(result.outcome == .completed)
+        #expect(Set(result.albumEntries?.map(\.name) ?? []) == ["a.jpg", "root.png", "d.jpeg", "tool.png", "g.JPG"])
+        #expect(result.albumEntries?.first { $0.name == "a.jpg" }?.location.components == ["2024", "01"])
+        #expect(result.albumEntries?.first { $0.name == "d.jpeg" }?.location.components == ["Nintendo", "Album"])
+        #expect(result.albumTruncated == false)
+        #expect(await transport.downloadCalls == 0)
+        #expect(await transport.uploadCalls == 0)
+        #expect(await transport.closed)
+    }
+
+    @Test func albumIndexSkipsAmbiguousDuplicateAndUnsizedScreenshots() async throws {
+        let ambiguous = AlbumTreeTransport(
+            stores: [albumStore(3, "microSD card")],
+            objects: [
+                fileObject(1, name: "Nintendo", parent: 0, storage: 3, folder: true),
+                fileObject(2, name: "nintendo", parent: 0, storage: 3, folder: true)
+            ],
+            children: [3: [.max: [1, 2]]])
+        let ambiguousResult = await MTPFileWorker.execute(.albumIndex()) { ambiguous }
+        #expect(ambiguousResult.outcome == .completed)
+        #expect(ambiguousResult.albumEntries?.isEmpty == true)
+        #expect(ambiguousResult.message.contains("不唯一"))
+
+        let duplicate = AlbumTreeTransport(
+            stores: [albumStore(1, "Album"), albumStore(2, "album")],
+            objects: [
+                fileObject(1, name: "a.jpg", parent: 0, storage: 1, size: 4),
+                fileObject(2, name: "b.jpg", parent: 0, storage: 2, size: 4)
+            ],
+            children: [1: [.max: [1]], 2: [.max: [2]]])
+        let duplicateResult = await MTPFileWorker.execute(.albumIndex()) { duplicate }
+        #expect(duplicateResult.outcome == .completed)
+        #expect(duplicateResult.albumEntries?.isEmpty == true)
+        #expect(duplicateResult.message.contains("不唯一"))
+
+        let unsized = AlbumTreeTransport(
+            stores: [albumStore(1, "Album")],
+            objects: [
+                fileObject(1, name: "missing.jpg", parent: 0, storage: 1, size: nil),
+                fileObject(2, name: "kept.png", parent: 0, storage: 1, size: 4)
+            ],
+            children: [1: [.max: [1, 2]]])
+        let unsizedResult = await MTPFileWorker.execute(.albumIndex()) { unsized }
+        #expect(unsizedResult.albumEntries?.map(\.name) == ["kept.png"])
+        #expect(unsizedResult.message.contains("缺少可核对的大小"))
+    }
+
+    @Test func albumIndexStopsPastTheDepthLimitWithoutDroppingShallowerShots() async throws {
+        var objects: [MTPFileObjectRecord] = []
+        var children: [UInt32: [UInt32: [UInt32]]] = [1: [:]]
+        children[1]?[.max] = [1, 11]
+        objects.append(fileObject(11, name: "shallow.jpg", parent: 0, storage: 1, size: 4))
+        for id: UInt32 in 1...9 {
+            objects.append(fileObject(id, name: "dir\(id)", parent: id == 1 ? 0 : id - 1, storage: 1, folder: true))
+            children[1]?[id] = [id + 1]
+        }
+        objects.append(fileObject(10, name: "deep.jpg", parent: 9, storage: 1, size: 4))
+        let transport = AlbumTreeTransport(stores: [albumStore(1, "Album")], objects: objects, children: children)
+        let result = await MTPFileWorker.execute(.albumIndex()) { transport }
+        #expect(result.outcome == .completed)
+        #expect(result.albumTruncated == true)
+        #expect(result.albumEntries?.map(\.name) == ["shallow.jpg"])
+        #expect(result.message.contains("并不完整"))
+        #expect(await transport.closed)
+    }
+
+    @Test func albumIndexWithoutAlbumRootsCompletesEmpty() async throws {
+        let transport = AlbumTreeTransport(
+            stores: [albumStore(2, "Games")],
+            objects: [fileObject(20, name: "skip.jpg", parent: 0, storage: 2, size: 6)],
+            children: [2: [.max: [20]]])
+        let result = await MTPFileWorker.execute(.albumIndex()) { transport }
+        #expect(result.outcome == .completed)
+        #expect(result.albumEntries?.isEmpty == true)
+        #expect(result.message.contains("没有发现"))
+        #expect(await transport.downloadCalls == 0)
+    }
+}
+
+private func albumStore(_ handle: UInt32, _ name: String) -> MTPFileStoreRecord {
+    .init(handle: handle, value: .init(name: name))
+}
+
+private actor AlbumTreeTransport: MTPFileTransport {
+    let stores: [MTPFileStoreRecord]
+    let objects: [UInt32: MTPFileObjectRecord]
+    let children: [UInt32: [UInt32: [UInt32]]]
+    var downloadCalls = 0
+    var uploadCalls = 0
+    var opened = false
+    var closed = false
+    init(stores: [MTPFileStoreRecord], objects: [MTPFileObjectRecord], children: [UInt32: [UInt32: [UInt32]]]) {
+        self.stores = stores
+        self.objects = Dictionary(uniqueKeysWithValues: objects.map { ($0.handle, $0) })
+        self.children = children
+    }
+    func open() { opened = true }
+    func storages() -> [MTPFileStoreRecord] { stores }
+    func children(storage: UInt32, parent: UInt32) -> [UInt32] { children[storage]?[parent] ?? [] }
+    func object(_ handle: UInt32) throws -> MTPFileObjectRecord {
+        guard let object = objects[handle] else { throw MTPFileError.invalidMetadata }
+        return object
+    }
+    func download(_ handle: UInt32, expectedBytes: UInt64, consume: @escaping @Sendable (Data) async throws -> Void) async throws -> UInt64 {
+        downloadCalls += 1
+        return 0
+    }
+    func upload(storage: UInt32, parent: UInt32, name: String, byteCount: UInt64,
+                source: @escaping @Sendable (UInt64, Int) async throws -> Data,
+                progress: @escaping @Sendable (UInt64) async -> Void) async throws -> UInt64 {
+        uploadCalls += 1
+        return byteCount
+    }
+    func close() { closed = true }
 }

@@ -62,6 +62,12 @@ struct RootView: View {
                         model.syncDeviceFileSession()
                         model.deviceFileManager.loadIfNeeded()
                     }
+            case .album:
+                AlbumScreenshotsView(model: model.albumScreenshots)
+                    .task(id: model.deviceFileSessionSignature) {
+                        model.syncDeviceFileSession()
+                        model.albumScreenshots.loadIfNeeded()
+                    }
             case .maintenance: MaintenanceView(model: model)
             default: EmptyView()
             }

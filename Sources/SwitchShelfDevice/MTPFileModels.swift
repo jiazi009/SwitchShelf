@@ -53,7 +53,7 @@ public struct MTPFileListing: Codable, Sendable, Equatable {
     }
 }
 
-public enum MTPFileOperation: String, Codable, Sendable { case storages, list, download, upload }
+public enum MTPFileOperation: String, Codable, Sendable { case storages, list, download, upload, albumIndex }
 public enum MTPFileOutcome: String, Codable, Sendable { case completed, failed, cancelled, deviceStateUnknown }
 
 public struct MTPFileRequest: Codable, Sendable, Identifiable {
@@ -70,6 +70,8 @@ public struct MTPFileRequest: Codable, Sendable, Identifiable {
         self.entry = entry; self.localURL = localURL; self.uploadSource = uploadSource
     }
     public static func storages() -> Self { Self(operation: .storages) }
+    /// Metadata only. Finds screenshot files under recognized album roots; does not download or modify the device.
+    public static func albumIndex() -> Self { Self(operation: .albumIndex) }
     public static func list(location: MTPFileLocation) -> Self { Self(operation: .list, location: location) }
     public static func download(entry: MTPFileEntry, to destination: URL) -> Self {
         Self(operation: .download, location: entry.location, entry: entry, localURL: destination)
@@ -100,14 +102,21 @@ public struct MTPFileResult: Codable, Sendable {
     public var outcome: MTPFileOutcome
     public var storages: [MTPFileStorage]
     public var listing: MTPFileListing?
+    /// Screenshot files found by `albumIndex`. Nil for every other operation.
+    public var albumEntries: [MTPFileEntry]?
+    /// True when `albumIndex` stopped at a depth, count or object limit. Nil for other operations.
+    public var albumTruncated: Bool?
     public var transferredBytes: UInt64
     public var releaseVerified: Bool
     public var message: String
     public init(requestID: String, operation: MTPFileOperation, outcome: MTPFileOutcome,
                 storages: [MTPFileStorage] = [], listing: MTPFileListing? = nil,
+                albumEntries: [MTPFileEntry]? = nil, albumTruncated: Bool? = nil,
                 transferredBytes: UInt64 = 0, releaseVerified: Bool = true, message: String) {
         self.requestID = requestID; self.operation = operation; self.outcome = outcome
-        self.storages = storages; self.listing = listing; self.transferredBytes = transferredBytes
+        self.storages = storages; self.listing = listing
+        self.albumEntries = albumEntries; self.albumTruncated = albumTruncated
+        self.transferredBytes = transferredBytes
         self.releaseVerified = releaseVerified; self.message = message
     }
 }

@@ -199,6 +199,33 @@ enum MTPFileNames {
     static func isWritableSD(_ name: String) -> Bool {
         name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "microsd card"
     }
+
+    /// Storages actually observed as album projections. A similarly named folder elsewhere is not included.
+    static func isAlbumStorage(_ name: String) -> Bool {
+        switch albumKey(name) {
+        case "album", "album (image sd)", "相册工具": true
+        default: false
+        }
+    }
+
+    /// SD file roots where screenshots live at Nintendo/Album. Install storages are not included.
+    static func isAlbumSDHost(_ name: String) -> Bool {
+        switch albumKey(name) {
+        case "microsd card", "sd card", "sd内存卡": true
+        default: false
+        }
+    }
+
+    static func isScreenshotFile(_ name: String) -> Bool {
+        switch albumKey((name as NSString).pathExtension) {
+        case "jpg", "jpeg", "png": true
+        default: false
+        }
+    }
+
+    private static func albumKey(_ name: String) -> String {
+        MTPFileWorker.key(name.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
 }
 
 /// Only the direct parent may use this receipt after proving worker exit. The

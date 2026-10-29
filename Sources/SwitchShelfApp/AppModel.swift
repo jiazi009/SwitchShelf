@@ -22,6 +22,7 @@ final class AppModel {
         didSet { syncDeviceFileSession() }
     }
     let deviceFileManager: DeviceFileManagerModel
+    let albumScreenshots: AlbumScreenshotModel
     private(set) var wifi = WiFiFTPSnapshot.notConnected
     var wifiHost = ""
     var wifiPort = ""
@@ -104,8 +105,10 @@ final class AppModel {
 
     init(appDirectory: URL? = nil, inventoryReader: BoundedInventoryReader = BoundedInventoryReader(),
          discoverDevice: @escaping @Sendable () async -> DeviceDiscovery = { await DeviceService().discover() },
-         fileManager: DeviceFileManagerModel? = nil) {
-        self.deviceFileManager = fileManager ?? DeviceFileManagerModel()
+         fileManager: DeviceFileManagerModel? = nil, albumModel: AlbumScreenshotModel? = nil) {
+        let sharedFileClient = BoundedDeviceFileClient()
+        self.deviceFileManager = fileManager ?? DeviceFileManagerModel(client: sharedFileClient)
+        self.albumScreenshots = albumModel ?? AlbumScreenshotModel(client: fileManager == nil ? sharedFileClient : BoundedDeviceFileClient())
         self.inventoryReader = inventoryReader
         self.discoverDevice = discoverDevice
         let defaults = UserDefaults.standard
@@ -121,6 +124,12 @@ final class AppModel {
         self.wifiHost = WiFiFTPRememberedHost.hostFieldForLaunch(currentField: "", defaults: defaults)
         deviceFileManager.canStart = { [weak self] in
             guard let self else { return "应用状态不可用。" }
+            if self.albumScreenshots.isBusy { return "正在读取或下载相册截图，请等待完成。" }
+            return self.deviceFileOperationBlocker
+        }
+        albumScreenshots.canStart = { [weak self] in
+            guard let self else { return "应用状态不可用。" }
+            if self.deviceFileManager.isBusy { return "正在浏览或传输设备文件，请等待完成。" }
             return self.deviceFileOperationBlocker
         }
     }
@@ -146,6 +155,7 @@ final class AppModel {
         case .device: "我的 Switch"
         case .wifi: "无线连接"
         case .files: "文件管理"
+        case .album: "相册截图"
         case .maintenance: "维护"
         case .source(let id): snapshot.sources.first { $0.id == id }?.name ?? "游戏来源"
         }
@@ -170,6 +180,8 @@ final class AppModel {
             return wifiSubtitle
         case .files:
             return "文件管理"
+        case .album:
+            return "查看并下载 Switch 相册截图"
         case .maintenance:
             return "本地缓存、扫描与来源诊断"
         }
@@ -220,7 +232,7 @@ final class AppModel {
                 break
             }
             result = games.filter { gameBelongs($0, to: source) }
-        case .queue, .device, .wifi, .files, .maintenance:
+        case .queue, .device, .wifi, .files, .album, .maintenance:
             result = []
         }
 
@@ -313,7 +325,7 @@ final class AppModel {
         case .recent: recentGameIDs.count
         case .unidentified: unidentifiedCount
         case .queue: plan.count
-        case .device, .wifi, .files, .maintenance: nil
+        case .device, .wifi, .files, .album, .maintenance: nil
         case .source(let id): sourceGameCount(id)
         }
     }
@@ -916,8 +928,13 @@ final class AppModel {
         return candidates[0].id
     }
 
+    private var deviceFileActivityBlocksUSB: Bool {
+        deviceFileManager.isBusy || deviceFileManager.hasUnverifiedWorker
+            || albumScreenshots.isBusy || albumScreenshots.hasUnverifiedWorker
+    }
+
     var canReadInventory: Bool {
-        !deviceFileManager.isBusy && !deviceFileManager.hasUnverifiedWorker && mtpCandidateSignature != nil && !automaticReadBlocked && !isReadingInventory && !isDiscovering && !installationPlanLocked && !wifiBlocksUSB
+        !deviceFileActivityBlocksUSB && mtpCandidateSignature != nil && !automaticReadBlocked && !isReadingInventory && !isDiscovering && !installationPlanLocked && !wifiBlocksUSB
     }
 
     var inventoryIsCurrentSession: Bool {
@@ -963,7 +980,7 @@ final class AppModel {
         } else if deviceDiscovery == nil {
             deviceDiscovery = result
         }
-        guard selection != .files, !deviceFileManager.isBusy, !deviceFileManager.hasUnverifiedWorker, !isVerifyingInstall, let signature = mtpCandidateSignature, !automaticReadBlocked,
+        guard selection != .files, selection != .album, !deviceFileActivityBlocksUSB, !isVerifyingInstall, let signature = mtpCandidateSignature, !automaticReadBlocked,
               !inventoryIsCurrentSession else { return }
         if openMTPIsRunning {
             wasOpenMTPRunning = true
@@ -997,7 +1014,7 @@ final class AppModel {
     }
 
     func refreshDevices() async {
-        guard !deviceFileManager.isBusy, !deviceFileManager.hasUnverifiedWorker, !isDiscovering, !isReadingInventory, !installationPlanLocked else { return }
+        guard !deviceFileActivityBlocksUSB, !isDiscovering, !isReadingInventory, !installationPlanLocked else { return }
         if wifiBlocksUSB {
             notice = wifiBlocksUSBNotice
             return
@@ -1026,7 +1043,7 @@ final class AppModel {
     /// Detect USB, then read when there is a single 057e:201d candidate and OpenMTP is not running.
     /// A failed read leaves the last cached snapshot available as historical data.
     func detectAndRead(announceWhenMissing: Bool = true) async {
-        guard !deviceFileManager.isBusy, !deviceFileManager.hasUnverifiedWorker, !isDiscovering, !isReadingInventory, !installationPlanLocked else { return }
+        guard !deviceFileActivityBlocksUSB, !isDiscovering, !isReadingInventory, !installationPlanLocked else { return }
         if wifiBlocksUSB {
             if announceWhenMissing { notice = wifiBlocksUSBNotice }
             return
@@ -1064,7 +1081,7 @@ final class AppModel {
 
     @discardableResult
     func readInventory(forVerification: Bool = false, automatically: Bool = false, timeoutSeconds: Int = 60) async -> Bool {
-        guard !Task.isCancelled, !deviceFileManager.isBusy, !deviceFileManager.hasUnverifiedWorker, !automaticReadBlocked, !isReadingInventory, !isInstalling else { return false }
+        guard !Task.isCancelled, !deviceFileActivityBlocksUSB, !automaticReadBlocked, !isReadingInventory, !isInstalling else { return false }
         if wifiBlocksUSB {
             notice = wifiBlocksUSBNotice
             return false
@@ -1372,12 +1389,14 @@ final class AppModel {
     var deviceFileSessionSignature: String? { mtpCandidateSignature }
 
     func syncDeviceFileSession() {
-        deviceFileManager.setDeviceSignature(mtpCandidateSignature)
+        let signature = mtpCandidateSignature
+        deviceFileManager.setDeviceSignature(signature)
+        albumScreenshots.setDeviceSignature(signature)
     }
 
     private var deviceFileOperationBlocker: String? {
-        if automaticReadBlocked || deviceFileManager.hasUnverifiedWorker { return "上次 USB 辅助进程退出未确认；请检查设备并重启应用。" }
-        if wifiBlocksUSB { return "请先断开无线 FTP，再使用 USB 文件管理。" }
+        if automaticReadBlocked || deviceFileManager.hasUnverifiedWorker || albumScreenshots.hasUnverifiedWorker { return "上次 USB 辅助进程退出未确认；请检查设备并重启应用。" }
+        if wifiBlocksUSB { return "请先断开无线 FTP，再使用 USB 文件或相册。" }
         if openMTPIsRunning { return "请先完整退出 OpenMTP 等其他 MTP 客户端。" }
         if installationPlanLocked { return "正在准备、安装或核对游戏，请等待完成。" }
         if isReadingInventory || isDiscovering { return "正在检测设备或读取清单，请稍候再试。" }
@@ -1386,8 +1405,8 @@ final class AppModel {
     }
 
     var installationConnectionBlocker: String? {
-        if deviceFileManager.isBusy { return "正在浏览或传输设备文件，请等待完成。" }
-        if deviceFileManager.hasUnverifiedWorker { return "上次文件操作进程退出未确认；请检查设备并重启应用。" }
+        if deviceFileManager.hasUnverifiedWorker || albumScreenshots.hasUnverifiedWorker { return "上次文件操作进程退出未确认；请检查设备并重启应用。" }
+        if deviceFileManager.isBusy || albumScreenshots.isBusy { return "正在浏览、下载或传输设备文件，请等待完成。" }
         if automaticReadBlocked { return "上次 USB 探针退出未确认，请重启应用并检查设备后再安装。" }
         if wifiBlocksUSB { return "请先断开无线 FTP，再使用 USB 安装。" }
         if openMTPIsRunning { return "请完整退出 OpenMTP 等其他 MTP 客户端。" }
@@ -1463,7 +1482,7 @@ final class AppModel {
     }
 
     var canReviewMTPInstallation: Bool {
-        !deviceFileManager.isBusy && !deviceFileManager.hasUnverifiedWorker && !automaticReadBlocked && !isInstalling && !isVerifyingInstall && !isReviewingInstall && !isReadingInventory && !isDiscovering && !isScanning &&
+        !deviceFileActivityBlocksUSB && !automaticReadBlocked && !isInstalling && !isVerifyingInstall && !isReviewingInstall && !isReadingInventory && !isDiscovering && !isScanning &&
         !isCheckingPlan && !wifiBlocksUSB && preparationIsCurrent && preparation?.isPrepared == true && queueValidationIssues.isEmpty
     }
 
@@ -1506,7 +1525,7 @@ final class AppModel {
             notice = wifiBlocksUSBNotice
             return
         }
-        guard !deviceFileManager.isBusy, !deviceFileManager.hasUnverifiedWorker, !automaticReadBlocked, !isVerifyingInstall, !isInstalling, !isReadingInventory, !isDiscovering, !isScanning, !wifiBlocksUSB,
+        guard !deviceFileActivityBlocksUSB, !automaticReadBlocked, !isVerifyingInstall, !isInstalling, !isReadingInventory, !isDiscovering, !isScanning, !wifiBlocksUSB,
               let signature = mtpCandidateSignature, !review.items.isEmpty, reviewedPlan == preflightInput,
               preparationIsCurrent, queueValidationIssues.isEmpty else {
             reviewedPlan = nil
@@ -1969,7 +1988,7 @@ final class AppModel {
 
     func connectWiFi() async {
         guard !isWiFiBusy else { return }
-        if deviceFileManager.isBusy || deviceFileManager.hasUnverifiedWorker || isDiscovering || isReadingInventory || installationPlanLocked {
+        if deviceFileActivityBlocksUSB || isDiscovering || isReadingInventory || installationPlanLocked {
             notice = AppNotice(
                 level: .warning,
                 title: "USB 会话还在进行",

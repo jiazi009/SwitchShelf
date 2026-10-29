@@ -98,6 +98,12 @@ struct SidebarView: View {
                 isSelected: model.selection == .files
             ) { model.select(.files) }
             SidebarRow(
+                title: "相册截图",
+                systemImage: "photo.on.rectangle.angled",
+                count: nil,
+                isSelected: model.selection == .album
+            ) { model.select(.album) }
+            SidebarRow(
                 title: "维护",
                 systemImage: "wrench.and.screwdriver.fill",
                 count: nil,

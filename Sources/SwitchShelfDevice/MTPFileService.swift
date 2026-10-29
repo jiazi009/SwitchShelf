@@ -85,6 +85,13 @@ public enum MTPFileWorker {
             switch request.operation {
             case .storages:
                 result.storages = stores.map(\.value)
+            case .albumIndex:
+                let indexed = try await AlbumIndexer.collect(stores: stores, transport: opened) { found in
+                    await progress(.init(requestID: request.id, phase: "正在查找截图", bytesTransferred: UInt64(found)))
+                }
+                result.albumEntries = indexed.entries
+                result.albumTruncated = indexed.truncated
+                result.message = indexed.message
             case .list, .download, .upload:
                 guard let location = request.location else { throw MTPFileError.invalidRequest }
                 let matches = stores.filter { key($0.value.name) == key(location.storageName) }
@@ -138,7 +145,7 @@ public enum MTPFileWorker {
                     guard amount == source.byteCount else { throw MTPFileError.incompleteTransfer }
                     result.transferredBytes = amount
                     result.message = "普通文件已上传到 SD 卡；这不是游戏安装。"
-                case .storages: break
+                case .storages, .albumIndex: break
                 }
             }
             try await opened.close()
@@ -164,7 +171,7 @@ public enum MTPFileWorker {
         guard UUID(uuidString: request.id) != nil else { throw MTPFileError.invalidRequest }
         if let location = request.location { try MTPFileNames.validate(location) }
         switch request.operation {
-        case .storages:
+        case .storages, .albumIndex:
             guard request.location == nil, request.entry == nil, request.localURL == nil, request.uploadSource == nil else { throw MTPFileError.invalidRequest }
         case .list:
             guard request.location != nil, request.entry == nil, request.localURL == nil, request.uploadSource == nil else { throw MTPFileError.invalidRequest }
@@ -204,6 +211,152 @@ private actor MTPFileCounter {
     func set(_ count: UInt64, phase: String) async { bytes = count; await publish(phase) }
     private func publish(_ phase: String) async {
         await report(.init(requestID: requestID, phase: phase, bytesTransferred: bytes, totalBytes: total))
+    }
+}
+
+/// Read-only screenshot index. It never downloads, uploads, deletes or creates device objects.
+private enum AlbumIndexer {
+    static let fileLimit = 2_000
+    static let depthLimit = 8
+    static let objectLimit = 20_000
+
+    struct Result {
+        var entries: [MTPFileEntry]
+        var truncated: Bool
+        var message: String
+    }
+
+    private final class State {
+        var entries: [MTPFileEntry] = []
+        var notes: [String] = []
+        var truncated = false
+        /// File-count and object-count limits stop the whole walk. Depth does not, so siblings stay visible.
+        var stop = false
+        var observed = 0
+        func note(_ text: String) { if !notes.contains(text) { notes.append(text) } }
+        func message(count: Int) -> String {
+            var text = count == 0
+                ? "没有发现相册截图。只检查 Album、Album (Image SD)、相册工具，以及 SD 卡上的 Nintendo/Album。"
+                : "已列出 \(count) 张截图，可以下载到本机。不会删除或修改设备上的文件。"
+            if truncated { text += "列表并不完整。" }
+            if !notes.isEmpty { text += notes.joined() }
+            return text
+        }
+    }
+
+    static func collect(stores: [MTPFileStoreRecord], transport: any MTPFileTransport,
+                        report: @escaping @Sendable (Int) async -> Void) async throws -> Result {
+        let state = State()
+        let groups = Dictionary(grouping: stores) { MTPFileWorker.key($0.value.name.trimmingCharacters(in: .whitespacesAndNewlines)) }
+        for store in stores {
+            try Task.checkCancellation()
+            if state.stop { break }
+            let name = store.value.name
+            let folded = MTPFileWorker.key(name.trimmingCharacters(in: .whitespacesAndNewlines))
+            if groups[folded, default: []].count != 1 {
+                state.note("「\(name)」名称不唯一，已跳过。")
+                continue
+            }
+            if MTPFileNames.isAlbumStorage(name) {
+                try await walk(store: store, parent: .max, location: MTPFileLocation(storageName: name),
+                               transport: transport, state: state, report: report)
+            } else if MTPFileNames.isAlbumSDHost(name) {
+                try await walkSD(store: store, transport: transport, state: state, report: report)
+            }
+        }
+        let entries = state.entries.sorted {
+            let left = $0.modifiedDate ?? "", right = $1.modifiedDate ?? ""
+            if left != right { return left > right }
+            return $0.id.localizedStandardCompare($1.id) == .orderedAscending
+        }
+        return Result(entries: entries, truncated: state.truncated, message: state.message(count: entries.count))
+    }
+
+    private static func walkSD(store: MTPFileStoreRecord, transport: any MTPFileTransport,
+                               state: State, report: @escaping @Sendable (Int) async -> Void) async throws {
+        let root = try await list(store: store, parent: .max, transport: transport, state: state)
+        guard !state.stop, let nintendo = uniqueDirectory("Nintendo", in: root, state: state) else { return }
+        let inside = try await list(store: store, parent: nintendo.handle, transport: transport, state: state)
+        guard !state.stop, let album = uniqueDirectory("Album", in: inside, state: state) else { return }
+        try await walk(store: store, parent: album.handle,
+                       location: MTPFileLocation(storageName: store.value.name, components: ["Nintendo", "Album"]),
+                       transport: transport, state: state, report: report)
+    }
+
+    private static func walk(store: MTPFileStoreRecord, parent: UInt32, location: MTPFileLocation,
+                             transport: any MTPFileTransport, state: State,
+                             report: @escaping @Sendable (Int) async -> Void) async throws {
+        if state.stop { return }
+        let objects = try await list(store: store, parent: parent, transport: transport, state: state)
+        if state.stop { return }
+        let grouped = Dictionary(grouping: objects) { MTPFileWorker.key($0.name) }
+        for object in objects {
+            try Task.checkCancellation()
+            if state.stop { return }
+            if grouped[MTPFileWorker.key(object.name), default: []].count != 1 {
+                state.note("有重名项目无法唯一定位，已跳过。")
+                continue
+            }
+            if object.isDirectory {
+                guard location.components.count < depthLimit else {
+                    state.truncated = true
+                    state.note("目录层级超过 \(depthLimit) 层，列表并不完整。")
+                    continue
+                }
+                try await walk(store: store, parent: object.handle,
+                               location: MTPFileLocation(storageName: location.storageName, components: location.components + [object.name]),
+                               transport: transport, state: state, report: report)
+            } else if MTPFileNames.isScreenshotFile(object.name) {
+                guard let bytes = object.byteCount, bytes <= MTPFileUSBTransport.maximumFileBytes else {
+                    state.note("有截图缺少可核对的大小，未列入。")
+                    continue
+                }
+                guard state.entries.count < fileLimit else {
+                    state.truncated = true
+                    state.stop = true
+                    state.note("截图数量达到 \(fileLimit) 张上限，列表并不完整。")
+                    return
+                }
+                state.entries.append(.init(location: location, name: object.name, isDirectory: false,
+                                           byteCount: bytes, modifiedDate: object.modifiedDate))
+                await report(state.entries.count)
+            }
+        }
+    }
+
+    private static func uniqueDirectory(_ name: String, in objects: [MTPFileObjectRecord], state: State) -> MTPFileObjectRecord? {
+        let matches = objects.filter { $0.isDirectory && MTPFileWorker.key($0.name) == MTPFileWorker.key(name) }
+        if matches.count > 1 {
+            state.note("「\(name)」不唯一，已跳过该目录。")
+            return nil
+        }
+        return matches.first
+    }
+
+    private static func list(store: MTPFileStoreRecord, parent: UInt32, transport: any MTPFileTransport, state: State) async throws -> [MTPFileObjectRecord] {
+        try Task.checkCancellation()
+        let handles = try await transport.children(storage: store.handle, parent: parent)
+        guard handles.count <= 10_000, Set(handles).count == handles.count else { throw MTPFileError.resourceLimit }
+        if state.observed + handles.count > objectLimit {
+            state.truncated = true
+            state.stop = true
+            state.note("目录对象过多，列表在安全上限处停止。")
+            return []
+        }
+        state.observed += handles.count
+        var result: [MTPFileObjectRecord] = []
+        for handle in handles {
+            try Task.checkCancellation()
+            let object = try await transport.object(handle)
+            let storageMatches = object.storage == store.handle
+            let parentMatches = parent == UInt32.max
+                ? [UInt32(0), UInt32.max, store.handle].contains(object.parent)
+                : object.parent == parent
+            guard object.handle == handle, storageMatches, parentMatches,
+                  MTPFileNames.isValid(object.name) else { throw MTPFileError.invalidMetadata }
+            result.append(object)
+        }
+        return result
     }
 }
 

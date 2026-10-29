@@ -6,15 +6,25 @@ struct AlbumScreenshotsView: View {
     @Bindable var model: AlbumScreenshotModel
     private let columns = [GridItem(.adaptive(minimum: 168, maximum: 220), spacing: 12)]
 
+    /// Stays 300pt while the gallery can keep about 480pt. Narrows toward 200pt in a short window.
+    static func previewColumnWidth(in available: CGFloat) -> CGFloat {
+        guard available.isFinite, available > 0 else { return 300 }
+        if available - 300 >= 480 { return 300 }
+        return min(300, max(200, available * 0.34))
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             header
             if let message = model.message { messageBanner(message, error: model.messageIsError) }
             if model.isBusy { operationProgress }
-            HStack(spacing: 0) {
-                gallery.frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
-                Divider()
-                preview.frame(width: 300)
+            GeometryReader { proxy in
+                let previewWidth = Self.previewColumnWidth(in: proxy.size.width)
+                HStack(spacing: 0) {
+                    gallery.frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
+                    Divider()
+                    preview.frame(width: previewWidth)
+                }
             }
             footer
         }
@@ -116,8 +126,8 @@ struct AlbumScreenshotsView: View {
                 .frame(height: 108)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 Text(entry.name).font(.system(size: 11.5, weight: .medium)).lineLimit(1).truncationMode(.middle)
-                Text(albumDateText(entry.modifiedDate)).font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
-                Text(albumByteText(entry.byteCount)).font(.system(size: 10)).foregroundStyle(.secondary)
+                Text(albumDateText(entry.modifiedDate)).font(.system(.caption)).foregroundStyle(.secondary).lineLimit(1)
+                Text(albumByteText(entry.byteCount)).font(.system(.caption)).foregroundStyle(.secondary)
             }
             .padding(10)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -133,17 +143,17 @@ struct AlbumScreenshotsView: View {
 
     private var preview: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("预览").font(.system(size: 10.5, weight: .semibold)).foregroundStyle(.secondary)
+            Text("预览").font(.system(.caption, weight: .semibold)).foregroundStyle(.secondary)
             if let entry = model.selectedEntry, let image = model.image(for: entry.id) {
                 Image(nsImage: image)
                     .resizable().scaledToFit()
                     .frame(maxWidth: .infinity, maxHeight: 220)
                     .clipShape(RoundedRectangle(cornerRadius: 10))
                 Text(entry.name).font(.system(size: 12, weight: .semibold)).lineLimit(2)
-                Text(entry.location.displayPath).font(.system(size: 10.5)).foregroundStyle(.secondary)
+                Text(entry.location.displayPath).font(.system(.caption)).foregroundStyle(.secondary)
                     .lineLimit(3).textSelection(.enabled)
                 Text("\(albumByteText(entry.byteCount)) · \(albumDateText(entry.modifiedDate))")
-                    .font(.system(size: 10.5)).foregroundStyle(.secondary)
+                    .font(.system(.caption)).foregroundStyle(.secondary)
             } else {
                 VStack(spacing: 8) {
                     Image(systemName: "photo").font(.system(size: 28, weight: .light)).foregroundStyle(.tertiary)
@@ -167,7 +177,7 @@ struct AlbumScreenshotsView: View {
             Spacer(minLength: 8)
             Text("只下载，不修改设备")
         }
-        .font(.system(size: 10)).foregroundStyle(.secondary)
+        .font(.system(.caption)).foregroundStyle(.secondary)
         .padding(.horizontal, 16).padding(.vertical, 10)
         .background(Theme.surface)
         .overlay(alignment: .top) { Rectangle().fill(Theme.hairline).frame(height: 0.5) }
@@ -178,7 +188,7 @@ struct AlbumScreenshotsView: View {
             Image(systemName: error ? "exclamationmark.circle.fill" : "checkmark.circle.fill")
                 .foregroundStyle(error ? Theme.warning : Theme.installed)
             Text(message).font(.system(size: 11)).frame(maxWidth: .infinity, alignment: .leading)
-            Button { model.dismissMessage() } label: { Image(systemName: "xmark").font(.system(size: 9, weight: .semibold)) }
+            Button { model.dismissMessage() } label: { Image(systemName: "xmark").font(.system(.caption2, weight: .semibold)) }
                 .buttonStyle(.plain).accessibilityLabel("关闭相册提示")
         }
         .padding(10).background(Theme.surfaceMuted, in: RoundedRectangle(cornerRadius: 8))
@@ -190,7 +200,7 @@ struct AlbumScreenshotsView: View {
             HStack {
                 Text(model.operationTitle).font(.system(size: 11, weight: .medium)).lineLimit(1)
                 Spacer(minLength: 8)
-                Button("停止") { model.cancel() }.font(.system(size: 10.5)).buttonStyle(.plain)
+                Button("停止") { model.cancel() }.font(.system(.caption)).buttonStyle(.plain)
                     .accessibilityLabel("停止相册下载")
             }
             if let progress = model.progress, let total = progress.totalBytes, total > 0 {
@@ -200,7 +210,7 @@ struct AlbumScreenshotsView: View {
                     Spacer()
                     Text("\(albumByteText(progress.bytesTransferred)) / \(albumByteText(total))").monospacedDigit()
                 }
-                .font(.system(size: 9.5)).foregroundStyle(.secondary)
+                .font(.system(.caption2)).foregroundStyle(.secondary)
             } else {
                 ProgressView().controlSize(.small)
             }

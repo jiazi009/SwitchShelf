@@ -123,7 +123,7 @@ struct WiFiConnectView: View {
                         .font(.system(size: 13, weight: .semibold))
                     Spacer()
                     Text("默认端口 \(DBIWiFiDocumentedPorts.fileAccess)")
-                        .font(.system(size: 9.5, design: .monospaced))
+                        .font(.system(.caption2, design: .monospaced))
                         .foregroundStyle(.tertiary)
                 }
                 rememberedHostNote
@@ -149,7 +149,7 @@ struct WiFiConnectView: View {
                     .controlSize(.large)
                     .disabled(model.isWiFiBusy || phase == .connected || model.wifiHost.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.isDiscovering || model.isReadingInventory || model.isInstalling)
                     Text("只发送匿名登录、PWD、PASV 和 LIST。不上传，不安装，不打开 USB。")
-                        .font(.system(size: 10))
+                        .font(.system(.caption))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 0)
@@ -162,7 +162,7 @@ struct WiFiConnectView: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
                 Image(systemName: "bookmark")
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.system(.caption, weight: .semibold))
                     .foregroundStyle(Theme.violet)
                 Text(model.rememberedWiFiHost.map { "已记住的主机 \($0)" } ?? "尚未记住主机")
                     .font(.system(size: 11.5, weight: .semibold))
@@ -171,7 +171,7 @@ struct WiFiConnectView: View {
             Text(model.rememberedWiFiHost == nil
                  ? "只有 FTP 会话第一次变为已连接时，才保存当时实际连上的主机。失败、超时和未知不会写入。目前没有这台 Switch 的成功连接记录，不会填入猜测的地址。"
                  : "下次启动时，如果主机栏是空的，会填入这个地址。失败、超时、未知，以及后来连上的其他主机，都不会改掉它。")
-                .font(.system(size: 10.5))
+                .font(.system(.caption))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -189,14 +189,14 @@ struct WiFiConnectView: View {
                         .font(.system(size: 13, weight: .semibold))
                     Spacer()
                     Text("没有读到就保持未知")
-                        .font(.system(size: 9.5))
+                        .font(.system(.caption2))
                         .foregroundStyle(.tertiary)
                 }
                 probeRow("问候", model.wifi.greeting)
                 probeRow("工作目录", model.wifi.workingDirectory)
                 VStack(alignment: .leading, spacing: 6) {
                     Text("LIST 原文")
-                        .font(.system(size: 10.5, weight: .semibold))
+                        .font(.system(.caption, weight: .semibold))
                         .foregroundStyle(.secondary)
                     switch model.wifi.listingText {
                     case .unknown:
@@ -215,7 +215,7 @@ struct WiFiConnectView: View {
                         .frame(maxHeight: 160)
                     }
                     Text("这是 FTP 目录文本，不是已安装游戏。文件名没有经过包身份校验。")
-                        .font(.system(size: 10))
+                        .font(.system(.caption))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -228,7 +228,7 @@ struct WiFiConnectView: View {
     private func probeRow(_ title: String, _ value: WiFiObservation<String>) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text(title)
-                .font(.system(size: 10.5, weight: .semibold))
+                .font(.system(.caption, weight: .semibold))
                 .foregroundStyle(.secondary)
                 .frame(width: 72, alignment: .leading)
             Text(displayed(value))
@@ -262,10 +262,10 @@ struct WiFiConnectView: View {
                 step(4, "和 USB 分开", "「我的 Switch」仍是 sphaira / DBI 的 USB MTP。无线会话连接期间不会同时做 USB 检测或安装。")
                 HStack(alignment: .top, spacing: 8) {
                     Image(systemName: "lock.shield.fill")
-                        .font(.system(size: 10))
+                        .font(.system(.caption))
                         .foregroundStyle(Theme.violet)
                     Text("sphaira 的网络菜单只说明如何打开 MTP，不是这条 Wi-Fi。HTTP 端口 \(DBIWiFiDocumentedPorts.httpConfig) 的可查询元数据尚未验证，所以这里不讲 HTTP。夹具测试不等于已经连上 Switch。")
-                        .font(.system(size: 10))
+                        .font(.system(.caption))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -278,14 +278,14 @@ struct WiFiConnectView: View {
     private func step(_ number: Int, _ title: String, _ detail: String) -> some View {
         HStack(alignment: .top, spacing: 10) {
             Text("\(number)")
-                .font(.system(size: 10, weight: .bold))
+                .font(.system(.caption, weight: .bold))
                 .foregroundStyle(Theme.violet)
                 .frame(width: 20, height: 20)
                 .background(Theme.violet.opacity(0.12), in: Circle())
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.system(size: 11.5, weight: .semibold))
                 Text(detail)
-                    .font(.system(size: 10.5))
+                    .font(.system(.caption))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }

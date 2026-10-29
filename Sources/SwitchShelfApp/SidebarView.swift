@@ -41,7 +41,7 @@ struct SidebarView: View {
                 Text("SwitchShelf")
                     .font(.system(size: 15, weight: .bold))
                 Text("本地游戏库")
-                    .font(.system(size: 9.5, weight: .medium))
+                    .font(.system(.caption2, weight: .medium))
                     .foregroundStyle(.secondary)
             }
             Spacer(minLength: 0)
@@ -82,6 +82,7 @@ struct SidebarView: View {
                 systemImage: "cable.connector",
                 count: nil,
                 isSelected: model.selection == .device,
+                statusText: model.deviceDiscovery?.state.label ?? "未检测到设备",
                 statusColor: deviceDot
             ) { model.select(.device) }
             SidebarRow(
@@ -89,6 +90,7 @@ struct SidebarView: View {
                 systemImage: "wifi",
                 count: nil,
                 isSelected: model.selection == .wifi,
+                statusText: model.wifi.phase.label,
                 statusColor: wifiDot
             ) { model.select(.wifi) }
             SidebarRow(
@@ -136,6 +138,7 @@ struct SidebarView: View {
                     systemImage: "externaldrive.fill",
                     count: model.sourceGameCount(source.id),
                     isSelected: model.selection == .source(source.id),
+                    statusText: "来源\(source.availability.label)",
                     statusColor: availabilityColor(source.availability)
                 ) {
                     model.select(.source(source.id))
@@ -175,7 +178,7 @@ struct SidebarView: View {
 
             if model.sources.isEmpty {
                 Text("尚未添加来源")
-                    .font(.system(size: 10.5))
+                    .font(.system(.caption))
                     .foregroundStyle(.tertiary)
                     .padding(.horizontal, 12)
                     .padding(.top, 2)
@@ -190,19 +193,19 @@ struct SidebarView: View {
                 HStack(spacing: 6) {
                     ProgressView().controlSize(.mini).scaleEffect(0.7).frame(width: 12, height: 12)
                     Text(model.scanPhase.map { "正在扫描「\($0)」…" } ?? "正在扫描…")
-                        .font(.system(size: 10))
+                        .font(.system(.caption))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
             } else {
                 HStack(spacing: 5) {
                     Image(systemName: model.offlineSources.isEmpty ? "clock" : "exclamationmark.triangle.fill")
-                        .font(.system(size: 9))
+                        .font(.system(.caption2))
                         .foregroundStyle(model.offlineSources.isEmpty ? Color.secondary : Theme.warning)
                     Text(model.offlineSources.isEmpty
                          ? (model.lastScanDate == nil ? "尚未扫描" : "上次扫描 \(relativeTime(model.lastScanDate))")
                          : "\(model.offlineSources.count) 个来源离线 · 保留缓存")
-                        .font(.system(size: 10))
+                        .font(.system(.caption))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
@@ -249,6 +252,7 @@ struct SidebarRow: View {
     var systemImage: String
     var count: Int?
     var isSelected: Bool
+    var statusText: String? = nil
     var statusColor: Color? = nil
     var action: () -> Void
 
@@ -267,20 +271,20 @@ struct SidebarRow: View {
                 Spacer(minLength: 4)
                 if let statusColor {
                     Circle()
-                        .fill(isSelected ? Color.white.opacity(0.85) : statusColor)
+                        .fill(isSelected ? Color.white : statusColor)
                         .frame(width: 5.5, height: 5.5)
-                        .accessibilityLabel("来源状态")
+                        .accessibilityHidden(true)
                 }
                 if let count {
                     Text("\(count)")
-                        .font(.system(size: 10, weight: .medium))
+                        .font(.system(.caption, weight: .medium))
                         .monospacedDigit()
-                        .foregroundStyle(isSelected ? Color.white.opacity(0.82) : Color.secondary)
+                        .foregroundStyle(isSelected ? Color.white : Color.secondary)
                 }
             }
             .foregroundStyle(isSelected ? Color.white : Color.primary)
             .padding(.horizontal, 10)
-            .frame(height: 32)
+            .frame(minHeight: 32)
             .background {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .fill(isSelected ? Theme.accent : (isHovering ? Color.primary.opacity(0.055) : Color.clear))
@@ -290,7 +294,14 @@ struct SidebarRow: View {
         .buttonStyle(.plain)
         .onHover { hovering in isHovering = hovering }
         .accessibilityLabel(title)
-        .accessibilityValue(count.map { "\($0) 项" } ?? "")
+        .accessibilityValue(accessibilityValueText)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    private var accessibilityValueText: String {
+        [statusText, count.map { "\($0) 项" }]
+            .compactMap { $0 }
+            .filter { !$0.isEmpty }
+            .joined(separator: "，")
     }
 }

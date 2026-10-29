@@ -44,12 +44,15 @@ struct RootView: View {
     @ViewBuilder
     private var pageContent: some View {
         if model.isLibraryPage {
-            HStack(spacing: 0) {
-                LibraryView(model: model, installationMotion: installationMotion)
-                    .frame(minWidth: 0, maxWidth: .infinity)
-                Divider().overlay(Theme.hairline)
-                InstallationSidebar(model: model, installationMotion: installationMotion)
-                    .frame(width: 320)
+            GeometryReader { proxy in
+                let stagingWidth = Self.stagingColumnWidth(in: proxy.size.width)
+                HStack(spacing: 0) {
+                    LibraryView(model: model, installationMotion: installationMotion)
+                        .frame(minWidth: 0, maxWidth: .infinity)
+                    Divider().overlay(Theme.hairline)
+                    InstallationSidebar(model: model, installationMotion: installationMotion)
+                        .frame(width: stagingWidth)
+                }
             }
         } else {
             switch model.selection ?? .all {
@@ -72,5 +75,12 @@ struct RootView: View {
             default: EmptyView()
             }
         }
+    }
+
+    /// Stays 320pt while the library can keep about 480pt. Narrows toward 220pt at the 960pt window.
+    static func stagingColumnWidth(in available: CGFloat) -> CGFloat {
+        guard available.isFinite, available > 0 else { return 320 }
+        if available - 320 >= 480 { return 320 }
+        return min(320, max(220, available * 0.34))
     }
 }

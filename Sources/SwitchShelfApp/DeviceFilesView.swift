@@ -44,7 +44,7 @@ struct DeviceFilesView: View {
     private var storageSidebar: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("设备存储")
-                .font(.system(size: 10.5, weight: .semibold)).foregroundStyle(.secondary)
+                .font(.system(.caption, weight: .semibold)).foregroundStyle(.secondary)
                 .padding(.horizontal, 14).padding(.top, 16).padding(.bottom, 10)
             ScrollView {
                 LazyVStack(spacing: 5) {
@@ -60,9 +60,9 @@ struct DeviceFilesView: View {
             Divider()
             VStack(alignment: .leading, spacing: 7) {
                 Label("普通文件传输", systemImage: "doc.on.doc")
-                    .font(.system(size: 10.5, weight: .medium))
+                    .font(.system(.caption, weight: .medium))
                 Text("上传到可写 microSD 目录。单个文件需小于 4 GiB；安装包请从游戏库发送。")
-                    .font(.system(size: 10)).foregroundStyle(.secondary)
+                    .font(.system(.caption)).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .padding(14)
@@ -81,13 +81,13 @@ struct DeviceFilesView: View {
                     Text(storage.name).font(.system(size: 11.5, weight: .medium)).lineLimit(2)
                     Spacer(minLength: 0)
                 }
-                Text(storage.role).font(.system(size: 9.5)).foregroundStyle(.secondary).lineLimit(2)
+                Text(storage.role).font(.system(.caption2)).foregroundStyle(.secondary).lineLimit(2)
                 if let capacity = storage.capacityBytes, capacity > 0, let free = storage.freeBytes {
                     ProgressView(value: Double(capacity - min(capacity, free)), total: Double(capacity))
                         .tint(selected ? Theme.accent : .secondary)
                         .accessibilityLabel("已使用容量")
                     Text("可用 \(fileByteText(free)) / \(fileByteText(capacity))")
-                        .font(.system(size: 9)).foregroundStyle(.secondary).lineLimit(2)
+                        .font(.system(.caption2)).foregroundStyle(.secondary).lineLimit(2)
                 }
             }
             .padding(10)
@@ -246,17 +246,17 @@ struct DeviceFilesView: View {
                 TableColumn("大小") { row in
                     let entry = row.entry
                     Text(entry.isDirectory ? "—" : fileByteText(entry.byteCount))
-                        .font(.system(size: 10.5)).foregroundStyle(.secondary).monospacedDigit()
+                        .font(.system(.caption)).foregroundStyle(.secondary).monospacedDigit()
                 }
                 .width(min: 64, ideal: 76, max: 92)
                 TableColumn("种类") { row in
                     let entry = row.entry
-                    Text(fileType(entry)).font(.system(size: 10.5)).foregroundStyle(.secondary).lineLimit(1)
+                    Text(fileType(entry)).font(.system(.caption)).foregroundStyle(.secondary).lineLimit(1)
                 }
                 .width(min: 58, ideal: 70, max: 90)
                 TableColumn("修改时间") { row in
                     let entry = row.entry
-                    Text(fileDateText(entry.modifiedDate)).font(.system(size: 10.5)).foregroundStyle(.secondary).lineLimit(1)
+                    Text(fileDateText(entry.modifiedDate)).font(.system(.caption)).foregroundStyle(.secondary).lineLimit(1)
                         .help(entry.modifiedDate ?? "设备未提供修改时间")
                 }
                 .width(min: 100, ideal: 120, max: 140)
@@ -282,9 +282,9 @@ struct DeviceFilesView: View {
                     Spacer(minLength: 4)
                     Text(selected.isDirectory ? "文件夹" : fileByteText(selected.byteCount)).foregroundStyle(.secondary)
                 }
-                .font(.system(size: 10.5))
+                .font(.system(.caption))
                 if let issue = model.downloadIssue {
-                    Text(issue).font(.system(size: 10)).foregroundStyle(Theme.warning)
+                    Text(issue).font(.system(.caption)).foregroundStyle(Theme.warning)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -296,7 +296,7 @@ struct DeviceFilesView: View {
                     if let free = storage.freeBytes { Text("可用 \(fileByteText(free))") }
                 }
             }
-            .font(.system(size: 10)).foregroundStyle(.secondary)
+            .font(.system(.caption)).foregroundStyle(.secondary)
         }
         .padding(.horizontal, 16).padding(.vertical, 10)
         .background(Theme.surface)
@@ -308,7 +308,7 @@ struct DeviceFilesView: View {
             Image(systemName: error ? "exclamationmark.circle.fill" : "checkmark.circle.fill")
                 .foregroundStyle(error ? Theme.warning : Theme.installed)
             Text(message).font(.system(size: 11)).frame(maxWidth: .infinity, alignment: .leading)
-            Button { model.dismissMessage() } label: { Image(systemName: "xmark").font(.system(size: 9, weight: .semibold)) }
+            Button { model.dismissMessage() } label: { Image(systemName: "xmark").font(.system(.caption2, weight: .semibold)) }
                 .buttonStyle(.plain).accessibilityLabel("关闭文件操作提示")
         }
         .padding(10).background(Theme.surfaceMuted, in: RoundedRectangle(cornerRadius: 8))
@@ -320,7 +320,7 @@ struct DeviceFilesView: View {
             HStack {
                 Text(model.operationTitle).font(.system(size: 11, weight: .medium)).lineLimit(1)
                 Spacer(minLength: 8)
-                Button("停止") { model.cancel() }.font(.system(size: 10.5)).buttonStyle(.plain)
+                Button("停止") { model.cancel() }.font(.system(.caption)).buttonStyle(.plain)
                     .accessibilityLabel("停止当前文件操作")
             }
             if let progress = model.progress, let total = progress.totalBytes, total > 0 {
@@ -330,7 +330,7 @@ struct DeviceFilesView: View {
                     Spacer()
                     Text("\(fileByteText(progress.bytesTransferred)) / \(fileByteText(total))").monospacedDigit()
                 }
-                .font(.system(size: 9.5)).foregroundStyle(.secondary)
+                .font(.system(.caption2)).foregroundStyle(.secondary)
             } else {
                 ProgressView().controlSize(.small)
             }

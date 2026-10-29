@@ -297,16 +297,16 @@ struct LibraryView: View {
                 Slider(value: $model.coverSize, in: 120...240, step: 4) {
                     Text("封面尺寸")
                 } minimumValueLabel: {
-                    Image(systemName: "square.grid.3x3").font(.system(size: 9))
+                    Image(systemName: "square.grid.3x3").font(.system(.caption2))
                 } maximumValueLabel: {
-                    Image(systemName: "square.grid.2x2").font(.system(size: 9))
+                    Image(systemName: "square.grid.2x2").font(.system(.caption2))
                 }
                 .accessibilityLabel("封面尺寸")
                 .accessibilityValue("\(Int(model.coverSize)) 点")
                 HStack {
-                    Text("紧凑").font(.system(size: 9)).foregroundStyle(.tertiary)
+                    Text("紧凑").font(.system(.caption2)).foregroundStyle(.tertiary)
                     Spacer()
-                    Text("宽松").font(.system(size: 9)).foregroundStyle(.tertiary)
+                    Text("宽松").font(.system(.caption2)).foregroundStyle(.tertiary)
                 }
             }
             .padding(14)
@@ -517,28 +517,28 @@ struct LibraryView: View {
     private var footer: some View {
         HStack(spacing: 8) {
             Text("\(model.filteredGames.count) 款游戏")
-                .font(.system(size: 10.5, weight: .medium))
+                .font(.system(.caption, weight: .medium))
                 .foregroundStyle(.secondary)
             if model.hasActiveFilters {
                 Text("（全部 \(model.games.count)）")
-                    .font(.system(size: 10.5))
+                    .font(.system(.caption))
                     .foregroundStyle(.tertiary)
             }
             if !model.plan.isEmpty {
                 Text("· 待安装 \(model.plan.count) 款")
-                    .font(.system(size: 10.5))
+                    .font(.system(.caption))
                     .foregroundStyle(Theme.accent)
             }
             Spacer()
             if model.isScanning {
                 ProgressView().controlSize(.mini).scaleEffect(0.7)
                 Text(model.scanPhase.map { "正在扫描「\($0)」…" } ?? "正在扫描…")
-                    .font(.system(size: 10))
+                    .font(.system(.caption))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             } else {
                 Text(model.lastScanDate == nil ? "尚未扫描" : "上次扫描 \(relativeTime(model.lastScanDate))")
-                    .font(.system(size: 10))
+                    .font(.system(.caption))
                     .foregroundStyle(.tertiary)
             }
             if !model.scanIssues.isEmpty {
@@ -546,7 +546,7 @@ struct LibraryView: View {
                     showIssues.toggle()
                 } label: {
                     Label("\(model.scanIssues.count) 条问题", systemImage: "exclamationmark.triangle.fill")
-                        .font(.system(size: 10))
+                        .font(.system(.caption))
                         .foregroundStyle(Theme.warning)
                 }
                 .buttonStyle(.plain)
@@ -560,12 +560,12 @@ struct LibraryView: View {
                                 Spacer()
                                 Button("复制诊断") { model.copyDiagnostics() }
                                     .buttonStyle(.plain)
-                                    .font(.system(size: 10))
+                                    .font(.system(.caption))
                                     .foregroundStyle(Theme.accent)
                             }
                             ForEach(Array(model.scanIssues.enumerated()), id: \.offset) { _, issue in
                                 Text(issue)
-                                    .font(.system(size: 10.5))
+                                    .font(.system(.caption))
                                     .foregroundStyle(.secondary)
                                     .fixedSize(horizontal: false, vertical: true)
                                     .textSelection(.enabled)

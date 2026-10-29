@@ -61,7 +61,13 @@ extension AppModel {
             }
             for key in ["brand", "header", "installButton", "staging", "stagingViewport"] { _ = try requireFrame(key) }
             let sidebar = checked["staging"]!
-            guard abs(sidebar.width - 320) < 1 else { throw NSError(domain: "StagingMatrix", code: 5) }
+            if width <= 960 {
+                guard sidebar.width >= 220, sidebar.width < 320 else {
+                    throw NSError(domain: "StagingMatrix", code: 5, userInfo: [NSLocalizedDescriptionKey: "Narrow staging width \(sidebar.width) should yield below 320 and stay at least 220"])
+                }
+            } else {
+                guard abs(sidebar.width - 320) < 1 else { throw NSError(domain: "StagingMatrix", code: 5) }
+            }
             if let first = snapshot.games.first {
                 let library = try requireFrame(layout == .grid ? "gridViewport" : "listViewport")
                 guard library.maxX <= sidebar.minX + 1 else { throw NSError(domain: "StagingMatrix", code: 6) }

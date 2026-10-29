@@ -87,9 +87,9 @@ struct BadgePill: View {
     var body: some View {
         HStack(spacing: 4) {
             if let systemImage {
-                Image(systemName: systemImage).font(.system(size: 9, weight: .semibold))
+                Image(systemName: systemImage).font(.system(.caption2, weight: .semibold))
             }
-            Text(text).font(.system(size: 10, weight: .semibold))
+            Text(text).font(.system(.caption, weight: .semibold))
         }
         .foregroundStyle(solid ? .white : tone.color)
         .padding(.horizontal, 7)
@@ -165,7 +165,7 @@ struct NoticeBanner: View {
             }
             Button(action: onDismiss) {
                 Image(systemName: "xmark")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.system(.caption, weight: .bold))
                     .foregroundStyle(.secondary)
                     .frame(width: 22, height: 22)
                     .contentShape(Rectangle())
@@ -369,7 +369,7 @@ struct StatTile: View {
                 Text(title).font(.system(size: 11)).foregroundStyle(.secondary)
                 Text(value).font(.system(size: 18, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.7)
                 if let detail {
-                    Text(detail).font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
+                    Text(detail).font(.system(.caption)).foregroundStyle(.secondary).lineLimit(1)
                 }
             }
             Spacer(minLength: 0)

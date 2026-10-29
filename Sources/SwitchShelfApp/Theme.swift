@@ -6,9 +6,19 @@ enum Theme {
     static let accent = Color(red: 0.12, green: 0.39, blue: 0.96)
     static let accentDeep = Color(red: 0.08, green: 0.28, blue: 0.82)
     static let violet = Color(red: 0.48, green: 0.34, blue: 0.94)
-    static let installed = Color(red: 0.10, green: 0.60, blue: 0.36)
-    static let warning = Color(red: 0.90, green: 0.52, blue: 0.12)
-    static let danger = Color(red: 0.84, green: 0.24, blue: 0.24)
+    /// Text and status marks. Light values clear 4.5:1 on white; dark values clear it on the lightest dark surface.
+    static let installed = adaptive(
+        light: NSColor(calibratedRed: 0.05, green: 0.42, blue: 0.26, alpha: 1),
+        dark: NSColor(calibratedRed: 0.30, green: 0.82, blue: 0.55, alpha: 1)
+    )
+    static let warning = adaptive(
+        light: NSColor(calibratedRed: 0.55, green: 0.28, blue: 0.02, alpha: 1),
+        dark: NSColor(calibratedRed: 0.98, green: 0.72, blue: 0.35, alpha: 1)
+    )
+    static let danger = adaptive(
+        light: NSColor(calibratedRed: 0.70, green: 0.14, blue: 0.14, alpha: 1),
+        dark: NSColor(calibratedRed: 1.00, green: 0.62, blue: 0.58, alpha: 1)
+    )
 
     static func adaptive(light: NSColor, dark: NSColor) -> Color {
         Color(nsColor: NSColor(name: nil) { appearance in
@@ -71,8 +81,8 @@ enum StatusTone {
         case .neutral: Color(red: 0.20, green: 0.24, blue: 0.30)
         case .accent: Theme.accentDeep
         case .success: Color(red: 0.06, green: 0.43, blue: 0.25)
-        case .warning: Color(red: 0.62, green: 0.32, blue: 0.07)
-        case .danger: Theme.danger
+        case .warning: Color(red: 0.50, green: 0.26, blue: 0.00)
+        case .danger: Color(red: 0.70, green: 0.14, blue: 0.14)
         }
     }
 }

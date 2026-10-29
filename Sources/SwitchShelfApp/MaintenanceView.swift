@@ -124,18 +124,18 @@ struct MaintenanceView: View {
                     Spacer()
                     Button("复制诊断摘要") { model.copyDiagnostics() }
                         .buttonStyle(.plain)
-                        .font(.system(size: 10))
+                        .font(.system(.caption))
                         .foregroundStyle(Theme.accent)
                         .accessibilityLabel("复制诊断摘要")
                 }
                 Text(model.appDataPath)
-                    .font(.system(size: 9.5, design: .monospaced))
+                    .font(.system(.caption2, design: .monospaced))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
                     .textSelection(.enabled)
                 Text("缓存数据库与安装计划存放在 Application Support/SwitchShelf；游戏来源始终只读。")
-                    .font(.system(size: 10))
+                    .font(.system(.caption))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: 8) {
@@ -160,11 +160,11 @@ struct MaintenanceView: View {
                         .font(.system(size: 12.5, weight: .semibold))
                     Spacer()
                     Text("\(model.sourceCount) 个来源")
-                        .font(.system(size: 9.5))
+                        .font(.system(.caption2))
                         .foregroundStyle(.tertiary)
                 }
                 if model.sources.isEmpty {
-                    Text("尚未添加来源。").font(.system(size: 10.5)).foregroundStyle(.secondary)
+                    Text("尚未添加来源。").font(.system(.caption)).foregroundStyle(.secondary)
                 } else {
                     ForEach(model.sources) { source in
                         HStack(spacing: 8) {
@@ -181,11 +181,11 @@ struct MaintenanceView: View {
                             }
                             Spacer()
                             Text(source.availability.label)
-                                .font(.system(size: 9.5))
+                                .font(.system(.caption2))
                                 .foregroundStyle(.secondary)
                             Button("扫描") { model.scanSource(source.id) }
                                 .buttonStyle(.plain)
-                                .font(.system(size: 10))
+                                .font(.system(.caption))
                                 .foregroundStyle(Theme.accent)
                                 .disabled(model.isScanning)
                                 .accessibilityLabel("扫描来源 \(source.name)")
@@ -193,7 +193,7 @@ struct MaintenanceView: View {
                                 model.revealSource(source)
                             } label: {
                                 Image(systemName: "folder")
-                                    .font(.system(size: 9.5))
+                                    .font(.system(.caption2))
                                     .foregroundStyle(.secondary)
                                     .frame(width: 20, height: 20)
                             }
@@ -216,7 +216,7 @@ struct MaintenanceView: View {
                         .font(.system(size: 12.5, weight: .semibold))
                     Spacer()
                     Text("\(model.scanIssues.count) 条")
-                        .font(.system(size: 9.5))
+                        .font(.system(.caption2))
                         .foregroundStyle(.tertiary)
                 }
                 if model.scanIssues.isEmpty {
@@ -225,18 +225,18 @@ struct MaintenanceView: View {
                             .font(.system(size: 11))
                             .foregroundStyle(Theme.installed)
                         Text("当前缓存中没有记录扫描问题。")
-                            .font(.system(size: 10.5))
+                            .font(.system(.caption))
                             .foregroundStyle(.secondary)
                     }
                 } else {
                     ForEach(Array(model.scanIssues.enumerated()), id: \.offset) { _, issue in
                         HStack(alignment: .top, spacing: 7) {
                             Image(systemName: "exclamationmark.triangle.fill")
-                                .font(.system(size: 9))
+                                .font(.system(.caption2))
                                 .foregroundStyle(Theme.warning)
                                 .padding(.top, 1)
                             Text(issue)
-                                .font(.system(size: 10.5))
+                                .font(.system(.caption))
                                 .foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
                                 .textSelection(.enabled)

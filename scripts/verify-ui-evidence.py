@@ -44,7 +44,11 @@ for variant in ["light-animated", "dark-animated", "light-reduced", "dark-reduce
         entry = entries[name]
         frames, viewport = entry["checkedFrames"], entry["viewport"]
         assert all(inside(rect, viewport) for rect in frames.values()), f"Native clipping: {variant}/{name}"
-        assert abs(frames["staging"]["width"] - 320) < 1
+        staging_width = frames["staging"]["width"]
+        if "960x640" in name:
+            assert 220 <= staging_width <= 320, f"Narrow staging width: {variant}/{name}"
+        else:
+            assert abs(staging_width - 320) < 1
         assert inside(frames["installButton"], frames["staging"])
         if name.startswith("populated"):
             assert entry["stagedGames"] == 2 and entry["libraryGames"] == 5

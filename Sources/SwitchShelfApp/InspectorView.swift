@@ -34,7 +34,7 @@ struct InspectorView: View {
                 model.closeGameDetails()
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.system(.caption, weight: .bold))
                     .foregroundStyle(.secondary)
                     .frame(width: 24, height: 24)
                     .contentShape(Rectangle())
@@ -130,7 +130,7 @@ private struct GameInspector: View {
                     .monospacedDigit()
                 Text(game.contentSummary)
             }
-            .font(.system(size: 10.5))
+            .font(.system(.caption))
             .foregroundStyle(.secondary)
 
             assessmentCard
@@ -142,19 +142,19 @@ private struct GameInspector: View {
                             .font(.system(size: 12, weight: .semibold))
                         Spacer()
                         Text("本地只读")
-                            .font(.system(size: 9.5))
+                            .font(.system(.caption2))
                             .foregroundStyle(.tertiary)
                     }
                     ForEach(groupedContents, id: \.kind) { group in
                         HStack(spacing: 5) {
                             Image(systemName: group.kind.symbol)
-                                .font(.system(size: 9, weight: .semibold))
+                                .font(.system(.caption2, weight: .semibold))
                             Text(group.kind.label)
                             Text("×\(group.contents.count)")
                                 .foregroundStyle(.tertiary)
                             Spacer()
                         }
-                        .font(.system(size: 10, weight: .medium))
+                        .font(.system(.caption, weight: .medium))
                         .foregroundStyle(.secondary)
                         .padding(.top, 2)
                         ForEach(group.contents) { content in
@@ -172,7 +172,7 @@ private struct GameInspector: View {
                     ForEach(gameSources) { source in
                         HStack(spacing: 7) {
                             Image(systemName: "externaldrive.fill")
-                                .font(.system(size: 10))
+                                .font(.system(.caption))
                                 .foregroundStyle(.secondary)
                             Text(source.name).font(.system(size: 11)).lineLimit(1)
                             Spacer()
@@ -180,7 +180,7 @@ private struct GameInspector: View {
                                 .fill(source.availability == .online ? Theme.installed : Theme.warning)
                                 .frame(width: 5, height: 5)
                             Text(source.availability.label)
-                                .font(.system(size: 9.5))
+                                .font(.system(.caption2))
                                 .foregroundStyle(.secondary)
                         }
                         .padding(.vertical, 2)
@@ -207,7 +207,7 @@ private struct GameInspector: View {
             .padding(.top, 2)
 
             Text("安装状态依据当前设备清单。已验证的包仍按原有证据判断。文件名已匹配的游戏只对照 Title ID 与内容类型，不代表包字节已验证。本体正向记录显示已安装；本地更新或 DLC 缺失或版本更低时显示部分安装。")
-                .font(.system(size: 9.5))
+                .font(.system(.caption2))
                 .foregroundStyle(.tertiary)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -232,19 +232,19 @@ private struct GameInspector: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack {
                     Text("安装状态")
-                        .font(.system(size: 10.5, weight: .semibold))
+                        .font(.system(.caption, weight: .semibold))
                         .foregroundStyle(.secondary)
                     Spacer()
                     if let observed = assessment.observedAt {
                         Text("清单 \(relativeTime(observed))")
-                            .font(.system(size: 9))
+                            .font(.system(.caption2))
                             .foregroundStyle(.tertiary)
                     }
                 }
                 Text(assessment.state.label)
                     .font(.system(size: 12, weight: .semibold))
                 Text(assessment.explanation)
-                    .font(.system(size: 10))
+                    .font(.system(.caption))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -265,7 +265,7 @@ private struct GameInspector: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 5) {
                     Text(content.displayVersion ?? formatVersion(content.rawVersion) ?? "版本未知")
-                        .font(.system(size: 10.5, weight: .medium))
+                        .font(.system(.caption, weight: .medium))
                         .monospacedDigit()
                     Text(content.format.rawValue.uppercased())
                         .font(.system(size: 8.5, weight: .semibold))
@@ -275,29 +275,29 @@ private struct GameInspector: View {
                         .background(Theme.hairline, in: RoundedRectangle(cornerRadius: 3, style: .continuous))
                     if state.state == .installed {
                         Image(systemName: "checkmark.seal.fill")
-                            .font(.system(size: 9))
+                            .font(.system(.caption2))
                             .foregroundStyle(Theme.installed)
                             .help(state.explanation)
                     } else if state.state == .notInstalled {
                         Image(systemName: "minus.circle")
-                            .font(.system(size: 9))
+                            .font(.system(.caption2))
                             .foregroundStyle(.secondary)
                             .help(state.explanation)
                     }
                     if content.availability == .offline {
                         Image(systemName: "wifi.slash")
-                            .font(.system(size: 9))
+                            .font(.system(.caption2))
                             .foregroundStyle(Theme.warning)
                             .help("来源离线")
                     }
                     Spacer(minLength: 0)
                     Text(formatByteCount(content.byteCount))
-                        .font(.system(size: 9.5))
+                        .font(.system(.caption2))
                         .foregroundStyle(.secondary)
                         .monospacedDigit()
                 }
                 Text(content.fileURL.lastPathComponent)
-                    .font(.system(size: 10))
+                    .font(.system(.caption))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
@@ -311,7 +311,7 @@ private struct GameInspector: View {
                 model.revealInFinder(content.fileURL)
             } label: {
                 Image(systemName: "folder")
-                    .font(.system(size: 10, weight: .medium))
+                    .font(.system(.caption, weight: .medium))
                     .foregroundStyle(.secondary)
                     .frame(width: 22, height: 22)
                     .contentShape(Rectangle())
@@ -365,7 +365,7 @@ private struct MultiSelectionInspector: View {
                     Text("\(selected.count) 款游戏已选择")
                         .font(.system(size: 15, weight: .semibold))
                     Text("批量操作仅影响本地安装计划")
-                        .font(.system(size: 10))
+                        .font(.system(.caption))
                         .foregroundStyle(.secondary)
                 }
             }
@@ -383,19 +383,19 @@ private struct MultiSelectionInspector: View {
                 ForEach(selected.prefix(6)) { game in
                     HStack(spacing: 7) {
                         Image(systemName: "gamecontroller.fill")
-                            .font(.system(size: 9))
+                            .font(.system(.caption2))
                             .foregroundStyle(Theme.accent.opacity(0.8))
                         Text(game.title).font(.system(size: 11)).lineLimit(1)
                         Spacer()
                         Text(formatByteCount(game.byteCount))
-                            .font(.system(size: 9))
+                            .font(.system(.caption2))
                             .foregroundStyle(.tertiary)
                             .monospacedDigit()
                     }
                 }
                 if selected.count > 6 {
                     Text("另有 \(selected.count - 6) 款游戏")
-                        .font(.system(size: 10))
+                        .font(.system(.caption))
                         .foregroundStyle(.tertiary)
                 }
             }
@@ -409,7 +409,7 @@ private struct MultiSelectionInspector: View {
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(.secondary)
                     Text(sourceNames.joined(separator: "、"))
-                        .font(.system(size: 10))
+                        .font(.system(.caption))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -432,7 +432,7 @@ private struct SummaryMetric: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(title).font(.system(size: 9)).foregroundStyle(.secondary)
+            Text(title).font(.system(.caption2)).foregroundStyle(.secondary)
             Text(value).font(.system(size: 13, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.7)
         }
         .padding(9)

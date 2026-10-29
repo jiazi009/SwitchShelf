@@ -30,7 +30,7 @@ struct InstallationSidebar: View {
             HStack(alignment: .top, spacing: 6) {
                 Image(systemName: "cable.connector").foregroundStyle(Theme.accent)
                 Text(model.installationConnectionBlocker ?? "USB 已发现 · 安装模式需在设备确认")
-                    .font(.system(size: 10.5)).foregroundStyle(.secondary).lineLimit(2)
+                    .font(.system(.caption)).foregroundStyle(.secondary).lineLimit(2)
             }
             Button("连接指引") { model.showConnectionGuide = true }
                 .font(.caption)
@@ -60,7 +60,7 @@ struct InstallationSidebar: View {
                 .disabled(model.plan.isEmpty || model.installationPlanLocked)
             }
             Text("有 XCI 时默认只安装整合包，不附带其他本体、更新和 DLC · 目标以设备端选择为准")
-                .font(.system(size: 9)).foregroundStyle(.secondary)
+                .font(.system(.caption2)).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             if let issue = model.queueValidationIssues.first {
                 Text(issue).font(.caption2).foregroundStyle(Theme.warning).lineLimit(3).help(issue)
@@ -131,7 +131,7 @@ struct InstallationSidebar: View {
                 ProgressView().controlSize(.small)
             }
             Text(detail)
-                .font(.system(size: 9))
+                .font(.system(.caption2))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -214,7 +214,7 @@ private struct StagedGameCard: View {
                     Text(item.title).font(.system(size: 12, weight: .semibold)).lineLimit(2)
                         .accessibilityIdentifier("staged-title-\(item.gameID)")
                     Text("\(item.includedContents.count) 个文件 · \(formatByteCount(item.byteCount))")
-                        .font(.system(size: 10)).foregroundStyle(.secondary)
+                        .font(.system(.caption)).foregroundStyle(.secondary)
                     HStack(spacing: 10) {
                         Button { model.movePlanItem(item.id, direction: -1) } label: { Image(systemName: "chevron.up") }
                             .disabled(index == 0).accessibilityLabel("上移\(item.title)")
@@ -227,14 +227,14 @@ private struct StagedGameCard: View {
                         .accessibilityLabel("移除待选游戏\(item.title)")
                         .accessibilityIdentifier("remove-staged-\(item.gameID)")
                     }
-                    .buttonStyle(.borderless).font(.system(size: 10))
+                    .buttonStyle(.borderless).font(.system(.caption))
                     .disabled(model.installationPlanLocked)
                 }
             }
             if let summary = transferSummary(transferStatuses(for: item, in: model.installStatuses), confirmed: model.installListConfirmed, verifying: model.isVerifyingInstall) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(summary.title)
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.system(.caption, weight: .semibold))
                         .foregroundStyle(summary.tone.color)
                         .lineLimit(2)
                     ProgressView(value: summary.fraction)
@@ -252,10 +252,10 @@ private struct StagedGameCard: View {
                         )) {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("\(content.kind.label) · \(content.version ?? "版本未知")")
-                                Text(content.fileName).font(.system(size: 9)).foregroundStyle(.secondary).lineLimit(2)
+                                Text(content.fileName).font(.system(.caption2)).foregroundStyle(.secondary).lineLimit(2)
                             }
                         }
-                        .toggleStyle(.checkbox).font(.system(size: 10))
+                        .toggleStyle(.checkbox).font(.system(.caption))
                         .help(content.fileName)
                     }
                     if let reminder = model.baseSelectionReminder(item) {
@@ -269,7 +269,7 @@ private struct StagedGameCard: View {
                 }
                 .padding(.top, 6)
             }
-            .font(.system(size: 10.5))
+            .font(.system(.caption))
             .disabled(model.installationPlanLocked)
         }
         .padding(11)

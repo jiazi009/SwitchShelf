@@ -108,7 +108,7 @@ struct DeviceView: View {
                     Label("libusb 直连", systemImage: "cable.connector")
                         .font(.system(size: 11.5, weight: .medium))
                     Text("设备清单、安装和安装后核对统一使用 libusb；每次操作完成并释放连接后才开始下一次。")
-                        .font(.system(size: 10.5)).foregroundStyle(.secondary)
+                        .font(.system(.caption)).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
@@ -133,12 +133,12 @@ struct DeviceView: View {
                         HStack(spacing: 6) {
                             ProgressView().controlSize(.mini).scaleEffect(0.75)
                             Text(model.isDiscovering ? "正在检测 USB…" : "正在读取清单…")
-                                .font(.system(size: 10.5))
+                                .font(.system(.caption))
                                 .foregroundStyle(.secondary)
                         }
                     } else {
                         Text(model.wifiBlocksUSB ? "无线连接期间自动 USB 检测已暂停。" : "自动检测已开启 · MTP 连接成功时会播放提示音")
-                            .font(.system(size: 10))
+                            .font(.system(.caption))
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -197,11 +197,11 @@ struct DeviceView: View {
         case .listed(let issues):
             VStack(alignment: .leading, spacing: 5) {
                 Text("问题")
-                    .font(.system(size: 10.5, weight: .semibold))
+                    .font(.system(.caption, weight: .semibold))
                     .foregroundStyle(.secondary)
                 ForEach(Array(issues.enumerated()), id: \.offset) { _, issue in
                     Label(issue, systemImage: "exclamationmark.triangle.fill")
-                        .font(.system(size: 10))
+                        .font(.system(.caption))
                         .foregroundStyle(Theme.warning)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -222,13 +222,13 @@ struct DeviceView: View {
         case .devices(let devices):
             VStack(alignment: .leading, spacing: 7) {
                 Text("USB 设备")
-                    .font(.system(size: 10.5, weight: .semibold))
+                    .font(.system(.caption, weight: .semibold))
                     .foregroundStyle(.secondary)
                 ForEach(devices) { device in
                     let name = device.name.trimmingCharacters(in: .whitespacesAndNewlines)
                     HStack(spacing: 8) {
                         Image(systemName: "cable.connector")
-                            .font(.system(size: 10, weight: .medium))
+                            .font(.system(.caption, weight: .medium))
                             .foregroundStyle(Theme.accent)
                         Text(name.isEmpty ? "未知" : name)
                             .font(.system(size: 11.5, weight: .medium))
@@ -237,7 +237,7 @@ struct DeviceView: View {
                             .help(name.isEmpty ? "未知" : name)
                         Spacer()
                         Text("VID \(hexDeviceID(device.vendorID)) · PID \(hexDeviceID(device.productID))")
-                            .font(.system(size: 9.5, design: .monospaced))
+                            .font(.system(.caption2, design: .monospaced))
                             .foregroundStyle(.secondary)
                             .fixedSize()
                     }
@@ -249,7 +249,7 @@ struct DeviceView: View {
     private func factRow(_ title: String, _ value: String, known: Bool) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
             Text(title)
-                .font(.system(size: 10.5, weight: .semibold))
+                .font(.system(.caption, weight: .semibold))
                 .foregroundStyle(.secondary)
                 .frame(width: 168, alignment: .leading)
             Text(value)
@@ -273,7 +273,7 @@ struct DeviceView: View {
                         .font(.system(size: 13, weight: .semibold))
                     Spacer()
                     Text("首次读取前请按步骤操作")
-                        .font(.system(size: 9.5))
+                        .font(.system(.caption2))
                         .foregroundStyle(.tertiary)
                 }
 
@@ -305,10 +305,10 @@ struct DeviceView: View {
 
                 HStack(alignment: .top, spacing: 8) {
                     Image(systemName: "lock.shield.fill")
-                        .font(.system(size: 10))
+                        .font(.system(.caption))
                         .foregroundStyle(Theme.installed)
                     Text("这里只读取 Games / Installed games 元数据；Mounts、Contents、存档、安装与测速入口不参与扫描。点击开始安装会检查文件并立即发送；请先在 sphaira 进入 MTP Install 并选择目标存储。发送期间暂停清单读取；发送完成不等于安装成功。侧边栏「无线连接」是另一条 DBI FTP，不会从本页打开。")
-                        .font(.system(size: 10))
+                        .font(.system(.caption))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -321,14 +321,14 @@ struct DeviceView: View {
     private func instructionStep(_ number: Int, title: String, detail: String) -> some View {
         HStack(alignment: .top, spacing: 10) {
             Text("\(number)")
-                .font(.system(size: 10, weight: .bold))
+                .font(.system(.caption, weight: .bold))
                 .foregroundStyle(Theme.accent)
                 .frame(width: 20, height: 20)
                 .background(Theme.accent.opacity(0.12), in: Circle())
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.system(size: 11.5, weight: .semibold))
                 Text(detail)
-                    .font(.system(size: 10.5))
+                    .font(.system(.caption))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -371,7 +371,7 @@ struct DeviceView: View {
                                         .help(entry.name)
                                     Spacer(minLength: 8)
                                     Text(entry.roleLabel)
-                                        .font(.system(size: 9.5, weight: .semibold))
+                                        .font(.system(.caption2, weight: .semibold))
                                         .foregroundStyle(entry.isInventoryEntry ? Theme.accent : .secondary)
                                 }
                             }
@@ -381,13 +381,13 @@ struct DeviceView: View {
                     }
                     ForEach(Array(overview.storage.entryNamesMissingFromList.enumerated()), id: \.offset) { _, name in
                         Text("清单入口未出现在已列出的存储名中：\(name)")
-                            .font(.system(size: 10.5))
+                            .font(.system(.caption))
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     ForEach(Array(overview.storage.notes.enumerated()), id: \.offset) { _, note in
                         Text(note)
-                            .font(.system(size: 10.5))
+                            .font(.system(.caption))
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -425,7 +425,7 @@ struct DeviceView: View {
                     Spacer()
                     if let count = overview.catalog.recordCount {
                         Text("\(count) 条记录")
-                            .font(.system(size: 9.5))
+                            .font(.system(.caption2))
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -433,17 +433,17 @@ struct DeviceView: View {
                     Label(model.inventoryCacheSaved
                           ? "这是上次读取后保存在本机的清单，不能代表设备当前的安装状态。"
                           : "这是上次读取的清单，仅保存在当前应用内存中；不能代表设备当前的安装状态。", systemImage: "clock.arrow.circlepath")
-                        .font(.system(size: 10.5))
+                        .font(.system(.caption))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 } else if let comparison = model.inventoryComparison {
                     Label(comparison, systemImage: "arrow.left.arrow.right")
-                        .font(.system(size: 10.5))
+                        .font(.system(.caption))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Text(overview.catalog.explanation)
-                    .font(.system(size: 10.5))
+                    .font(.system(.caption))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
 
@@ -455,7 +455,7 @@ struct DeviceView: View {
                     }
                     HStack(spacing: 7) {
                         Image(systemName: "magnifyingglass")
-                            .font(.system(size: 10, weight: .semibold))
+                            .font(.system(.caption, weight: .semibold))
                             .foregroundStyle(.secondary)
                         TextField("筛选目录、本地游戏、Title ID 或路径", text: $recordQuery)
                             .textFieldStyle(.plain)
@@ -466,7 +466,7 @@ struct DeviceView: View {
                                 recordQuery = ""
                             } label: {
                                 Image(systemName: "xmark.circle.fill")
-                                    .font(.system(size: 10))
+                                    .font(.system(.caption))
                                     .foregroundStyle(.tertiary)
                             }
                             .buttonStyle(.plain)
@@ -480,7 +480,7 @@ struct DeviceView: View {
                     let groups = filteredGroups(inventory)
                     if groups.isEmpty {
                         Text("没有匹配的记录。")
-                            .font(.system(size: 10.5))
+                            .font(.system(.caption))
                             .foregroundStyle(.secondary)
                             .padding(.vertical, 8)
                     } else {
@@ -501,7 +501,7 @@ struct DeviceView: View {
                     Spacer()
                     Button("复制诊断摘要") { model.copyDiagnostics() }
                         .buttonStyle(.plain)
-                        .font(.system(size: 10))
+                        .font(.system(.caption))
                         .foregroundStyle(Theme.accent)
                         .accessibilityLabel("复制设备与库存诊断摘要")
                 }
@@ -567,18 +567,18 @@ struct DeviceView: View {
                 Spacer(minLength: 8)
                 if group.localGameTitles.isEmpty {
                     Text("没有对应的本地游戏")
-                        .font(.system(size: 10))
+                        .font(.system(.caption))
                         .foregroundStyle(.secondary)
                 } else {
                     Text(group.localGameTitles.joined(separator: "、"))
-                        .font(.system(size: 10, weight: .medium))
+                        .font(.system(.caption, weight: .medium))
                         .foregroundStyle(Theme.accent)
                         .lineLimit(1)
                         .help(group.localGameTitles.joined(separator: "、"))
                 }
             }
             Text("按游戏目录分组 · \(group.records.count) 条记录")
-                .font(.system(size: 9.5))
+                .font(.system(.caption2))
                 .foregroundStyle(.tertiary)
             ForEach(group.records) { record in
                 recordRow(record)
@@ -602,7 +602,7 @@ struct DeviceView: View {
                         .background(Theme.hairline, in: RoundedRectangle(cornerRadius: 3, style: .continuous))
                     Spacer(minLength: 0)
                     Text(formatVersion(record.rawVersion) ?? "版本未知")
-                        .font(.system(size: 9.5, design: .monospaced))
+                        .font(.system(.caption2, design: .monospaced))
                         .foregroundStyle(.secondary)
                 }
                 HStack(spacing: 6) {

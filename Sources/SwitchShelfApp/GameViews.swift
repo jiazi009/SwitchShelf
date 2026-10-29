@@ -101,7 +101,7 @@ struct CoverArtwork: View {
                     VStack(alignment: .leading, spacing: 5) {
                         if cover == nil {
                             Text("暂无封面")
-                                .font(.system(size: 9, weight: .medium))
+                                .font(.system(.caption2, weight: .medium))
                                 .foregroundStyle(.white.opacity(0.72))
                         }
                         if let installationAssessment, installationAssessment.state == .installed || installationAssessment.state == .partial {
@@ -346,7 +346,7 @@ struct GameCard: View {
                         .monospacedDigit()
                         .fixedSize()
                 }
-                .font(.system(size: 10))
+                .font(.system(.caption))
                 .foregroundStyle(.secondary)
             }
             .padding(.horizontal, 2)
@@ -357,9 +357,13 @@ struct GameCard: View {
             GameDetailsButton(model: model, game: game).padding(7)
         }
         .onHover { isHovering = $0 }
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(isFocused ? Theme.accent : Color.clear, lineWidth: 2)
+                .allowsHitTesting(false)
+        }
         .focusable()
         .focused($isFocused)
-        .focusEffectDisabled()
         .onKeyPress(.space) {
             withAnimation(.snappy(duration: 0.36)) { model.handleGridTap(game) }
             return .handled
@@ -452,6 +456,7 @@ struct GameListRow: View {
     var game: Game
     var isSelected: Bool
     let installationMotion: Namespace.ID
+    @FocusState private var isFocused: Bool
 
     private var assessment: InstallationAssessment { model.assessment(for: game) }
     private var isOffline: Bool {
@@ -486,7 +491,7 @@ struct GameListRow: View {
                                 .frame(width: 74, alignment: .trailing)
                                 .accessibilityIdentifier("library-bytes-\(game.id)")
                         }
-                        .font(.system(size: 10)).foregroundStyle(.secondary)
+                        .font(.system(.caption)).foregroundStyle(.secondary)
                         HStack(spacing: 5) {
                             if isOffline {
                                 BadgePill(text: "离线", systemImage: "wifi.slash", tone: .neutral)
@@ -496,9 +501,9 @@ struct GameListRow: View {
                                 BadgePill(text: game.identification.label, systemImage: "questionmark", tone: .warning)
                                     .fixedSize(horizontal: true, vertical: false)
                             }
-                            Text("\(game.contents.count) 个文件").font(.system(size: 9)).foregroundStyle(.secondary).fixedSize()
+                            Text("\(game.contents.count) 个文件").font(.system(.caption2)).foregroundStyle(.secondary).fixedSize()
                             if let source = model.sources(for: game).first {
-                                Text(source.name).font(.system(size: 9)).foregroundStyle(.tertiary).lineLimit(1)
+                                Text(source.name).font(.system(.caption2)).foregroundStyle(.tertiary).lineLimit(1)
                             }
                         }
                     }
@@ -516,8 +521,14 @@ struct GameListRow: View {
             .buttonStyle(.plain)
             GameDetailsButton(model: model, game: game, placement: .list).padding(.trailing, 5)
         }
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .strokeBorder(isFocused ? Theme.accent : Color.clear, lineWidth: 2)
+                .allowsHitTesting(false)
+        }
         .accessibilityIdentifier("game-row-\(game.id)")
         .focusable()
+        .focused($isFocused)
         .onKeyPress(.return) {
             withAnimation(.snappy(duration: 0.36)) { model.handleGridTap(game) }
             return .handled

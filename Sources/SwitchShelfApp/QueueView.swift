@@ -140,7 +140,7 @@ struct QueueView: View {
                     BadgePill(text: "按顺序发送", systemImage: "list.number", tone: .accent)
                 }
                 Text("点击开始安装会检查文件并立即发送。Switch 必须进入 sphaira 的 MTP Install 页面；目标存储由设备端选择。文件发送完成不等于安装成功。")
-                    .font(.system(size: 10.5))
+                    .font(.system(.caption))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 ViewThatFits(in: .horizontal) {
@@ -149,7 +149,7 @@ struct QueueView: View {
                 }
                 .padding(.top, 2)
                 ForEach(Array(model.queueValidationIssues.enumerated()), id: \.offset) { _, issue in
-                    Text(issue).font(.system(size: 10.5)).foregroundStyle(Theme.warning)
+                    Text(issue).font(.system(.caption)).foregroundStyle(Theme.warning)
                 }
                 if !model.installStatuses.isEmpty {
                     let completedBytes = model.installStatuses.reduce(UInt64(0)) { total, status in
@@ -159,13 +159,13 @@ struct QueueView: View {
                     let totalBytes = SphairaBatchReview(items: model.installStatuses.map(\.item)).totalBytes
                     ProgressView(value: Double(completedBytes), total: Double(max(totalBytes, 1)))
                     Text("已提交 \(formatByteCount(Int64(clamping: completedBytes))) / \(formatByteCount(Int64(clamping: totalBytes)))；发送完成仍需设备确认。")
-                        .font(.system(size: 10.5)).foregroundStyle(.secondary)
+                        .font(.system(.caption)).foregroundStyle(.secondary)
                     ForEach(model.installStatuses) { status in
                         HStack(alignment: .top) {
                             Text("\(status.item.gameTitle) · \(status.item.request.name)").lineLimit(1)
                             Spacer()
                             Text(statusText(status)).foregroundStyle(.secondary)
-                        }.font(.system(size: 10.5))
+                        }.font(.system(.caption))
                     }
                 }
                 if model.isInstalling {
@@ -173,26 +173,26 @@ struct QueueView: View {
                         .buttonStyle(.bordered)
                 }
                 Button("查看本地传输记录") { model.openMTPInstallationRecords() }
-                    .font(.system(size: 10.5))
+                    .font(.system(.caption))
                 if model.isCheckingPlan {
                     Text("正在检查本地文件元数据…")
-                        .font(.system(size: 10.5))
+                        .font(.system(.caption))
                         .foregroundStyle(.secondary)
                 } else if let result = model.preparation {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(model.preparationIsCurrent
                              ? (result.isPrepared ? "本地准备检查通过：\(result.offers.count) 个文件；不代表设备就绪或安装成功。" : "本地准备检查未通过：\(result.issues.count) 个问题。")
                              : "计划或来源已变化，检查结果已过期；请重新检查计划。")
-                            .font(.system(size: 10.5, weight: .medium))
+                            .font(.system(.caption, weight: .medium))
                         if model.preparationIsCurrent {
                             ForEach(Array(result.issues.enumerated()), id: \.offset) { _, issue in
                                 Text("· \(issue.message)")
-                                    .font(.system(size: 10))
+                                    .font(.system(.caption))
                                     .foregroundStyle(Theme.warning)
                             }
                         }
                         Text("元数据只反映检查时刻；开始前还需重新验证文件。文件名身份仅是候选，未校验包内容。")
-                            .font(.system(size: 10))
+                            .font(.system(.caption))
                             .foregroundStyle(.secondary)
                     }
                     .padding(.top, 4)
@@ -264,7 +264,7 @@ private struct PlanItemCard: View {
                                 .lineLimit(2)
                             Spacer(minLength: 4)
                             Text("第 \(index + 1) 项")
-                                .font(.system(size: 9))
+                                .font(.system(.caption2))
                                 .foregroundStyle(.tertiary)
                                 .monospacedDigit()
                         }
@@ -279,14 +279,14 @@ private struct PlanItemCard: View {
                                 Text("·").foregroundStyle(.tertiary)
                             }
                             Text("\(includedCount)/\(item.contents.count) 项 · \(formatByteCount(item.byteCount))")
-                                .font(.system(size: 10))
+                                .font(.system(.caption))
                                 .foregroundStyle(.secondary)
                         }
 
                         HStack(spacing: 8) {
                             HStack(spacing: 5) {
                                 Image(systemName: item.target.symbol)
-                                    .font(.system(size: 9))
+                                    .font(.system(.caption2))
                                     .foregroundStyle(.secondary)
                                 Picker("安装位置", selection: targetBinding) {
                                     ForEach(InstallTarget.allCases) { target in
@@ -302,11 +302,11 @@ private struct PlanItemCard: View {
                             }
                             if item.note.isEmpty {
                                 Text("无备注")
-                                    .font(.system(size: 9.5))
+                                    .font(.system(.caption2))
                                     .foregroundStyle(.tertiary)
                             } else {
                                 Text(item.note)
-                                    .font(.system(size: 9.5))
+                                    .font(.system(.caption2))
                                     .foregroundStyle(.secondary)
                                     .lineLimit(1)
                             }
@@ -334,14 +334,14 @@ private struct PlanItemCard: View {
                         .help("下移")
                         .accessibilityLabel("下移 \(item.title)")
                     }
-                    .font(.system(size: 9, weight: .semibold))
+                    .font(.system(.caption2, weight: .semibold))
                     .foregroundStyle(.secondary)
 
                     Button {
                         model.removePlanItem(item.id)
                     } label: {
                         Image(systemName: "trash")
-                            .font(.system(size: 10, weight: .medium))
+                            .font(.system(.caption, weight: .medium))
                             .foregroundStyle(.secondary)
                             .frame(width: 22, height: 22)
                             .contentShape(Rectangle())
@@ -353,7 +353,7 @@ private struct PlanItemCard: View {
 
                 TextField("备注（仅保存在本机，例如：先备份存档）", text: noteBinding, axis: .vertical)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 10.5))
+                    .font(.system(.caption))
                     .lineLimit(1...2)
                     .padding(.horizontal, 9)
                     .padding(.vertical, 6)
@@ -376,29 +376,29 @@ private struct PlanItemCard: View {
                     } label: {
                         HStack(spacing: 6) {
                             Text("内容清单")
-                                .font(.system(size: 10.5, weight: .medium))
+                                .font(.system(.caption, weight: .medium))
                             Text("\(includedCount)/\(item.contents.count)")
-                                .font(.system(size: 9.5))
+                                .font(.system(.caption2))
                                 .foregroundStyle(.secondary)
                                 .monospacedDigit()
                             if item.contents.filter({ $0.kind == .update }).count > 1 &&
                                 item.contents.filter({ $0.kind == .update && $0.included }).isEmpty {
                                 Text("请核对并选择更新补丁（最多一个）")
-                                    .font(.system(size: 9)).foregroundStyle(Theme.warning)
+                                    .font(.system(.caption2)).foregroundStyle(Theme.warning)
                             }
                             if item.contents.filter({ $0.kind == .update && $0.included }).count > 1 {
                                 Text("已选多个更新，请只保留一个")
-                                    .font(.system(size: 9)).foregroundStyle(Theme.warning)
+                                    .font(.system(.caption2)).foregroundStyle(Theme.warning)
                             }
                             if includedCount == 0 {
                                 Text("至少选择一项")
-                                    .font(.system(size: 9))
+                                    .font(.system(.caption2))
                                     .foregroundStyle(Theme.warning)
                             }
                             Spacer()
                         }
                     }
-                    .font(.system(size: 10.5))
+                    .font(.system(.caption))
                     .accessibilityLabel("展开内容清单")
                 }
             }
@@ -415,11 +415,11 @@ private struct PlanItemCard: View {
         ) {
             HStack(spacing: 7) {
                 Image(systemName: content.kind.symbol)
-                    .font(.system(size: 9))
+                    .font(.system(.caption2))
                     .foregroundStyle(Theme.accent)
                     .frame(width: 14)
                 Text(content.fileName)
-                    .font(.system(size: 10))
+                    .font(.system(.caption))
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Text(content.kind.label)

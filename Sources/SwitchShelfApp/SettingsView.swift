@@ -16,7 +16,7 @@ struct SettingsView: View {
             Section("扫描") {
                 Toggle("启动时刷新已缓存来源", isOn: $refreshOnLaunch)
                 Text("缓存为空时始终会执行首次扫描。已缓存时关闭此项可避免每次启动都访问 SMB 来源，仍可用 ⌘R 手动刷新。")
-                    .font(.system(size: 10.5))
+                    .font(.system(.callout))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -24,7 +24,7 @@ struct SettingsView: View {
             Section("本地数据") {
                 LabeledContent("位置") {
                     Text(appDataDirectory.path)
-                        .font(.system(size: 10, design: .monospaced))
+                        .font(.system(.caption, design: .monospaced))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .truncationMode(.middle)
@@ -39,7 +39,7 @@ struct SettingsView: View {
                     }
                 }
                 Text("缓存与安装计划只存放在本机。游戏与设备内容不会被上传，来源文件夹始终只读。")
-                    .font(.system(size: 10.5))
+                    .font(.system(.callout))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -49,13 +49,14 @@ struct SettingsView: View {
                 LabeledContent("游戏库", value: "本地文件 · 只读扫描")
                 LabeledContent("设备", value: "USB 清单 · 安装队列")
                 Text("安装队列通过 sphaira 依次发送文件。点击开始安装后立即发送。发送完成不等于安装成功，设备端安装结果仍需自行确认。")
-                    .font(.system(size: 10.5))
+                    .font(.system(.callout))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
         .formStyle(.grouped)
-        .frame(width: 520, height: 440)
+        .frame(width: 520, alignment: .top)
+        .frame(minHeight: 440)
         .alert("无法打开本地数据", isPresented: Binding(
             get: { errorMessage != nil },
             set: { if !$0 { errorMessage = nil } }

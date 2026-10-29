@@ -20,7 +20,7 @@
       "y" : 239
     },
     "gridViewport" : {
-      "height" : 1162,
+      "height" : 1087,
       "width" : 719,
       "x" : 236,
       "y" : 212
@@ -35,7 +35,7 @@
       "height" : 39.56787109375,
       "width" : 288,
       "x" : 972,
-      "y" : 1354.43212890625
+      "y" : 1279.43212890625
     },
     "remove-staged-matrix-1" : {
       "height" : 12,
@@ -50,7 +50,7 @@
       "y" : 195
     },
     "staging" : {
-      "height" : 1358,
+      "height" : 1283,
       "width" : 320,
       "x" : 956,
       "y" : 52
@@ -62,7 +62,7 @@
       "y" : 195
     },
     "stagingViewport" : {
-      "height" : 1048.43212890625,
+      "height" : 962.43212890625,
       "width" : 320,
       "x" : 956,
       "y" : 170
@@ -76,15 +76,15 @@
   "stagedGames" : 1,
   "state" : "ambiguous-expanded",
   "viewport" : {
-    "height" : 1410,
+    "height" : 1335,
     "width" : 1276,
     "x" : 0,
     "y" : 0
   },
   "windowFrame" : {
-    "height" : 1410,
+    "height" : 1335,
     "width" : 1276,
     "x" : 640,
-    "y" : -148
+    "y" : 75
   }
 }

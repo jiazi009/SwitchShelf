@@ -63,7 +63,7 @@
       "y" : 195
     },
     "stagingViewport" : {
-      "height" : 330.43212890625,
+      "height" : 319.43212890625,
       "width" : 320,
       "x" : 640,
       "y" : 170
@@ -71,7 +71,7 @@
   },
   "fixtureOnly" : true,
   "image" : "ambiguous-expanded-960x640.png",
-  "imageSHA256" : "652819dcb37e8dc670c8861d400fea4dfd4f1f876a3f6cf38081fdb209ac39a0",
+  "imageSHA256" : "f3b8b7232ac0ea15ae5ed6655e65441288376c2ef6fa0d97aaddb28cb3c563c7",
   "libraryGames" : 1,
   "name" : "ambiguous-expanded-960x640",
   "nativeSizingNotOverridden" : true,
@@ -90,6 +90,6 @@
     "height" : 692,
     "width" : 960,
     "x" : 640,
-    "y" : 570
+    "y" : 718
   }
 }

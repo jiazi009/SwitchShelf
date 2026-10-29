@@ -93,7 +93,7 @@
       "y" : 324
     },
     "stagingViewport" : {
-      "height" : 378.43212890625,
+      "height" : 367.43212890625,
       "width" : 320,
       "x" : 640,
       "y" : 170
@@ -101,7 +101,7 @@
   },
   "fixtureOnly" : true,
   "image" : "populated-grid-960x640.png",
-  "imageSHA256" : "fcace8931836fa7041e1f4133478fdb6e6db6d98d83e01bb98cd9b730d774b31",
+  "imageSHA256" : "a725b3ac0a6e167c1e25a92bd1416e0ebc1c2539971cc855f9907d664651fe21",
   "libraryGames" : 5,
   "name" : "populated-grid-960x640",
   "nativeSizingNotOverridden" : true,

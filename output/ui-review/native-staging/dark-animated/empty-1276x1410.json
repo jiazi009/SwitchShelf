@@ -17,16 +17,16 @@
       "height" : 39.56787109375,
       "width" : 288,
       "x" : 972,
-      "y" : 1354.43212890625
+      "y" : 1279.43212890625
     },
     "staging" : {
-      "height" : 1358,
+      "height" : 1283,
       "width" : 320,
       "x" : 956,
       "y" : 52
     },
     "stagingViewport" : {
-      "height" : 1096.43212890625,
+      "height" : 1010.43212890625,
       "width" : 320,
       "x" : 956,
       "y" : 170
@@ -40,15 +40,15 @@
   "stagedGames" : 0,
   "state" : "empty",
   "viewport" : {
-    "height" : 1410,
+    "height" : 1335,
     "width" : 1276,
     "x" : 0,
     "y" : 0
   },
   "windowFrame" : {
-    "height" : 1410,
+    "height" : 1335,
     "width" : 1276,
     "x" : 640,
-    "y" : -148
+    "y" : 75
   }
 }

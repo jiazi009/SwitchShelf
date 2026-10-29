@@ -54,7 +54,9 @@ for variant in ["light-animated", "dark-animated", "light-reduced", "dark-reduce
                 assert inside(frames[f"remove-staged-{game}"], frames[f"staged-card-{game}"])
         if name.startswith("empty"):
             assert entry["stagedGames"] == 0 and entry["libraryGames"] == 0
-    assert {"details-grid", "details-list", "install-review"} <= entries.keys()
+    # Installation starts immediately in the current app; real sends are never
+    # triggered by this synthetic window suite. Lifecycle/physical tests cover it.
+    assert {"details-grid", "details-list"} <= entries.keys()
     for entry in entries.values():
         if "image" in entry:
             image_hash(directory, entry["image"], entry["imageSHA256"])

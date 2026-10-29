@@ -6,99 +6,99 @@
       "name": "grid-960x640-light",
       "pixelHeight": 1280,
       "pixelWidth": 1920,
-      "pngBytes": 1032052,
+      "pngBytes": 1031687,
       "width": 960,
-      "imageSHA256": "5beb208476873d7282def4d13d0f40cf146474a3ce0eff7e20be1cccc754869f"
+      "imageSHA256": "9ca528a79835cb1abd361ecf9ecc4bde9fbb6b31673934b8cefe904dbee6c0f4"
     },
     {
       "height": 640,
       "name": "list-960x640-light",
       "pixelHeight": 1280,
       "pixelWidth": 1920,
-      "pngBytes": 1004014,
+      "pngBytes": 1005295,
       "width": 960,
-      "imageSHA256": "517fe697dbfa68cc3d0ca5a5472434054e961a0bf0fd34a09504676f9c9845de"
+      "imageSHA256": "9b326a1c570c016632a5a3c97ecfee88fe293ca9308d4d53f16b12a6c8cd02b8"
     },
     {
       "height": 640,
       "name": "queue-960x640-light",
       "pixelHeight": 1280,
       "pixelWidth": 1920,
-      "pngBytes": 875066,
+      "pngBytes": 894557,
       "width": 960,
-      "imageSHA256": "9c94623cb4efe68f99aa292adfd2efa534d8759e783ca28bfb023a61fa14439e"
+      "imageSHA256": "c1f2541084632f9c98b1ce6e6ec35173dc76538a25f5ffa1442451e1f4f954e3"
     },
     {
       "height": 640,
       "name": "maintenance-960x640-light",
       "pixelHeight": 1280,
       "pixelWidth": 1920,
-      "pngBytes": 829048,
+      "pngBytes": 826800,
       "width": 960,
-      "imageSHA256": "cac70c5ac7703fe8e2af16479aac6a8e180fb29dbde6d84fb3b8349440dfefbb"
+      "imageSHA256": "12eb5be9848261232778b250808cc79c12585a8b6ae08e2b8f46e9a5b5f4cb9b"
     },
     {
       "height": 640,
       "name": "device-960x640-light",
       "pixelHeight": 1280,
       "pixelWidth": 1920,
-      "pngBytes": 799119,
+      "pngBytes": 785911,
       "width": 960,
-      "imageSHA256": "096127431ceb9924080b139b2f46f5b63f72df7cc32c5ff1d72263b9df84420e"
+      "imageSHA256": "d7e72912407e2dbfeba325e16288b469eeed59ca7ef4c9ceb3723391238bc10e"
     },
     {
       "height": 820,
       "name": "grid-1280x820-light",
       "pixelHeight": 1640,
       "pixelWidth": 2560,
-      "pngBytes": 1762156,
+      "pngBytes": 1761310,
       "width": 1280,
-      "imageSHA256": "13f54bfb38dea6056146f8f66b3c583806156d3ef44e25334a09cd959748cc23"
+      "imageSHA256": "5c51827968203ea7d3147f16248acfa1214302c2b4d6992a53fe8bd28d237d3f"
     },
     {
       "height": 820,
       "name": "list-1280x820-light",
       "pixelHeight": 1640,
       "pixelWidth": 2560,
-      "pngBytes": 1214923,
+      "pngBytes": 1215080,
       "width": 1280,
-      "imageSHA256": "d1a88e55daf80036ef741c599b6994d7550421f28633383641d24c9b7b60f532"
+      "imageSHA256": "2b6fde1e655fa2fa430820c6ff43055554e6faec1d0556555d153a2e546e9851"
     },
     {
       "height": 820,
       "name": "queue-1280x820-light",
       "pixelHeight": 1640,
       "pixelWidth": 2560,
-      "pngBytes": 1067236,
+      "pngBytes": 1087078,
       "width": 1280,
-      "imageSHA256": "d768fbfc4967faf827834d4eccc97a619caa7f36058805f9a546172f75043140"
+      "imageSHA256": "c0e1390a004814c56ff6cf445bfb2b862fb662937ee69bf27f9799391b916641"
     },
     {
       "height": 820,
       "name": "maintenance-1280x820-light",
       "pixelHeight": 1640,
       "pixelWidth": 2560,
-      "pngBytes": 1024895,
+      "pngBytes": 1020516,
       "width": 1280,
-      "imageSHA256": "0f1c926b35a8507d569e766c475410d1af2f3014b467d9e2552f78c7be372396"
+      "imageSHA256": "402774ba3f2375ff65b68bf01bb58392c924ce556fbdc283556896ac6b5800f9"
     },
     {
       "height": 820,
       "name": "device-1280x820-light",
       "pixelHeight": 1640,
       "pixelWidth": 2560,
-      "pngBytes": 1035987,
+      "pngBytes": 1024394,
       "width": 1280,
-      "imageSHA256": "e999b3c926b4e2fb81c32714f691880db525cf19a5bf2c4e495875a9b7b58b8b"
+      "imageSHA256": "dcbdec0439ee06b41ff87fcdeed1ccd8c1e2c04fedd9fab1c401bfda576fbaa4"
     },
     {
       "height": 640,
       "name": "grid-compact120-960x640-light",
       "pixelHeight": 1280,
       "pixelWidth": 1920,
-      "pngBytes": 1100906,
+      "pngBytes": 1102052,
       "width": 960,
-      "imageSHA256": "a79915f6ae5100151f89c45a7ac47f7657ba66a3ac09f3195e9cf36156f613c6"
+      "imageSHA256": "d35559705ef0a0fefadfbbe2ef4338e4ab98e35527bb77644174037b8825c1cf"
     },
     {
       "height": 440,
@@ -114,99 +114,99 @@
       "name": "grid-960x640-dark",
       "pixelHeight": 1280,
       "pixelWidth": 1920,
-      "pngBytes": 1042512,
+      "pngBytes": 1043720,
       "width": 960,
-      "imageSHA256": "e17f876252bd58f0961c4b7b486b880715463c86d2f2c70480857d571bb18c0d"
+      "imageSHA256": "6f3147c5d63317baca29293f887565ae122a0c9285af98595671c39393a09511"
     },
     {
       "height": 640,
       "name": "list-960x640-dark",
       "pixelHeight": 1280,
       "pixelWidth": 1920,
-      "pngBytes": 1023589,
+      "pngBytes": 1025867,
       "width": 960,
-      "imageSHA256": "c08be94ba1f8d671b50b7d09edea2bb9ba12ad91662f43aecf78c0f71397a066"
+      "imageSHA256": "b27d0feed769063abee6ce837a8779ace675d2050f21192b115daf3c2ef4133d"
     },
     {
       "height": 640,
       "name": "queue-960x640-dark",
       "pixelHeight": 1280,
       "pixelWidth": 1920,
-      "pngBytes": 900186,
+      "pngBytes": 921462,
       "width": 960,
-      "imageSHA256": "eb3d5b3606d9898506236cad5fc0f0563c8d1323c6838954d6b159ddabad1ce6"
+      "imageSHA256": "24df372a1efd0078aa90f639339b5aff014f9f5257e6547e2e48048aea5ad6eb"
     },
     {
       "height": 640,
       "name": "maintenance-960x640-dark",
       "pixelHeight": 1280,
       "pixelWidth": 1920,
-      "pngBytes": 856172,
+      "pngBytes": 853507,
       "width": 960,
-      "imageSHA256": "4c589e879bbb5fe53cac1cf505f700cea1f5e946b7f43c74aa610292cba6be83"
+      "imageSHA256": "128698e02b7d2f39a0c95d8e71846d2119c2fab1fb45e5f0fc620dc4a699b429"
     },
     {
       "height": 640,
       "name": "device-960x640-dark",
       "pixelHeight": 1280,
       "pixelWidth": 1920,
-      "pngBytes": 822864,
+      "pngBytes": 810766,
       "width": 960,
-      "imageSHA256": "806586d404dcb3af938bf5e949417ba2af412f2df641457eb70ef2a701a28737"
+      "imageSHA256": "3f8c2457a5f1eff6f32690a7b5cbd9785d1e22b21b7b9cfa80df58e639fef384"
     },
     {
       "height": 820,
       "name": "grid-1280x820-dark",
       "pixelHeight": 1640,
       "pixelWidth": 2560,
-      "pngBytes": 1747627,
+      "pngBytes": 1747383,
       "width": 1280,
-      "imageSHA256": "4af01a9a2b1041456717bb4a3aa27366a8eb4f2d1a9ae699960d0cac0f5109dc"
+      "imageSHA256": "2e74c1673829c78f2bc58ca8d7a3a41d0a8f15ee89ee495ab6cfdcb7725eeb57"
     },
     {
       "height": 820,
       "name": "list-1280x820-dark",
       "pixelHeight": 1640,
       "pixelWidth": 2560,
-      "pngBytes": 1214996,
+      "pngBytes": 1216534,
       "width": 1280,
-      "imageSHA256": "7c4b7bf6f2ac382f6bc4e14f0c59a969018b870693dde3af004ec88edebe45e2"
+      "imageSHA256": "c6038b6b69e030e5e88c93d5f47894b4ff5acc8188bdadc947d01aeb95489e30"
     },
     {
       "height": 820,
       "name": "queue-1280x820-dark",
       "pixelHeight": 1640,
       "pixelWidth": 2560,
-      "pngBytes": 1070448,
+      "pngBytes": 1089306,
       "width": 1280,
-      "imageSHA256": "cc2ee2cce22d83c74426b73a86f493dd11d13c0a499ce38ff3371300840853ba"
+      "imageSHA256": "bfc7483d5153beb012af71875ac92da3d457180767a63f2bc609a2190d12f463"
     },
     {
       "height": 820,
       "name": "maintenance-1280x820-dark",
       "pixelHeight": 1640,
       "pixelWidth": 2560,
-      "pngBytes": 1029199,
+      "pngBytes": 1024831,
       "width": 1280,
-      "imageSHA256": "abd116c2eb01465b0480a31815342b7ccbad967d4e69e754cca2d00ae7ffec7e"
+      "imageSHA256": "68488fc5b9a94ba5e87fb2474633ab873d471894008b6059519513d5cf5a9977"
     },
     {
       "height": 820,
       "name": "device-1280x820-dark",
       "pixelHeight": 1640,
       "pixelWidth": 2560,
-      "pngBytes": 1047877,
+      "pngBytes": 1032853,
       "width": 1280,
-      "imageSHA256": "d1104ed753fc2eebfd864525e99bfee062770f2710c459d703bc913f557b733e"
+      "imageSHA256": "08ff57db78151c248eae58f5cb71626b6deeb67a502aae75c5ec592fe23ed208"
     },
     {
       "height": 640,
       "name": "grid-compact120-960x640-dark",
       "pixelHeight": 1280,
       "pixelWidth": 1920,
-      "pngBytes": 1113504,
+      "pngBytes": 1116593,
       "width": 960,
-      "imageSHA256": "69e5e1d49b30b8919a2d568c194b729d5a2ca19f2dc7c850d27dd3935f3eec77"
+      "imageSHA256": "d3801574068bec3ebbc1be1395be86b7e6fbb0e71b0ae98cade751ea30f12506"
     },
     {
       "height": 440,
@@ -227,24 +227,23 @@
   "noBootstrapUSBOrInstall": true,
   "productionSources": true,
   "productionSourceSHA256": {
-    "Sources/SwitchShelfApp/AppModel.swift": "d2f730c3fc1d84c5b6e280e29e918cf5d4efa0f18c3f90af457499d4928bbae3",
-    "Sources/SwitchShelfApp/AppTypes.swift": "bd0f69b054eca4cacdbfa3b519809ed507616ce37a0f8c6e8693084531716da5",
-    "Sources/SwitchShelfApp/Components.swift": "420d2c88637114af6f58ffeada2fb23d32074d53ea7ea3da2e8f15680ec35551",
+    "Sources/SwitchShelfApp/AppModel.swift": "3c549591588878d806099a72f0e3d0a5e4932e488cfbac16980fd2a48e892e86",
+    "Sources/SwitchShelfApp/AppTypes.swift": "713025bfd32770f2ea1aa17cfed50c9ba13918630a71b3e42531177096169b90",
+    "Sources/SwitchShelfApp/Components.swift": "49bd0d8e9b61314944c9d85c996ff74bc2c149cdb71eb31cb47b31dc771f47ff",
     "Sources/SwitchShelfApp/CoverPalette.swift": "5f5e182b7950bd06b40e5f629034ad399657dbea28d8d73cfac3f517228f9712",
-    "Sources/SwitchShelfApp/DeviceView.swift": "bb27a0b5d5448df3050f441b8553868f685cac3240ea0c3e78f36ce7e38452ed",
-    "Sources/SwitchShelfApp/GameInteraction.swift": "592bf6bc1a864c9a9b04c1ca08cfd0a8576e536880b3af336c47461539ce5912",
-    "Sources/SwitchShelfApp/GameViews.swift": "1b3220bbdeb285d89ea57595a241af39c480b63c9078c18eee0023c76d6dd775",
+    "Sources/SwitchShelfApp/DeviceView.swift": "474697d0840ec3e3378725af6eda4f25f6a7910b2e0cbab85b2b96b8b121ca36",
+    "Sources/SwitchShelfApp/GameInteraction.swift": "976fac35bf7097b3e4afe0590f8179169d624a7ba4c3ec555840396588640a1b",
+    "Sources/SwitchShelfApp/GameViews.swift": "1074b6581985aadfcdfd99c40997ce150c079d73b55ab028c29deef7b9634e80",
     "Sources/SwitchShelfApp/InspectorView.swift": "f3c489713ef6fc4f0856488964f2fcdf693f3d9cdb8f01a96acaed924392860d",
-    "Sources/SwitchShelfApp/InstallationSidebar.swift": "05c793e207cc73dea5a2a0d37235007f5f0271302b42a7e291b4659cba68d0d9",
-    "Sources/SwitchShelfApp/LibraryView.swift": "4a8648eb75567b421dc25df8741037732ffdb1c1206f473396e383e096c5f168",
-    "Sources/SwitchShelfApp/MTPInstallConfirmation.swift": "2d51462e4504af7cc3d588286d13392f42aa6006abd6a7e4c8e77367c857a882",
-    "Sources/SwitchShelfApp/MaintenanceView.swift": "d27c11cb4cbb5f4d8ce5504463d1174e289cf05b8ccc92394331b79754ddee92",
-    "Sources/SwitchShelfApp/QueueView.swift": "30d4d5b3889dcb7b49f5bb09c775eb786b1cb500bdd3e80dffa8dfde83bba862",
-    "Sources/SwitchShelfApp/RootView.swift": "afb584e7f50ea301e08ac83a5b77479a1e7bd979850c8c2b684fefd2c053d319",
-    "Sources/SwitchShelfApp/SettingsView.swift": "1bc2355a5772f0a0041d66aa69cd0c941d90c70a1c2231e3090859183748b7a8",
-    "Sources/SwitchShelfApp/SidebarView.swift": "f94ffeea720f1854534e6ffd2877751090d17ec17d4bc45eadfbc881410e993f",
+    "Sources/SwitchShelfApp/InstallationSidebar.swift": "69d8d40fa4462b7b5964db213dab2598a7e0067f40e7da6d2d8fa89438ed2581",
+    "Sources/SwitchShelfApp/LibraryView.swift": "72d541cb0b59a1f9396c47af186995f47c2ee9b49e21ea1aa00c3dc1fa484488",
+    "Sources/SwitchShelfApp/MaintenanceView.swift": "8794f294222d51d8fd7806ff1cb0b4892f145d81aaea6031f49b805f7da32789",
+    "Sources/SwitchShelfApp/QueueView.swift": "61d0894649961a8128b0bc05b0269476cdd1eb05f6aca159ffc922c1d2a8dcef",
+    "Sources/SwitchShelfApp/RootView.swift": "0384468afa349b503a669962cfde730947a08595fef3af09cc9bac80774fbf80",
+    "Sources/SwitchShelfApp/SettingsView.swift": "f1bdbd680f2ea229ae6861715d7ca948c1ab4a316c81035f3110096e870e7337",
+    "Sources/SwitchShelfApp/SidebarView.swift": "60c69b56bb29f3baffcab38525638864e2d94440867d1eb408a2f6942284a77e",
     "Sources/SwitchShelfApp/Stores.swift": "34b2335028a040d5421ad6c9bb63c7a95a65604a5db7ab44f44dde93b68917a5",
-    "Sources/SwitchShelfApp/SwitchShelfApp.swift": "90167bdd8a56dea93b907c9dcac8c0dc247ca8498d3ba57340446527caac640f",
+    "Sources/SwitchShelfApp/SwitchShelfApp.swift": "2cd92c2352cd6d3bd1de71e5bcd1b0d1cb711bbbd274accfaf700e1f7455c581",
     "Sources/SwitchShelfApp/Theme.swift": "f693bec566b1e908253ae3cc232657f9425cd89d17b0e6364b8d6483d65e3fd7",
     "Sources/SwitchShelfApp/WiFiConnectView.swift": "afe97a46d4e0c0e233c9dccf5fa6e76fd1fdf29c38638b057df3549909e8c4aa"
   }

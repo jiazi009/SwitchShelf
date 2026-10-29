@@ -93,7 +93,7 @@
       "y" : 324
     },
     "stagingViewport" : {
-      "height" : 378.43212890625,
+      "height" : 367.43212890625,
       "width" : 320,
       "x" : 640,
       "y" : 170
@@ -101,7 +101,7 @@
   },
   "fixtureOnly" : true,
   "image" : "populated-grid-960x640.png",
-  "imageSHA256" : "eae8df125d6603a8fe6bfe57ddb22dc4c2d05cc76a6baa7a7e65341a33c766d3",
+  "imageSHA256" : "3587616e6d3285c8186f002a21bd9036ddf53ea164c4178bf3674b48ce94f188",
   "libraryGames" : 5,
   "name" : "populated-grid-960x640",
   "nativeSizingNotOverridden" : true,
@@ -120,6 +120,6 @@
     "height" : 692,
     "width" : 960,
     "x" : 640,
-    "y" : 570
+    "y" : 718
   }
 }

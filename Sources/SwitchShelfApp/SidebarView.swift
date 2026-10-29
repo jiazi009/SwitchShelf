@@ -92,6 +92,12 @@ struct SidebarView: View {
                 statusColor: wifiDot
             ) { model.select(.wifi) }
             SidebarRow(
+                title: "文件管理",
+                systemImage: "folder",
+                count: nil,
+                isSelected: model.selection == .files
+            ) { model.select(.files) }
+            SidebarRow(
                 title: "维护",
                 systemImage: "wrench.and.screwdriver.fill",
                 count: nil,

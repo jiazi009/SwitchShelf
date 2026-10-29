@@ -48,7 +48,7 @@ with (contents / "Info.plist").open("wb") as f:
         "CFBundleIdentifier": "local.switchshelf.app",
         "CFBundleName": "SwitchShelf", "CFBundleDisplayName": "SwitchShelf",
         "CFBundleExecutable": "SwitchShelf", "CFBundlePackageType": "APPL",
-        "CFBundleShortVersionString": "0.3.4", "CFBundleVersion": "5",
+        "CFBundleShortVersionString": "0.3.5", "CFBundleVersion": "6",
         "LSMinimumSystemVersion": "26.0", "NSHighResolutionCapable": True,
         "NSPrincipalClass": "NSApplication",
         **icon_info,

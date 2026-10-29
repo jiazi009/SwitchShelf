@@ -56,6 +56,12 @@ struct RootView: View {
             case .queue: QueueView(model: model)
             case .device: DeviceView(model: model)
             case .wifi: WiFiConnectView(model: model)
+            case .files:
+                DeviceFilesView(model: model.deviceFileManager)
+                    .task(id: model.deviceFileSessionSignature) {
+                        model.syncDeviceFileSession()
+                        model.deviceFileManager.loadIfNeeded()
+                    }
             case .maintenance: MaintenanceView(model: model)
             default: EmptyView()
             }

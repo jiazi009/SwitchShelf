@@ -49,6 +49,36 @@ func failure(mode: String, code: String, message: String, transport: String? = n
 // by the parent: no serials or unrelated libusb diagnostics can contaminate JSON/logs.
 let arguments = Array(CommandLine.arguments.dropFirst())
 let invocationParentPID = getppid()
+// Device file operations use one direct, parent-authenticated child. Normal probe
+// modes can never reach upload/download code, and the child cannot spawn a USB grandchild.
+if arguments.first == "--device-file-worker" {
+    guard arguments.count == 3,
+          ProcessInfo.processInfo.environment["SWITCHSHELF_DEVICE_FILE_TOKEN"] == arguments[1],
+          UUID(uuidString: arguments[1]) != nil,
+          getppid() > 1,
+          ProcessInfo.processInfo.environment["SWITCHSHELF_DEVICE_FILE_PARENT_PID"] == String(getppid()),
+          let fileTimeout = UInt32(ProcessInfo.processInfo.environment["SWITCHSHELF_DEVICE_FILE_TIMEOUT"] ?? "123"),
+          (1...14_403).contains(fileTimeout) else {
+        emit(failure(mode: "files", code: "unconfirmed", message: "Device file operations require the reviewed app flow."), exitCode: 64)
+    }
+    // Independent fallback if the parent supervisor itself cannot make progress.
+    // This direct process owns the USB handle; process exit releases that ownership.
+    signal(SIGALRM) { _ in Darwin._exit(124) }
+    alarm(fileTimeout)
+    let parentPID = getppid()
+    Task.detached {
+        while true {
+            try? await Task.sleep(for: .milliseconds(100))
+            if getppid() != parentPID { Darwin._exit(1) }
+        }
+    }
+    Task {
+        let code = await DeviceFileProcessWorker.run(directory: URL(fileURLWithPath: arguments[2]))
+        Darwin.exit(code)
+    }
+    RunLoop.main.run()
+    Darwin.exit(1)
+}
 // Separate explicit installation entry point. Never reached by discover/inventory/storages.
 // A direct parent process passes one reviewed, confirmed request in a private directory.
 if arguments.first == "--sphaira-install-worker" {

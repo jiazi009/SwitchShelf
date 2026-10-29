@@ -198,7 +198,11 @@ final class AlbumScreenshotModel {
                     self.hasUnverifiedWorker = self.hasUnverifiedWorker || fenced || !result.releaseVerified
                     guard token == self.generation else { return }
                     guard result.outcome == .completed, result.releaseVerified else {
-                        self.message = "已下载 \(completed.count) 张。\(result.message) 已保存的文件仍留在本机，设备文件未删除。"
+                        if request.operation == .albumIndex {
+                            self.message = result.message
+                        } else {
+                            self.message = "已下载 \(completed.count) 张。\(result.message) 已保存的文件仍留在本机，设备文件未删除。"
+                        }
                         self.messageIsError = true
                         return
                     }

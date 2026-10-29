@@ -257,11 +257,16 @@ private enum AlbumIndexer {
                 state.note("「\(name)」名称不唯一，已跳过。")
                 continue
             }
-            if MTPFileNames.isAlbumStorage(name) {
-                try await walk(store: store, parent: .max, location: MTPFileLocation(storageName: name),
-                               transport: transport, state: state, report: report)
-            } else if MTPFileNames.isAlbumSDHost(name) {
-                try await walkSD(store: store, transport: transport, state: state, report: report)
+            do {
+                if MTPFileNames.isAlbumStorage(name) {
+                    try await walk(store: store, parent: .max, location: MTPFileLocation(storageName: name),
+                                   transport: transport, state: state, report: report)
+                } else if MTPFileNames.isAlbumSDHost(name) {
+                    try await walkSD(store: store, transport: transport, state: state, report: report)
+                }
+            } catch MTPFileError.invalidMetadata {
+                // One unreadable album root must not discard screenshots already found elsewhere.
+                state.note("「\(name)」有元数据无法确认，已跳过该入口。")
             }
         }
         let entries = state.entries.sorted {
@@ -345,15 +350,28 @@ private enum AlbumIndexer {
         }
         state.observed += handles.count
         var result: [MTPFileObjectRecord] = []
+        // sphaira virtual projections, including Album (Image SD), report
+        // 0xFFFFFFFE as the object storage. GetObjectHandles stays scoped to
+        // this storage. Real SD listings do not use that alias.
+        let virtualAlbum = MTPFileNames.isAlbumStorage(store.value.name)
         for handle in handles {
             try Task.checkCancellation()
-            let object = try await transport.object(handle)
-            let storageMatches = object.storage == store.handle
+            let object: MTPFileObjectRecord
+            do {
+                object = try await transport.object(handle)
+            } catch MTPFileError.invalidMetadata {
+                state.note("有条目元数据无法读取，已跳过。")
+                continue
+            }
+            let storageMatches = object.storage == store.handle || (virtualAlbum && object.storage == UInt32.max - 1)
             let parentMatches = parent == UInt32.max
                 ? [UInt32(0), UInt32.max, store.handle].contains(object.parent)
                 : object.parent == parent
             guard object.handle == handle, storageMatches, parentMatches,
-                  MTPFileNames.isValid(object.name) else { throw MTPFileError.invalidMetadata }
+                  MTPFileNames.isValid(object.name) else {
+                state.note("有条目位置或名称无法确认，已跳过。")
+                continue
+            }
             result.append(object)
         }
         return result
@@ -384,8 +402,11 @@ private actor MTPFileResolver {
         for handle in handles {
             try Task.checkCancellation()
             let object = try await transport.object(handle)
-            let games = store.value.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "games"
-            let storageMatches = object.storage == store.handle || (games && object.storage == UInt32.max - 1)
+            // sphaira virtual projections report 0xFFFFFFFE. Album is one of
+            // those projections; ordinary SD listings stay strict.
+            let virtual = store.value.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "games"
+                || MTPFileNames.isAlbumStorage(store.value.name)
+            let storageMatches = object.storage == store.handle || (virtual && object.storage == UInt32.max - 1)
             let parentMatches = parent == UInt32.max
                 ? [UInt32(0), UInt32.max, store.handle].contains(object.parent)
                 : object.parent == parent

@@ -108,10 +108,11 @@ struct MTPFileServiceTests {
         }
     }
     @Test func gamesVirtualStorageAliasIsAcceptedOnlyWithinGames() async throws {
-        for name in ["Games", "microSD card"] {
+        for name in ["Games", "Album", "Album (Image SD)", "相册工具", "microSD card"] {
             let transport = FileTransportFixture(name: name, objects: [fileObject(1, name: "Observed", parent: 9, storage: .max - 1, folder: true)], children: [.max: [1]])
             let result = await MTPFileWorker.execute(.list(location: .init(storageName: name))) { transport }
-            #expect(result.outcome == (name == "Games" ? .completed : .failed))
+            let virtual = name != "microSD card"
+            #expect(result.outcome == (virtual ? .completed : .failed))
             #expect(await transport.closed)
         }
     }
@@ -363,6 +364,19 @@ struct MTPFileServiceTests {
         #expect(result.albumEntries?.map(\.name) == ["shallow.jpg"])
         #expect(result.message.contains("并不完整"))
         #expect(await transport.closed)
+    }
+
+    @Test func albumIndexAcceptsSphairaVirtualStorageAndSkipsUnreadableObjects() async throws {
+        let virtual = AlbumTreeTransport(
+            stores: [albumStore(7, "Album (Image SD)")],
+            objects: [fileObject(1, name: "shot.jpg", parent: 7, storage: .max - 1, size: 6)],
+            children: [7: [.max: [1, 99]]])
+        let result = await MTPFileWorker.execute(.albumIndex()) { virtual }
+        #expect(result.outcome == .completed)
+        #expect(result.albumEntries?.map(\.name) == ["shot.jpg"])
+        #expect(result.message.contains("跳过"))
+        #expect(await virtual.downloadCalls == 0)
+        #expect(await virtual.closed)
     }
 
     @Test func albumIndexWithoutAlbumRootsCompletesEmpty() async throws {

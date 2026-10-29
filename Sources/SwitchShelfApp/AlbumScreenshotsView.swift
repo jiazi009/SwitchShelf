@@ -21,6 +21,10 @@ struct AlbumScreenshotsView: View {
         .frame(minHeight: 0, maxHeight: .infinity)
         .background(Theme.canvas)
         .accessibilityIdentifier("album-screenshots")
+        .onChange(of: model.screenshots.count) { _, count in
+            guard count > 0 else { return }
+            Task { @MainActor in model.loadThumbnails() }
+        }
     }
 
     private var header: some View {
@@ -101,8 +105,10 @@ struct AlbumScreenshotsView: View {
             VStack(alignment: .leading, spacing: 8) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 8).fill(Theme.surfaceAlt)
-                    if selected, let image = model.previewImage, model.previewEntryID == entry.id {
+                    if let image = model.image(for: entry.id) {
                         Image(nsImage: image).resizable().scaledToFill()
+                    } else if model.isLoadingPreviews {
+                        ProgressView().controlSize(.small)
                     } else {
                         Image(systemName: "photo").font(.system(size: 22)).foregroundStyle(.secondary)
                     }
@@ -119,7 +125,7 @@ struct AlbumScreenshotsView: View {
             .overlay { RoundedRectangle(cornerRadius: 12).strokeBorder(selected ? Theme.accent.opacity(0.45) : Theme.hairline) }
         }
         .buttonStyle(.plain)
-        .disabled(model.isBusy)
+        .disabled(model.isBusy && !model.isLoadingPreviews)
         .help(entry.location.displayPath + "/" + entry.name)
         .accessibilityLabel("\(entry.name)，\(albumByteText(entry.byteCount))")
         .accessibilityAddTraits(selected ? .isSelected : [])
@@ -128,7 +134,7 @@ struct AlbumScreenshotsView: View {
     private var preview: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("预览").font(.system(size: 10.5, weight: .semibold)).foregroundStyle(.secondary)
-            if let entry = model.selectedEntry, let image = model.previewImage, model.previewEntryID == entry.id {
+            if let entry = model.selectedEntry, let image = model.image(for: entry.id) {
                 Image(nsImage: image)
                     .resizable().scaledToFit()
                     .frame(maxWidth: .infinity, maxHeight: 220)
@@ -141,7 +147,7 @@ struct AlbumScreenshotsView: View {
             } else {
                 VStack(spacing: 8) {
                     Image(systemName: "photo").font(.system(size: 28, weight: .light)).foregroundStyle(.tertiary)
-                    Text(model.selectedEntry == nil ? "选择一张截图" : "点选后从设备下载这一张作为预览")
+                    Text(model.selectedEntry == nil ? "选择一张截图" : (model.isLoadingPreviews ? "正在从设备加载这张预览" : "这张预览还没有加载出来"))
                         .font(.system(size: 11.5)).foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                 }

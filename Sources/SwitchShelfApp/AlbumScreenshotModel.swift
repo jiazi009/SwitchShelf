@@ -18,8 +18,8 @@ final class AlbumScreenshotModel {
     private(set) var operationTitle = ""
     private(set) var message: String?
     private(set) var messageIsError = false
-    private(set) var previewImage: NSImage?
-    private(set) var previewEntryID: String?
+    private(set) var isLoadingPreviews = false
+    private(set) var thumbnails: [String: NSImage] = [:]
     var selectedEntryID: String?
     var searchText = ""
 
@@ -28,6 +28,7 @@ final class AlbumScreenshotModel {
     @ObservationIgnored private var operationTask: Task<Void, Never>?
     @ObservationIgnored private var generation = 0
     @ObservationIgnored private var previewRoot: URL?
+    @ObservationIgnored private var shouldLoadThumbnails = false
 
     init(client: BoundedDeviceFileClient = BoundedDeviceFileClient()) { self.client = client }
 
@@ -75,27 +76,74 @@ final class AlbumScreenshotModel {
             self?.truncated = result.albumTruncated == true
             self?.selectedEntryID = nil
             self?.clearPreviewCache()
+            self?.shouldLoadThumbnails = true
         }
     }
 
+    func image(for entryID: String) -> NSImage? { thumbnails[entryID] }
+
     func select(_ entry: MTPFileEntry) {
-        guard !isBusy else { return }
         selectedEntryID = entry.id
-        guard previewEntryID != entry.id || previewImage == nil else { return }
-        guard let destination = previewDestination(for: entry) else { return }
-        begin(title: "预览 \(entry.name)", requests: { [.download(entry: entry, to: destination)] }, timeout: 7_200) { [weak self] results in
-            guard let self, results.first?.outcome == .completed else { return }
-            guard let image = NSImage(contentsOf: destination) else {
-                self.message = "截图已下载到缓存，但这份文件无法作为图片显示。"
-                self.messageIsError = true
-                self.previewImage = nil
-                self.previewEntryID = entry.id
-                return
+        guard thumbnails[entry.id] == nil, !isBusy, blocker == nil else { return }
+        loadThumbnails(entries: [entry])
+    }
+
+    /// Fills the grid from the device, one screenshot at a time. A failure skips
+    /// that image and keeps going. This does not write anything on the Switch.
+    func loadThumbnails(entries: [MTPFileEntry]? = nil) {
+        let pending = (entries ?? screenshots).filter { thumbnails[$0.id] == nil && $0.byteCount != nil }
+        guard !pending.isEmpty, !isBusy, !hasUnverifiedWorker, let signature = deviceSignature else { return }
+        if let blocker { showError(blocker); return }
+        let token = generation
+        isBusy = true
+        isLoadingPreviews = true
+        operationTitle = "加载预览 1/\(pending.count)"
+        message = "正在加载 \(pending.count) 张预览，完成后每张卡片都会显示画面。"
+        messageIsError = false
+        progress = nil
+        let client = client
+        operationTask = Task { [weak self] in
+            guard let self else { return }
+            defer { self.isBusy = false; self.isLoadingPreviews = false; self.operationTask = nil }
+            var failed = 0
+            for (index, entry) in pending.enumerated() {
+                if Task.isCancelled || token != self.generation { break }
+                self.operationTitle = "加载预览 \(index + 1)/\(pending.count)"
+                guard let destination = self.previewDestination(for: entry) else { failed += 1; continue }
+                do {
+                    let result = try await client.execute(.download(entry: entry, to: destination),
+                                                          expectedDeviceSignature: signature, timeoutSeconds: 180) { [weak self] progress in
+                        await self?.receive(progress, generation: token)
+                    }
+                    let fenced = await client.hasUnverifiedWorker
+                    self.hasUnverifiedWorker = self.hasUnverifiedWorker || fenced || !result.releaseVerified
+                    guard token == self.generation else { return }
+                    if result.outcome == .completed, result.releaseVerified, let image = NSImage(contentsOf: destination) {
+                        var next = self.thumbnails
+                        next[entry.id] = image
+                        self.thumbnails = next
+                    } else {
+                        failed += 1
+                        if self.hasUnverifiedWorker { break }
+                    }
+                } catch {
+                    let fenced = await client.hasUnverifiedWorker
+                    self.hasUnverifiedWorker = self.hasUnverifiedWorker || fenced
+                    guard token == self.generation else { return }
+                    if error is CancellationError { break }
+                    failed += 1
+                    if self.hasUnverifiedWorker { break }
+                }
             }
-            self.previewImage = image
-            self.previewEntryID = entry.id
-            self.message = "预览已从设备下载。要保存到其他位置，使用下载。"
-            self.messageIsError = false
+            guard token == self.generation else { return }
+            if self.hasUnverifiedWorker {
+                self.showError("预览加载中断，请检查设备后重试。已显示的图片仍可查看。")
+            } else if failed > 0 {
+                self.showError("有 \(failed) 张预览没能从设备读出。其余截图仍可查看和下载。")
+            } else if !Task.isCancelled {
+                self.message = "预览已加载。点一张可以看大图；下载会保存到你选的本机位置。"
+                self.messageIsError = false
+            }
         }
     }
 
@@ -181,7 +229,14 @@ final class AlbumScreenshotModel {
         let client = client
         operationTask = Task { [weak self] in
             guard let self else { return }
-            defer { self.isBusy = false; self.operationTask = nil }
+            defer {
+                self.isBusy = false
+                self.operationTask = nil
+                if self.shouldLoadThumbnails {
+                    self.shouldLoadThumbnails = false
+                    self.loadThumbnails()
+                }
+            }
             var completed: [MTPFileResult] = []
             do {
                 let prepared = try await Task.detached(priority: .utility) { try requests() }.value
@@ -249,8 +304,7 @@ final class AlbumScreenshotModel {
     }
 
     private func clearPreviewCache() {
-        previewImage = nil
-        previewEntryID = nil
+        thumbnails = [:]
         if let previewRoot, previewRoot.lastPathComponent == "album-previews" {
             try? FileManager.default.removeItem(at: previewRoot)
         }

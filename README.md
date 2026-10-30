@@ -2,6 +2,85 @@
 
 Native macOS Switch game library with read-only sphaira / DBI MTP inventory. Selected design: [liquid glass](output/design-demos/03-liquid-glass.png).
 
+## 界面截图
+
+以下截图采集自 2026-10-30 正在运行的 SwitchShelf 0.3.6，展示主要工作界面。采集时 USB 与 FTP 均未连接，设备内容目录展示的是历史缓存，不代表设备当前安装状态。点击图片可查看原图。
+
+**游戏库 · 网格视图** — 浏览游戏封面、内容类型与容量，通过搜索、筛选和排序定位游戏。
+
+![游戏库网格视图与安装待选区](Docs/Screenshots/01-library-grid.jpg)
+
+<details>
+<summary>游戏库 · 列表视图</summary>
+
+列表集中展示游戏名称、本体 / 更新 / DLC、文件数量、来源和容量。
+
+![游戏库列表视图](Docs/Screenshots/02-library-list.jpg)
+
+</details>
+
+<details>
+<summary>游戏详情与安装待选</summary>
+
+详情浮层展示封面、匹配信息与安装状态依据；点击卡片可加入右侧待选区，展开选择本体、更新和 DLC，并查看计划目标与总容量。截图中的开始安装按钮因设备未连接而禁用。
+
+![游戏详情浮层与历史清单状态](Docs/Screenshots/03-game-details.jpg)
+
+![安装待选区与本体更新 DLC 文件选择](Docs/Screenshots/04-installation-staging.jpg)
+
+</details>
+
+<details>
+<summary>我的 Switch · 设备信息与内容目录</summary>
+
+设备页展示 USB 检测、清单会话、存储入口及完整性信息；内容目录按游戏分组列出本体、更新和 DLC，支持搜索。以下为未连接设备时显示的历史清单。
+
+![我的 Switch 设备概览与存储信息](Docs/Screenshots/05-device.jpg)
+
+![设备历史内容目录与游戏分组](Docs/Screenshots/06-inventory.jpg)
+
+</details>
+
+<details>
+<summary>无线连接 · DBI FTP</summary>
+
+填写主机与端口，查看连接指引和只读探测结果。截图为未连接状态。
+
+![无线连接与 DBI FTP 主机设置](Docs/Screenshots/07-wireless.jpg)
+
+</details>
+
+<details>
+<summary>文件管理</summary>
+
+设备存储、目录导航、搜索排序及单文件上传 / 下载入口。截图为等待设备连接状态。
+
+![文件管理等待设备连接](Docs/Screenshots/08-file-manager.jpg)
+
+</details>
+
+<details>
+<summary>相册截图</summary>
+
+相册搜索、图片预览与下载入口。截图为等待设备连接状态。
+
+![相册截图搜索预览与下载界面](Docs/Screenshots/09-album.jpg)
+
+</details>
+
+<details>
+<summary>维护与设置</summary>
+
+维护页汇总本地游戏、来源、缓存、安装待选和扫描问题；设置页提供启动扫描选项、本地数据入口与版本信息。
+
+![维护页面的缓存来源与扫描诊断](Docs/Screenshots/10-maintenance.jpg)
+
+![设置页面的扫描选项本地数据与版本](Docs/Screenshots/11-settings.jpg)
+
+</details>
+
+## Build and usage
+
 Requires macOS 26+, Apple Silicon and Swift 6/Xcode.
 ```sh
 swift build

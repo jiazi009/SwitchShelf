@@ -1,0 +1,61 @@
+{
+  "date": "2026-11-03",
+  "tool": "built-in image_gen",
+  "assets": [
+    {
+      "file": "01-cover.png",
+      "width": 1086,
+      "height": 1448,
+      "bytes": 1811827,
+      "sha256": "f04ae03f82faa8e7627c6bca21d363a17a386016101c13d942d4553ebeda1b9e"
+    },
+    {
+      "file": "02-native.png",
+      "width": 1086,
+      "height": 1448,
+      "bytes": 1838405,
+      "sha256": "6eafa0524c36c1b0d8e35fdfe23ff4341964f8941cb4ad02e6e31e902035fd9f"
+    },
+    {
+      "file": "03-lightweight.png",
+      "width": 1086,
+      "height": 1448,
+      "bytes": 1766269,
+      "sha256": "8ddaf923a6ae5bb53ae593ea0aa6d36469303914509c7fd3a9a64814d32ad26a"
+    },
+    {
+      "file": "04-workflow.png",
+      "width": 1086,
+      "height": 1448,
+      "bytes": 1747572,
+      "sha256": "5048868df30027b74f3a634e39b3e1ff86ef8e456ac3a15a26bfdd77ddd0ace0"
+    }
+  ],
+  "source_screenshots": [
+    "Docs/Screenshots/01-library-grid.jpg",
+    "Docs/Screenshots/03-game-details.jpg",
+    "Docs/Screenshots/04-installation-staging.jpg"
+  ],
+  "source_icon": "Assets/AppIcon.png",
+  "app_size_evidence": {
+    "version": "0.3.6",
+    "build": "7",
+    "logical_bytes": 14311335
+  },
+  "repository": "https://github.com/jiazi009/SwitchShelf",
+  "repository_public": true,
+  "repository_license_detected": false,
+  "checks": [
+    "Four final PNGs",
+    "Each 1086x1448, 3:4",
+    "Visual inspection of all four designs and open-source revisions",
+    "Headline, labels, measured size, GitHub path and disabled-device state reviewed",
+    "Copy and tags checked"
+  ],
+  "limitations": [
+    "Promotional layouts generated from actual screenshots; original screenshots and running app remain authoritative for small UI text.",
+    "No real device access or source-game file access performed.",
+    "No source code changed.",
+    "No license added."
+  ]
+}

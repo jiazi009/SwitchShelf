@@ -92,6 +92,10 @@ Maintenance summarizes local games, sources, caches, staged installations, and s
 
 </details>
 
+## Download and install
+
+Download `SwitchShelf-0.3.6-arm64.dmg` from [GitHub Releases](https://github.com/jiazi009/SwitchShelf/releases), open it, and drag the app into Applications. This pre-release uses an ad-hoc signature and is not notarized by Apple. On first launch, you may need to click **Open Anyway** in **System Settings → Privacy & Security**. See the [0.3.6 release notes](Docs/Releases/v0.3.6.md) for the full steps and checksum instructions.
+
 ## Build and run
 
 Requires macOS 26+, Apple Silicon, and Xcode / a Swift toolchain supporting Swift 6. The app packaging script also requires Python 3.
@@ -114,6 +118,14 @@ python3 scripts/build-app.py
 ```
 
 The app is written to `build/SwitchShelf.app`. Device inventory, installation, and result verification all use libusb; the packaging script bundles the required runtime. ImageCaptureCore and libmtp connection routes have been removed.
+
+Build a DMG with bilingual installation instructions and an Applications shortcut:
+
+```sh
+python3 scripts/build-dmg.py
+```
+
+The DMG and `SHA256SUMS` are written to `build/releases/v0.3.6/`. This script creates an ad-hoc signed, unnotarized pre-release package.
 
 ## Usage
 

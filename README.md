@@ -94,6 +94,10 @@ A native macOS Switch library and device manager with sphaira MTP installation, 
 
 </details>
 
+## 下载安装
+
+从 [GitHub Releases](https://github.com/jiazi009/SwitchShelf/releases) 下载 `SwitchShelf-0.3.6-arm64.dmg`，打开后将应用拖入“应用程序”。此预发布包使用本地签名，未经 Apple 公证；首次打开可能需要在“系统设置 → 隐私与安全性”中点击“仍要打开”。完整步骤与下载校验见 [0.3.6 发行说明](Docs/Releases/v0.3.6.md)。
+
 ## 构建与运行
 
 需要 macOS 26+、Apple Silicon，以及支持 Swift 6 的 Xcode / Swift 工具链；应用打包脚本使用 Python 3。
@@ -116,6 +120,14 @@ python3 scripts/build-app.py
 ```
 
 产物位于 `build/SwitchShelf.app`。设备清单、安装与结果核对统一使用 libusb，打包脚本会将所需运行库包含在应用内。ImageCaptureCore 与 libmtp 连接路径已移除。
+
+制作包含中英文安装说明与 Applications 快捷入口的 DMG：
+
+```sh
+python3 scripts/build-dmg.py
+```
+
+DMG 与 `SHA256SUMS` 位于 `build/releases/v0.3.6/`。此脚本生成本地签名、未经 Apple 公证的预发布包。
 
 ## 使用说明
 

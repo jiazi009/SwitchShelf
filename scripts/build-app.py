@@ -11,6 +11,7 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--icon", type=Path, help="Selected PNG app icon; otherwise use Assets/AppIcon.png if present")
+parser.add_argument("--output", type=Path, help="Destination .app bundle; defaults to build/SwitchShelf.app")
 args = parser.parse_args()
 icon = args.icon or ROOT / "Assets" / "AppIcon.png"
 if args.icon and not icon.is_file():
@@ -18,7 +19,7 @@ if args.icon and not icon.is_file():
 subprocess.run(["swift", "build", "-c", "release", "--product", "SwitchShelf"], cwd=ROOT, check=True)
 subprocess.run(["swift", "build", "-c", "release", "--product", "switchshelf-probe"], cwd=ROOT, check=True)
 bin_dir = Path(subprocess.check_output(["swift", "build", "-c", "release", "--show-bin-path"], cwd=ROOT, text=True).strip())
-app = ROOT / "build" / "SwitchShelf.app"
+app = (args.output or ROOT / "build" / "SwitchShelf.app").resolve()
 contents = app / "Contents"
 macos = contents / "MacOS"
 frameworks = contents / "Frameworks"
